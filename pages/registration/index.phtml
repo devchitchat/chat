@@ -1,0 +1,38 @@
+<section class="signin">
+{{#if error}}
+  <div class="alert alert-error" role="alert">{{error}}</div>
+{{/if}}
+
+  <!-- Sign up with invite -->
+  <section id="panel-signup" role="tabpanel">
+    <form method="POST" action="/registration" class="auth-form" novalidate>
+      <input type="hidden" name="_action" value="signup">
+      <div class="field">
+        <label for="signup-token">Invite code</label>
+        <input id="signup-token" name="invite_token" type="text" autocomplete="off" required
+          placeholder="paste invite code" value="{{invite_token}}">
+      </div>
+      <div class="field">
+        <label for="signup-handle">Handle</label>
+        <input id="signup-handle" name="handle" type="text" autocomplete="username" autocapitalize="none" required
+          placeholder="choose-a-handle">
+      </div>
+      <div class="field">
+        <label for="signup-display">Display name</label>
+        <input id="signup-display" name="display_name" type="text" autocomplete="name" placeholder="Your Name">
+      </div>
+      <div class="field">
+        <label for="signup-password">Password</label>
+        <input id="signup-password" name="password" type="password" autocomplete="new-password" required
+          placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn-primary">Create account</button>
+    </form>
+  </section>
+  <footer>
+    <div class="auth-tabs" role="tablist">
+      <a role="tab" aria-controls="panel-signin" aria-selected="false" href="/login" title="Sign in">Sign in</a>
+      <a role="tab" aria-controls="panel-signup" aria-selected="true" href="/registration" title="Sign up">Sign up</a>
+    </div>
+  </footer>
+</section>

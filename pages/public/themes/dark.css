@@ -1,0 +1,20 @@
+/* dark theme — default */
+:root, [data-theme="dark"] {
+  --bg-base:    #1a1b1e;
+  --bg-topbar:  #141517;
+  --bg-sidebar: #1e1f22;
+  --bg-hover:   rgba(255,255,255,0.06);
+  --bg-active:  rgba(88,166,255,0.12);
+  --bg-input:   #2b2d31;
+  --bg-call:    #1e1f22;
+
+  --text-primary:   #e3e5e8;
+  --text-secondary: #b5bac1;
+  --text-muted:     #6d6f78;
+
+  --border:  #2e3035;
+  --accent:  #58a6ff;
+
+  --color-success: #3ba55c;
+  --color-danger:  #ed4245;
+}

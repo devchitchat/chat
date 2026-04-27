@@ -1,0 +1,29 @@
+<section class="signin">
+{{#if error}}
+  <div class="alert alert-error" role="alert">{{error}}</div>
+{{/if}}
+
+  <!-- Sign in -->
+  <section id="panel-signin" role="tabpanel">
+    <form method="POST" action="/login" class="auth-form" novalidate>
+      <input type="hidden" name="_action" value="signin">
+      <div class="field">
+        <label for="signin-handle">Handle</label>
+        <input id="signin-handle" name="handle" type="text" autocomplete="username" autocapitalize="none" required
+          placeholder="your-handle">
+      </div>
+      <div class="field">
+        <label for="signin-password">Password</label>
+        <input id="signin-password" name="password" type="password" autocomplete="current-password" required
+          placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn-primary">Sign in</button>
+    </form>
+  </section>
+  <footer>
+    <div class="auth-tabs" role="tablist">
+      <a role="tab" aria-controls="panel-signin" aria-selected="true" href="/login" title="Sign in">Sign in</a>
+      <a role="tab" aria-controls="panel-signup" aria-selected="false" href="/registration" title="Sign up">Sign up</a>
+    </div>
+  </footer>
+</section>

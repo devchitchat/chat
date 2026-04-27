@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@devchitchat/app",
+      "dependencies": {
+        "@devchitchat/index97": "^2.1.0",
+        "@devchitchat/rdbljs": "^1.2.4",
+      },
+    },
+  },
+  "packages": {
+    "@devchitchat/index97": ["@devchitchat/index97@2.1.0", "", { "peerDependencies": { "typescript": "^5" }, "optionalPeers": ["typescript"], "bin": { "index97": "cli.js" } }, "sha512-EE+6meo3evsyTRIvzYJrY6EHSqQJ1o2hllEQwgYrRgVldRtoBBHCq7OmdZtzBuCYwPEOkZfvp4H2jDFqIeanWw=="],
+
+    "@devchitchat/rdbljs": ["@devchitchat/rdbljs@1.2.4", "", { "peerDependencies": { "typescript": "^5" }, "optionalPeers": ["typescript"] }, "sha512-8dbLZWO12mZs9imRNdmCZ43p4JRBlxc4z9VTrh3lKuIu/xf6azJBXBhCUAH0H8Hygbp6jvKOzT9kKlcNDeCkcQ=="],
+  }
+}
