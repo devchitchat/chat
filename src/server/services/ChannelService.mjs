@@ -281,6 +281,11 @@ export class ChannelService {
     return { channel_id: channelId, user_id: targetUserId }
   }
 
+  /**
+   * 
+   * @param {string} channelId 
+   * @returns 
+   */
   getChannel(channelId) {
     return this.db.prepare('SELECT * FROM channels WHERE channel_id = ?').get(channelId)
   }
