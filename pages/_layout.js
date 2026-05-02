@@ -2,8 +2,10 @@ import { sessionFromRequest } from '../src/context.js'
 
 export async function data(req) {
   const session = sessionFromRequest(req)
+  const user = session?.user ?? null
   return {
-    user: session?.user ?? null,
+    user,
+    isAdmin: user?.roles?.includes('admin') ?? false,
     pageTitle: 'Chat',
   }
 }

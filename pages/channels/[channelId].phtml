@@ -27,6 +27,7 @@
   </section>
 
   <footer class="sidebar-footer">
+    <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
     <!-- Mini-bar: shown when the user is in a call and navigates to another channel -->
     <div class="call-mini-bar" id="call-mini-bar">
       <span class="call-mini-bar-channel" id="mini-bar-channel-name"></span>
@@ -81,19 +82,17 @@
     <button class="btn-icon" id="ctrl-mic" aria-label="Toggle microphone" type="button">🎙</button>
     <button class="btn-icon" id="ctrl-cam" aria-label="Toggle camera" type="button">📷</button>
     <button class="btn-icon" id="ctrl-screen" aria-label="Share screen" type="button">🖥</button>
+    <button class="btn-icon" id="ctrl-devices" aria-label="Switch camera or microphone" type="button">&#9881;</button>
     <span class="call-peer-count" id="call-peer-count"></span>
     <button class="btn-leave" id="btn-leave-call" type="button">Leave</button>
   </div>
-
-  <!-- Tile grid: shown when user is in the call -->
-  <div class="tile-grid" id="tile-grid"></div>
 
   <!-- Server-rendered initial messages baked in -->
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
     {{#each seedMessages}}
     <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id">
-      <span class="message-handle">{{user_handle}}</span>
-      <time class="message-time" datetime="{{ts}}">{{ts}}</time>
+      <span class="message-handle">{{user_display_name}}</span>
+      <time class="message-time" datetime="{{ts}}">{{ts_fmt}}</time>
       <p class="message-text">{{text}}</p>
     </article>
     {{/each}}
@@ -112,6 +111,16 @@
     </textarea>
     <button onclick="sendMessage" class="btn-send" aria-label="Send message" type="button">Send</button>
   </footer>
-</section>
+</section><!-- /.chat-panel -->
+
+<!-- Tile panel: sibling of chat-panel, never inside it -->
+<div class="tile-panel" id="tile-panel">
+  <div class="tile-panel-header">
+    <span class="tile-panel-title" id="tile-panel-title">Call</span>
+    <button class="btn-icon tile-panel-collapse" id="tile-panel-collapse"
+            aria-label="Collapse tile panel" type="button">&#8854;</button>
+  </div>
+  <div class="tile-grid" id="tile-grid"></div>
+</div>
 
 </div><!-- /.main-content -->

@@ -1,4 +1,4 @@
-# devchitchat-v2
+# devchitchat
 
 Self-hosted chat for small technical teams. SQLite + Bun.js + JavaScript throughout.
 See `plans/ideal-customer-profile.md` for the target user and `plans/architecture-decisions.md`

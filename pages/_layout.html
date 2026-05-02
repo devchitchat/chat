@@ -21,6 +21,9 @@
       {{#if user}}
       <span class="topbar-user" aria-label="Signed in as {{user.handle}}">{{user.display_name}}</span>
       {{/if}}
+      {{#if isAdmin}}
+      <a href="/admin/invites" class="topbar-link">Admin</a>
+      {{/if}}
     </nav>
     <div class="topbar-actions">
       <label for="theme-picker" class="sr-only">Theme</label>
@@ -44,21 +47,6 @@
   </main>
 
   <script type="module" src="/client/theme.js"></script>
-  <script type="module">
-    import { init, signal, Context } from '@devchitchat/rdbljs'
-    import { initSwipeNav } from '/client/swipe-nav.js'
-    const pageState = {
-      errors: signal([]),
-      hubs: signal([{
-        channels: [],
-        name: 'testing area'
-      }])
-    }
-    // Context.provide(document.body, { pageState })
-    const app = await init(window)
-    console.log('app was initialized', app)
-    window.Context = Context
-    initSwipeNav()
-  </script>
+  <script type="module" src="/client/app.js"></script>
 </body>
 </html>

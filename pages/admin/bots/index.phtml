@@ -1,0 +1,58 @@
+<div class="admin-page">
+  <nav class="admin-nav">
+    <a href="/admin/invites" class="admin-nav-link">Invites</a>
+    <a href="/admin/users" class="admin-nav-link">Users</a>
+    <a href="/admin/bots" class="admin-nav-link active">Bots</a>
+  </nav>
+
+  <h1>Bots</h1>
+
+  <section class="admin-section">
+    <h2>Create bot</h2>
+    <form method="POST" action="/admin/bots" class="admin-form">
+      <div class="form-row">
+        <label for="handle">Handle</label>
+        <input type="text" id="handle" name="handle" required placeholder="e.g. deploy-bot">
+      </div>
+      <div class="form-row">
+        <label for="display_name">Display name</label>
+        <input type="text" id="display_name" name="display_name" placeholder="e.g. Deploy Bot">
+      </div>
+      <div class="form-row">
+        <label for="token_label">Initial token label (optional)</label>
+        <input type="text" id="token_label" name="token_label" placeholder="e.g. production">
+      </div>
+      <button type="submit" class="btn">Create bot</button>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <h2>Existing bots</h2>
+    {{#if bots}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Handle</th>
+          <th>Display name</th>
+          <th>Tokens</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each bots}}
+        <tr>
+          <td><code>{{handle}}</code></td>
+          <td>{{display_name}}</td>
+          <td>{{tokens.length}}</td>
+          <td>{{created_at_fmt}}</td>
+          <td><a href="/admin/bots/{{user_id}}" class="btn-ghost">Manage</a></td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No bots yet.</p>
+    {{/if}}
+  </section>
+</div>

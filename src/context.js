@@ -19,6 +19,7 @@ export let searchService = null
 export let presenceService = null
 export let signalingService = null
 export let userSettingsService = null
+export let botService = null
 export let logger = null
 
 export function init(services) {
@@ -32,6 +33,7 @@ export function init(services) {
   presenceService = services.presenceService
   signalingService = services.signalingService
   userSettingsService = services.userSettingsService
+  botService = services.botService
   logger = services.logger
 }
 

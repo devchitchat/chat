@@ -29,7 +29,7 @@ export class SqliteMessageRepository {
 
   listMessages({ channelId, afterSeq, limit }) {
     return this.db.prepare(
-      `SELECT m.msg_id, m.seq, m.user_id, u.handle AS user_handle, m.ts, m.text
+      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
        WHERE m.channel_id = ? AND m.seq > ? ORDER BY m.seq ASC LIMIT ?`
     ).all(channelId, afterSeq, limit)

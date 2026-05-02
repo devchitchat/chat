@@ -9,6 +9,7 @@ import { DeliveryService } from '../services/DeliveryService.js'
 import { SearchService } from '../services/SearchService.js'
 import { PresenceService } from '../services/PresenceService.js'
 import { SignalingService } from '../services/SignalingService.js'
+import { BotService } from '../services/BotService.js'
 import { SqliteAuthRepository } from '../adapters/SqliteAuthRepository.js'
 import { SqliteHubRepository } from '../adapters/SqliteHubRepository.js'
 import { SqliteChannelRepository } from '../adapters/SqliteChannelRepository.js'
@@ -50,6 +51,7 @@ export class ChatServer {
     this.deliveryService = new DeliveryService({ deliveryRepo })
     this.presenceService = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
+    this.botService = new BotService({ authRepo, channelRepo })
 
     // connectionId → ws (for direct lookup when we only have the id)
     this.connections = new Map()
@@ -72,9 +74,10 @@ export class ChatServer {
 
   #open(ws) {
     const connectionId = newId('conn')
-    const userId    = ws.data?.userId    ?? null
-    const sessionId = ws.data?.sessionId ?? null
-    ws.data = { connectionId, userId, sessionId, peerId: null, callId: null }
+    const userId      = ws.data?.userId      ?? null
+    const sessionId   = ws.data?.sessionId   ?? null
+    const displayName = ws.data?.displayName ?? null
+    ws.data = { connectionId, userId, sessionId, displayName, peerId: null, callId: null }
     if (userId) {
       // Pre-authenticated via cookie at upgrade time — wire presence + user topic
       ws.subscribe(`user:${userId}`)
@@ -144,6 +147,17 @@ export class ChatServer {
       case 'auth.signin':           return this.#handleSignIn(ws, msg)
       case 'auth.signout':          return this.#handleSignOut(ws, msg)
       case 'admin.invite_create':   return this.#handleAdminInviteCreate(ws, msg)
+      case 'admin.invite_list':     return this.#handleAdminInviteList(ws, msg)
+      case 'admin.invite_revoke':   return this.#handleAdminInviteRevoke(ws, msg)
+      case 'admin.user_list':       return this.#handleAdminUserList(ws, msg)
+      case 'admin.user_set_roles':  return this.#handleAdminUserSetRoles(ws, msg)
+      case 'admin.user_set_password': return this.#handleAdminUserSetPassword(ws, msg)
+      case 'admin.user_set_display_name': return this.#handleAdminUserSetDisplayName(ws, msg)
+      case 'admin.bot_create':      return this.#handleAdminBotCreate(ws, msg)
+      case 'admin.bot_list':        return this.#handleAdminBotList(ws, msg)
+      case 'admin.bot_token_create': return this.#handleAdminBotTokenCreate(ws, msg)
+      case 'admin.bot_token_revoke': return this.#handleAdminBotTokenRevoke(ws, msg)
+      case 'admin.bot_set_channels': return this.#handleAdminBotSetChannels(ws, msg)
       case 'hub.list':              return this.#handleHubList(ws, msg)
       case 'hub.create':            return this.#handleHubCreate(ws, msg)
       case 'hub.update':            return this.#handleHubUpdate(ws, msg)
@@ -177,16 +191,28 @@ export class ChatServer {
   // ── Auth handlers ──────────────────────────────────────────────────────────
 
   #handleHello(ws, msg) {
-    const resume = msg.body?.resume?.session_token
-    let session = null
-    if (resume) session = this.auth.validateSession(resume)
-    if (session) this.#attachUser(ws, session.user, session.session_id)
+    const { session_token, bot_token } = msg.body?.resume ?? {}
+    let user = null
+    let sessionId = null
+
+    if (bot_token) {
+      const bot = this.botService.authenticateToken(bot_token)
+      user = { user_id: bot.userId, handle: bot.handle, display_name: bot.displayName, roles: bot.roles }
+      this.#attachUser(ws, user, null)
+    } else if (session_token) {
+      const session = this.auth.validateSession(session_token)
+      if (session) {
+        user = session.user
+        sessionId = session.session_id
+        this.#attachUser(ws, user, sessionId)
+      }
+    }
 
     this.#sendWs(ws, {
       t: 'hello_ack', reply_to: msg.id, ok: true,
       body: {
         server: { name: 'devchitchat', ver: '2.0.0' },
-        session: { authenticated: !!session, user: session?.user ?? null, session_token: resume ?? null },
+        session: { authenticated: !!user, user: user ?? null, session_token: session_token ?? null },
         limits: { max_channels: 200, max_group_members: 20, max_message_bytes: 8000, max_signaling_bytes: 64000 }
       }
     })
@@ -219,6 +245,69 @@ export class ChatServer {
     const { ttl_ms, max_uses, note } = msg.body || {}
     const invite = this.auth.createInvite({ createdByUserId: ws.data.userId, ttlMs: ttl_ms, maxUses: max_uses, note })
     this.#sendWs(ws, { t: 'admin.invite', reply_to: msg.id, ok: true, body: { invite_token: invite.inviteToken, expires_at: invite.expiresAt, max_uses: invite.maxUses } })
+  }
+
+  #handleAdminInviteList(ws, msg) {
+    const invites = this.auth.listInvites({ requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.invite_list_result', reply_to: msg.id, ok: true, body: { invites } })
+  }
+
+  #handleAdminInviteRevoke(ws, msg) {
+    const { invite_id } = msg.body || {}
+    this.auth.revokeInvite({ inviteId: invite_id, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.invite_revoked', reply_to: msg.id, ok: true, body: { invite_id } })
+  }
+
+  #handleAdminUserList(ws, msg) {
+    const users = this.auth.listUsers({ requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.user_list_result', reply_to: msg.id, ok: true, body: { users } })
+  }
+
+  #handleAdminUserSetRoles(ws, msg) {
+    const { user_id, roles } = msg.body || {}
+    this.auth.setUserRoles({ targetUserId: user_id, roles, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
+  }
+
+  async #handleAdminUserSetPassword(ws, msg) {
+    const { user_id, new_password } = msg.body || {}
+    await this.auth.adminSetPassword({ targetUserId: user_id, newPassword: new_password, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
+  }
+
+  #handleAdminUserSetDisplayName(ws, msg) {
+    const { user_id, display_name } = msg.body || {}
+    this.auth.adminUpdateDisplayName({ targetUserId: user_id, displayName: display_name, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
+  }
+
+  #handleAdminBotCreate(ws, msg) {
+    const { handle, display_name, token_label } = msg.body || {}
+    const result = this.botService.createBot({ handle, displayName: display_name, tokenLabel: token_label, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.bot_created', reply_to: msg.id, ok: true, body: result })
+  }
+
+  #handleAdminBotList(ws, msg) {
+    const bots = this.botService.listBots({ requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.bot_list_result', reply_to: msg.id, ok: true, body: { bots } })
+  }
+
+  #handleAdminBotTokenCreate(ws, msg) {
+    const { user_id, label } = msg.body || {}
+    const result = this.botService.createToken({ userId: user_id, label, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.bot_token_created', reply_to: msg.id, ok: true, body: result })
+  }
+
+  #handleAdminBotTokenRevoke(ws, msg) {
+    const { token_id } = msg.body || {}
+    this.botService.revokeToken({ tokenId: token_id, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.bot_token_revoked', reply_to: msg.id, ok: true, body: { token_id } })
+  }
+
+  #handleAdminBotSetChannels(ws, msg) {
+    const { user_id, channel_ids } = msg.body || {}
+    this.botService.setBotChannels({ userId: user_id, channelIds: channel_ids, requestingUserId: ws.data.userId })
+    this.#sendWs(ws, { t: 'admin.bot_updated', reply_to: msg.id, ok: true, body: { user_id } })
   }
 
   // ── Hub handlers ───────────────────────────────────────────────────────────
@@ -342,13 +431,12 @@ export class ChatServer {
   #handleMsgSend(ws, msg) {
     const { channel_id, text, client_msg_id } = msg.body || {}
     const result = this.messageService.sendMessage({ channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id })
-    const user = this.auth.getUser(ws.data.userId)
 
     this.#sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id } })
 
     this.#publishChannel(channel_id, {
       t: 'msg.event', ok: true,
-      body: { msg_id: result.msg_id, channel_id, seq: result.seq, user_id: ws.data.userId, user_handle: user?.handle, ts: result.ts, text }
+      body: { msg_id: result.msg_id, channel_id, seq: result.seq, user_id: ws.data.userId, user_display_name: ws.data.displayName, ts: result.ts, text }
     })
 
     this.deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
@@ -584,6 +672,7 @@ export class ChatServer {
     const alreadyAttached = ws.data.userId === user.user_id
     ws.data.userId = user.user_id
     ws.data.sessionId = sessionId
+    ws.data.displayName = user.display_name
     if (!alreadyAttached) {
       ws.subscribe(`user:${user.user_id}`)
       this.presenceService.addConnection(ws.data.connectionId, user.user_id)

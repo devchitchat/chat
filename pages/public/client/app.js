@@ -1,36 +1,26 @@
 /**
- * app.js — discovers and mounts rdbljs islands.
+ * app.js — boots rdbljs islands and page-level setup.
  *
- * Loaded as <script type="module" src="/client/app.js"> on the channel page.
- * Finds every element with an [island] attribute, dynamically imports the
- * module at that path, and calls its default export with the element.
+ * Loaded as <script type="module" src="/client/app.js"> from _layout.html.
+ * init(window) from rdbljs discovers all [island] elements, imports each
+ * module, calls the default export factory with (root, window), and wires
+ * up bind(root, scope) so all directives (model=, onclick=, each=, etc.) work.
  */
+import { init } from '@devchitchat/rdbljs'
 import { getSettings, syncFromServer } from '/client/settings-sync.js'
+import { initSwipeNav } from '/client/swipe-nav.js'
+import { initRouter } from '/client/router.js'
 
-// Apply settings synchronously before islands mount (no layout flash)
+// Apply settings before islands mount (prevent layout flash)
 const settings = getSettings()
 if (window.matchMedia('(max-width: 1024px)').matches && settings.mobile_chat_open === false) {
   document.body.classList.add('sidebar-open')
 }
 
-async function mountIslands() {
-  const islands = document.querySelectorAll('[island]')
-  for (const el of islands) {
-    const path = el.getAttribute('island')
-    try {
-      const mod = await import(path)
-      if (typeof mod.default === 'function') {
-        mod.default(el)
-      }
-    } catch (err) {
-      console.error(`[island] failed to mount ${path}:`, err)
-    }
-  }
-}
+await init(window)
 
-mountIslands()
-
-import('/client/swipe-nav.js').then(m => m.initSwipeNav())
+initRouter()
+initSwipeNav()
 
 // Reconcile with server in background after islands mount
 syncFromServer().then(remoteSettings => {

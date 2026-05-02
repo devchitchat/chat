@@ -21,14 +21,15 @@ import { patchSettings } from '../settings-sync.js'
 
 export default function CallIsland(root) {
   // ── Data from HTML ─────────────────────────────────────────────────────────
-  const channelId  = root.dataset.id
-  const channelKind = root.dataset.kind ?? 'text'
+  let channelId   = root.dataset.id
+  let channelKind = root.dataset.kind ?? 'text'
   const userId     = root.dataset.userId
   const userHandle = root.dataset.userHandle
   const seedSeq    = parseInt(root.dataset.seedSeq ?? '0', 10)
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   const messages      = document.getElementById('messages')
+  const tilePanelEl   = document.getElementById('tile-panel')
   const tileGridEl    = document.getElementById('tile-grid')
   const callStatusEl  = document.getElementById('call-status')
   const callStatusInfo = document.getElementById('call-status-info')
@@ -41,6 +42,7 @@ export default function CallIsland(root) {
   const ctrlMic       = document.getElementById('ctrl-mic')
   const ctrlCam       = document.getElementById('ctrl-cam')
   const ctrlScreen    = document.getElementById('ctrl-screen')
+  const ctrlDevices   = document.getElementById('ctrl-devices')
 
   // Mini-bar (lives in sidebar footer — shared across channel navigations)
   const miniBarEl     = document.getElementById('call-mini-bar')
@@ -79,10 +81,31 @@ export default function CallIsland(root) {
   let screenStream = null  // local screen share
   let iceServers   = [{ urls: 'stun:stun.l.google.com:19302' }]
 
+  // ── Device state ───────────────────────────────────────────────────────────
+  const DEVICES_KEY = 'devchitchat_devices'
+  let availableDevices = { cameras: [], mics: [] }
+  let activeCameraId   = null
+  let activeMicId      = null
+
+  function loadSavedDevices() {
+    try { return JSON.parse(localStorage.getItem(DEVICES_KEY) ?? '{}') } catch { return {} }
+  }
+  function saveDevices(patch) {
+    localStorage.setItem(DEVICES_KEY, JSON.stringify({ ...loadSavedDevices(), ...patch }))
+  }
+  async function refreshDevices() {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    availableDevices = {
+      cameras: devices.filter(d => d.kind === 'videoinput'),
+      mics:    devices.filter(d => d.kind === 'audioinput'),
+    }
+    return availableDevices
+  }
+
   // ── Chat: connect + join channel ───────────────────────────────────────────
 
   ws.on('open', () => {
-    ws.send({ t: 'hello', body: { client: 'devchitchat-v2', resume: { session_token: null } } })
+    ws.send({ t: 'hello', body: { client: 'devchitchat', resume: { session_token: null } } })
   })
 
   ws.on('hello_ack', () => {
@@ -129,7 +152,7 @@ export default function CallIsland(root) {
     }
   }
 
-  function appendMessage({ msg_id, seq, user_id, user_handle: handle, ts, text }) {
+  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text }) {
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
     const article = document.createElement('article')
     article.className = 'message'
@@ -137,7 +160,7 @@ export default function CallIsland(root) {
     article.dataset.msgId = msg_id
     const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     article.innerHTML = `
-      <span class="message-handle">${escHtml(handle ?? user_id)}</span>
+      <span class="message-handle">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}</time>
       <p class="message-text">${escHtml(text)}</p>
     `
@@ -219,13 +242,12 @@ export default function CallIsland(root) {
     callIdSig.set(call_id)
     inCall.set(true)
     _showCallControls()
+    _showTilePanel()
+    _attachDeviceChangeListener()
     patchSettings({ last_channel_id: channelId })
 
     // Start audio immediately; video is opt-in
     await _startAudio()
-
-    // Render local tile (muted — it's our own feed)
-    if (audioStream) _renderTile('local', null, true, userHandle ?? 'You')
 
     // New joiner is offerer toward all existing peers
     for (const peer of peers) {
@@ -516,8 +538,14 @@ export default function CallIsland(root) {
   async function _startAudio() {
     if (audioStream) return
     try {
-      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      const saved = loadSavedDevices()
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: saved.micId ? { deviceId: { ideal: saved.micId } } : true,
+        video: false,
+      })
+      activeMicId = audioStream.getAudioTracks()[0]?.getSettings().deviceId ?? null
       audioStream.getAudioTracks().forEach(t => { t.enabled = !micMuted() })
+      await refreshDevices()  // labels now available after permission granted
       for (const [peerId] of peerActors) negotiatePeer(peerId)
     } catch {
       micMuted.set(true)
@@ -542,7 +570,12 @@ export default function CallIsland(root) {
       return
     }
     try {
-      videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: false })
+      const saved = loadSavedDevices()
+      const videoConstraint = saved.cameraId
+        ? { deviceId: { ideal: saved.cameraId }, width: 640, height: 360 }
+        : { width: 640, height: 360 }
+      videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false })
+      activeCameraId = videoStream.getVideoTracks()[0]?.getSettings().deviceId ?? null
       camOff.set(false)
       _renderTile('local-cam', videoStream, true, `${userHandle ?? 'You'} (cam)`)
       ws.send({ t: 'rtc.stream_publish', body: { call_id: callIdSig(), stream: { kind: 'camera' } } })
@@ -612,7 +645,6 @@ export default function CallIsland(root) {
   function _updateTileLayout() {
     if (!tileGridEl) return
     const count = tileGridEl.querySelectorAll('.stream-tile').length
-    tileGridEl.classList.toggle('active', count > 0)
     tileGridEl.classList.toggle('avatars-only', count >= 5)
   }
 
@@ -629,6 +661,164 @@ export default function CallIsland(root) {
     }
   }
 
+  // ── Device switching ───────────────────────────────────────────────────────
+
+  async function switchCamera(deviceId) {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId } },
+    })
+    const newTrack = newStream.getVideoTracks()[0]
+
+    for (const { pc } of peerActors.values()) {
+      const slots = _getTransceiverSlots(pc)
+      if (slots.camera?.sender) await slots.camera.sender.replaceTrack(newTrack)
+    }
+
+    videoStream?.getTracks().forEach(t => t.stop())
+    videoStream = newStream
+    activeCameraId = deviceId
+    saveDevices({ cameraId: deviceId })
+
+    const localTile = tileGridEl?.querySelector('[data-peer="local-cam"]')
+    if (localTile) localTile.querySelector('video').srcObject = newStream
+  }
+
+  async function switchMic(deviceId) {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: { exact: deviceId } },
+    })
+    const newTrack = newStream.getAudioTracks()[0]
+    newTrack.enabled = !micMuted()
+
+    for (const { pc } of peerActors.values()) {
+      const slots = _getTransceiverSlots(pc)
+      if (slots.audio?.sender) await slots.audio.sender.replaceTrack(newTrack)
+    }
+
+    audioStream?.getTracks().forEach(t => t.stop())
+    audioStream = newStream
+    activeMicId = deviceId
+    saveDevices({ micId: deviceId })
+  }
+
+  // ── Device change detection ────────────────────────────────────────────────
+
+  function _onDeviceChange() {
+    refreshDevices().then(({ cameras, mics }) => {
+      const cameraGone = activeCameraId && !cameras.find(d => d.deviceId === activeCameraId)
+      const micGone    = activeMicId    && !mics.find(d => d.deviceId === activeMicId)
+      if (cameraGone || micGone) _showDeviceWarning(cameraGone ? 'camera' : 'mic')
+      if (pickerEl?.classList.contains('open')) _populatePicker()
+    })
+  }
+
+  function _attachDeviceChangeListener() {
+    navigator.mediaDevices.addEventListener('devicechange', _onDeviceChange)
+  }
+  function _detachDeviceChangeListener() {
+    navigator.mediaDevices.removeEventListener('devicechange', _onDeviceChange)
+  }
+
+  // ── Device picker ──────────────────────────────────────────────────────────
+
+  let pickerEl = null
+
+  function _buildPicker() {
+    pickerEl = document.createElement('div')
+    pickerEl.className = 'device-picker'
+    pickerEl.innerHTML = `
+      <div class="device-picker-row">
+        <label>Camera</label>
+        <select id="dp-camera"></select>
+        <video id="dp-preview" autoplay playsinline muted></video>
+      </div>
+      <div class="device-picker-row">
+        <label>Microphone</label>
+        <select id="dp-mic"></select>
+        <canvas id="dp-level" width="80" height="12"></canvas>
+      </div>
+      <div class="device-picker-footer">
+        <button id="dp-cancel" class="btn-ghost" type="button">Cancel</button>
+        <button id="dp-apply"  class="btn-primary" type="button">Switch</button>
+      </div>
+    `
+    callControlsEl?.after(pickerEl)
+
+    pickerEl.querySelector('#dp-cancel').addEventListener('click', _closePicker)
+    pickerEl.querySelector('#dp-apply').addEventListener('click', _applyPicker)
+
+    const cameraSelect = pickerEl.querySelector('#dp-camera')
+    const previewVideo = pickerEl.querySelector('#dp-preview')
+
+    cameraSelect.addEventListener('change', async () => {
+      pickerEl._previewStream?.getTracks().forEach(t => t.stop())
+      pickerEl._previewStream = null
+      if (!cameraSelect.value) return
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: cameraSelect.value } },
+        })
+        previewVideo.srcObject = stream
+        pickerEl._previewStream = stream
+      } catch { /* camera unavailable */ }
+    })
+  }
+
+  function _populatePicker() {
+    const { cameras, mics } = availableDevices
+    const cameraSelect = pickerEl?.querySelector('#dp-camera')
+    const micSelect    = pickerEl?.querySelector('#dp-mic')
+    if (cameraSelect) {
+      cameraSelect.innerHTML = cameras
+        .map(d => `<option value="${escHtml(d.deviceId)}"${d.deviceId === activeCameraId ? ' selected' : ''}>${escHtml(d.label || 'Camera')}</option>`)
+        .join('')
+    }
+    if (micSelect) {
+      micSelect.innerHTML = mics
+        .map(d => `<option value="${escHtml(d.deviceId)}"${d.deviceId === activeMicId ? ' selected' : ''}>${escHtml(d.label || 'Microphone')}</option>`)
+        .join('')
+    }
+  }
+
+  async function _openPicker() {
+    if (!pickerEl) _buildPicker()
+    await refreshDevices()
+    _populatePicker()
+    pickerEl.classList.add('open')
+  }
+
+  function _closePicker() {
+    pickerEl?._previewStream?.getTracks().forEach(t => t.stop())
+    if (pickerEl) pickerEl._previewStream = null
+    pickerEl?.classList.remove('open')
+  }
+
+  async function _applyPicker() {
+    const cameraId = pickerEl?.querySelector('#dp-camera')?.value
+    const micId    = pickerEl?.querySelector('#dp-mic')?.value
+    try {
+      if (cameraId && cameraId !== activeCameraId && videoStream) await switchCamera(cameraId)
+      if (micId    && micId    !== activeMicId)                    await switchMic(micId)
+    } catch { /* device unavailable — leave current stream in place */ }
+    _closePicker()
+  }
+
+  ctrlDevices?.addEventListener('click', () => {
+    pickerEl?.classList.contains('open') ? _closePicker() : _openPicker()
+  })
+
+  // ── Device warning toast ───────────────────────────────────────────────────
+
+  function _showDeviceWarning(kind) {
+    const label = kind === 'camera' ? 'Camera' : 'Microphone'
+    const toast = document.createElement('div')
+    toast.className = 'device-warning-toast'
+    toast.textContent = `${label} disconnected — click ⚙ to switch`
+    document.body.appendChild(toast)
+    setTimeout(() => toast.remove(), 6000)
+    ctrlDevices?.classList.add('device-warning')
+  }
+
   // ── Controls visibility ────────────────────────────────────────────────────
 
   function _showCallControls() {
@@ -639,6 +829,93 @@ export default function CallIsland(root) {
   function _hideCallControls() {
     callControlsEl?.classList.remove('active')
   }
+
+  // ── Tile panel show / hide ─────────────────────────────────────────────────
+
+  const LAYOUT_KEY = 'devchitchat_tile_layout'
+
+  function _showTilePanel() {
+    document.querySelector('.main-content')?.classList.add('has-call')
+    tilePanelEl?.classList.add('active')
+  }
+
+  function _hideTilePanel() {
+    document.querySelector('.main-content')?.classList.remove('has-call')
+    tilePanelEl?.classList.remove('active')
+    tilePanelEl?.classList.remove('collapsed')
+  }
+
+  // Restore collapse state from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
+    if (saved.collapsed) tilePanelEl?.classList.add('collapsed')
+    if (saved.overlayRight && saved.overlayTop && tilePanelEl) {
+      tilePanelEl.style.right = saved.overlayRight
+      tilePanelEl.style.top   = saved.overlayTop
+    }
+  } catch { /* ignore */ }
+
+  // Collapse toggle
+  document.getElementById('tile-panel-collapse')?.addEventListener('click', () => {
+    const collapsed = tilePanelEl?.classList.toggle('collapsed')
+    try {
+      const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...saved, collapsed: !!collapsed }))
+    } catch { /* ignore */ }
+  })
+
+  // Overlay drag (mobile only)
+  ;(function _attachOverlayDrag(panel) {
+    if (!panel) return
+    if (window.matchMedia('(min-width: 1025px)').matches) return
+
+    const header = panel.querySelector('.tile-panel-header')
+    if (!header) return
+
+    let startX, startY, startRight, startTop
+
+    function onMove(e) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY
+      const dx = startX - clientX
+      const dy = clientY - startY
+      const newRight = Math.max(0, Math.min(startRight + dx, window.innerWidth  - 60))
+      const newTop   = Math.max(0, Math.min(startTop  + dy, window.innerHeight - 60))
+      panel.style.right = newRight + 'px'
+      panel.style.top   = newTop   + 'px'
+    }
+
+    function onEnd() {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup',   onEnd)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend',  onEnd)
+      try {
+        const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
+        localStorage.setItem(LAYOUT_KEY, JSON.stringify({
+          ...saved,
+          overlayRight: panel.style.right,
+          overlayTop:   panel.style.top,
+        }))
+      } catch { /* ignore */ }
+    }
+
+    header.addEventListener('mousedown', e => {
+      startX = e.clientX; startY = e.clientY
+      startRight = parseInt(panel.style.right) || 0
+      startTop   = parseInt(panel.style.top)   || 0
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup',   onEnd)
+    })
+
+    header.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY
+      startRight = parseInt(panel.style.right) || 0
+      startTop   = parseInt(panel.style.top)   || 0
+      document.addEventListener('touchmove', onMove, { passive: true })
+      document.addEventListener('touchend',  onEnd)
+    }, { passive: true })
+  })(tilePanelEl)
 
   // ── Mini-bar (persists while navigating away during a call) ───────────────
 
@@ -673,6 +950,33 @@ export default function CallIsland(root) {
     }
   })
 
+  // SPA navigation: router morphed .chat-panel and dispatched this event.
+  // Re-initialise chat state for the new channel without touching RTC.
+  document.addEventListener('chatpanel:navigated', (e) => {
+    const { channelId: newId, name, topic, kind, seedSeq: newSeedSeq } = e.detail
+    if (newId === channelId) return   // same channel — nothing to do
+
+    // Leave old channel subscription on the server
+    ws.send({ t: 'channel.leave', body: { channel_id: channelId } })
+
+    // Update local identity
+    channelId = newId
+    channelKind = kind
+    channelName.set(name)
+    channelTopic.set(topic)
+    afterSeq = newSeedSeq
+
+    // Update browser chrome
+    document.title = `#${name} — devchitchat`
+    const textarea = root.querySelector('#message-input')
+    if (textarea) textarea.placeholder = `Message in ${name}`
+
+    // Join new channel — server responds with channel.joined + rtc.call_state.
+    // channel.joined handler sends msg.list if afterSeq > 0, which will append
+    // any messages that arrived after the seed snapshot.
+    ws.send({ t: 'channel.join', body: { channel_id: channelId } })
+  })
+
   // ── Teardown ───────────────────────────────────────────────────────────────
 
   function _teardownCall() {
@@ -691,7 +995,11 @@ export default function CallIsland(root) {
     if (tileGridEl) tileGridEl.innerHTML = ''
     _updateTileLayout()
     _hideCallControls()
+    _hideTilePanel()
     _hideMiniBar()
+    _closePicker()
+    _detachDeviceChangeListener()
+    ctrlDevices?.classList.remove('device-warning')
 
     micMuted.set(false)
     camOff.set(false)
@@ -699,6 +1007,8 @@ export default function CallIsland(root) {
     inCall.set(false)
     selfPeerId.set(null)
     pinnedPeerId = null
+    activeCameraId = null
+    activeMicId = null
   }
 
   // ── Mobile back button ─────────────────────────────────────────────────────

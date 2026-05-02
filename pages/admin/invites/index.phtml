@@ -1,0 +1,79 @@
+<div class="admin-page">
+  <nav class="admin-nav">
+    <a href="/admin/invites" class="admin-nav-link active">Invites</a>
+    <a href="/admin/users" class="admin-nav-link">Users</a>
+    <a href="/admin/bots" class="admin-nav-link">Bots</a>
+  </nav>
+
+  <h1>Invite tokens</h1>
+
+  {{#if createdToken}}
+  <div class="admin-notice admin-notice--success">
+    <strong>Invite created.</strong> Send this link — it will not be shown again:<br>
+    <a href="{{createdLink}}" class="invite-link">{{createdLink}}</a>
+    <p class="admin-hint">Or share just the token if you prefer:<br>
+    <code class="token-display">{{createdToken}}</code></p>
+  </div>
+  {{/if}}
+
+  <section class="admin-section">
+    <h2>Create invite</h2>
+    <form method="POST" action="/admin/invites" class="admin-form">
+      <input type="hidden" name="action" value="create">
+      <div class="form-row">
+        <label for="ttl_hours">Expires in (hours)</label>
+        <input type="number" id="ttl_hours" name="ttl_hours" value="24" min="1" max="720">
+      </div>
+      <div class="form-row">
+        <label for="max_uses">Max uses</label>
+        <input type="number" id="max_uses" name="max_uses" value="1" min="1" max="100">
+      </div>
+      <div class="form-row">
+        <label for="note">Note (optional)</label>
+        <input type="text" id="note" name="note" placeholder="e.g. For Alice">
+      </div>
+      <button type="submit" class="btn">Create invite</button>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <h2>Active invites</h2>
+    {{#if invites}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Note</th>
+          <th>Created by</th>
+          <th>Expires</th>
+          <th>Uses</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each invites}}
+        <tr>
+          <td>{{note}}</td>
+          <td>{{created_by_handle}}</td>
+          <td>{{expires_at_fmt}}</td>
+          <td>{{uses}} / {{max_uses}}</td>
+          <td>
+            {{#if expired}}<span class="tag tag--warn">Expired</span>{{/if}}
+            {{#if exhausted}}<span class="tag tag--warn">Exhausted</span>{{/if}}
+          </td>
+          <td>
+            <form method="POST" action="/admin/invites" class="inline">
+              <input type="hidden" name="action" value="revoke">
+              <input type="hidden" name="invite_id" value="{{invite_id}}">
+              <button type="submit" class="btn-ghost btn-danger">Revoke</button>
+            </form>
+          </td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No invites yet.</p>
+    {{/if}}
+  </section>
+</div>

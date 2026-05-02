@@ -25,6 +25,7 @@ initContext({
   searchService: chat.searchService,
   presenceService: chat.presenceService,
   signalingService: chat.signalingService,
+  botService: chat.botService,
   userSettingsService,
   logger,
 })
@@ -58,7 +59,7 @@ const server = await createServer({
     '/ws': (req, server) => {
       const session = sessionFromRequest(req)
       if (server.upgrade(req, {
-        data: session ? { userId: session.user.user_id, sessionId: session.session_id } : {}
+        data: session ? { userId: session.user.user_id, sessionId: session.session_id, displayName: session.user.display_name } : {}
       })) return
       return new Response('WebSocket upgrade required', { status: 426 })
     },

@@ -1,0 +1,80 @@
+<div class="admin-page">
+  <nav class="admin-nav">
+    <a href="/admin/invites" class="admin-nav-link">Invites</a>
+    <a href="/admin/users" class="admin-nav-link">Users</a>
+    <a href="/admin/bots" class="admin-nav-link active">Bots</a>
+  </nav>
+
+  <h1>Bot: <code>{{bot.handle}}</code></h1>
+  <p class="admin-hint">{{bot.display_name}}</p>
+
+  {{#if flash}}
+  <div class="admin-notice admin-notice--success">Saved.</div>
+  {{/if}}
+
+  {{#if createdToken}}
+  <div class="admin-notice admin-notice--success">
+    <strong>Token created.</strong> Copy it now — it will not be shown again:<br>
+    <code class="token-display">{{createdToken}}</code>
+  </div>
+  {{/if}}
+
+  <section class="admin-section">
+    <h2>API tokens</h2>
+
+    <form method="POST" class="admin-form admin-form--inline">
+      <input type="hidden" name="action" value="create_token">
+      <input type="text" name="label" placeholder="Token label (optional)">
+      <button type="submit" class="btn">Create token</button>
+    </form>
+
+    {{#if tokens}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Label</th>
+          <th>Created</th>
+          <th>Last used</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each tokens}}
+        <tr>
+          <td>{{label}}</td>
+          <td>{{created_at_fmt}}</td>
+          <td>{{last_used_at_fmt}}</td>
+          <td>{{#if revoked}}<span class="tag tag--warn">Revoked</span>{{/if}}</td>
+          <td>
+            {{#if revoked}}{{else}}
+            <form method="POST" class="inline">
+              <input type="hidden" name="action" value="revoke_token">
+              <input type="hidden" name="token_id" value="{{token_id}}">
+              <button type="submit" class="btn-ghost btn-danger">Revoke</button>
+            </form>
+            {{/if}}
+          </td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No tokens yet.</p>
+    {{/if}}
+  </section>
+
+  <section class="admin-section">
+    <h2>Channel access</h2>
+    <form method="POST" class="admin-form">
+      <input type="hidden" name="action" value="set_channels">
+      {{#each allChannels}}
+      <label class="checkbox-label">
+        <input type="checkbox" name="channel_ids" value="{{channel_id}}" {{#if checked}}checked{{/if}}>
+        # {{name}}
+      </label>
+      {{/each}}
+      <button type="submit" class="btn">Save channel access</button>
+    </form>
+  </section>
+</div>

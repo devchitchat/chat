@@ -117,6 +117,35 @@ function buildChannelForm(container, { channelId, channelName, channelTopic, ws,
   requestAnimationFrame(() => container.querySelector('#ch-name-input')?.focus())
 }
 
+function buildCreateHubForm(container, { ws, dismiss }) {
+  container.innerHTML = `
+    <div class="field">
+      <label for="new-hub-name">Hub name</label>
+      <input id="new-hub-name" type="text" placeholder="e.g. Engineering" maxlength="80" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="new-hub-desc">Description <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <input id="new-hub-desc" type="text" maxlength="240" autocomplete="off">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="new-hub-cancel" type="button">Cancel</button>
+      <button class="btn-primary" id="new-hub-save" type="button">Create</button>
+    </div>
+  `
+  container.querySelector('#new-hub-cancel').addEventListener('click', dismiss)
+  container.querySelector('#new-hub-save').addEventListener('click', () => {
+    const name = container.querySelector('#new-hub-name').value.trim()
+    if (!name) return
+    ws.send({ t: 'hub.create', body: {
+      name,
+      description: container.querySelector('#new-hub-desc').value.trim() || null,
+      visibility: 'public'
+    } })
+    dismiss()
+  })
+  requestAnimationFrame(() => container.querySelector('#new-hub-name')?.focus())
+}
+
 function buildCreateChannelForm(container, { hubId, ws, dismiss }) {
   container.innerHTML = `
     <div class="field">
@@ -149,6 +178,18 @@ function buildCreateChannelForm(container, { hubId, ws, dismiss }) {
 }
 
 // ── Sheet/modal openers ───────────────────────────────────────────────────────
+
+function openCreateHubModal(ws) {
+  showModal({
+    title: 'New hub',
+    build: body => buildCreateHubForm(body, { ws, dismiss: dismissModal })
+  })
+}
+
+function openCreateHubSheet(ws) {
+  showActionSheet({ label: 'New hub', items: [] })
+  buildCreateHubForm(getItemsContainer(), { ws, dismiss: dismissSheet })
+}
 
 function openHubSheet(hubId, hubName, ws) {
   showActionSheet({
@@ -470,6 +511,11 @@ export default function SidebarIsland(root) {
     if (window.matchMedia('(max-width: 700px)').matches) {
       document.body.classList.remove('sidebar-open')
     }
+  })
+
+  // New hub button
+  root.querySelector('#btn-new-hub')?.addEventListener('click', () => {
+    isTouch() ? openCreateHubSheet(ws) : openCreateHubModal(ws)
   })
 
   // Wire management handlers (event delegation — attached once, survives re-renders)

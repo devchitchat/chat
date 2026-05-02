@@ -38,7 +38,7 @@ export default function ChatIsland(root) {
 
   // Connect + join channel
   ws.on('open', () => {
-    ws.send({ t: 'hello', body: { client: 'devchitchat-v2', resume: { session_token: null } } })
+    ws.send({ t: 'hello', body: { client: 'devchitchat', resume: { session_token: null } } })
   })
 
   ws.on('hello_ack', () => {
@@ -85,7 +85,7 @@ export default function ChatIsland(root) {
     }, 300)
   })
 
-  function appendMessage({ msg_id, seq, user_id, user_handle, ts, text }) {
+  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text }) {
     // Avoid duplicates (seed messages already in DOM)
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
     const article = document.createElement('article')
@@ -94,7 +94,7 @@ export default function ChatIsland(root) {
     article.dataset.msgId = msg_id
     const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     article.innerHTML = `
-      <span class="message-handle">${escHtml(user_handle ?? user_id)}</span>
+      <span class="message-handle">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}</time>
       <p class="message-text">${escHtml(text)}</p>
     `

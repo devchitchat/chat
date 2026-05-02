@@ -48,7 +48,10 @@ export async function GET(req) {
     user,
     channel,
     currentChannelId: channelId,
-    seedMessages,
+    seedMessages: seedMessages.map(m => ({
+      ...m,
+      ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    })),
     seedSeq,
     hubs: hubsWithChannels,
   }

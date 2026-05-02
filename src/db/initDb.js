@@ -160,6 +160,20 @@ export const initDb = (db) => {
   // Add sort_order to existing databases that pre-date this column
   try { db.exec(`ALTER TABLE channels ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
 
+  // Bot tokens — added after initial schema
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bot_tokens (
+      token_id     TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      token_hash   TEXT NOT NULL UNIQUE,
+      label        TEXT,
+      created_at   INTEGER NOT NULL,
+      last_used_at INTEGER,
+      revoked_at   INTEGER,
+      FOREIGN KEY(user_id) REFERENCES users(user_id)
+    );
+  `)
+
   try {
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS fts_messages USING fts5(
