@@ -142,16 +142,16 @@ export class SqliteAuthRepository {
     ).run(userId, handle, displayName, now)
   }
 
-  insertBotToken({ tokenId, userId, tokenHash, label, now }) {
+  insertBotToken({ tokenId, userId, tokenHash, label, now, expiresAt = null }) {
     this.db.prepare(
-      `INSERT INTO bot_tokens (token_id, user_id, token_hash, label, created_at)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(tokenId, userId, tokenHash, label ?? null, now)
+      `INSERT INTO bot_tokens (token_id, user_id, token_hash, label, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(tokenId, userId, tokenHash, label ?? null, now, expiresAt)
   }
 
   listBotTokens({ userId }) {
     return this.db.prepare(
-      `SELECT token_id, label, created_at, last_used_at, revoked_at
+      `SELECT token_id, label, created_at, expires_at, last_used_at, revoked_at
        FROM bot_tokens WHERE user_id = ? ORDER BY created_at DESC`
     ).all(userId)
   }
@@ -166,14 +166,16 @@ export class SqliteAuthRepository {
     ).run(now, userId)
   }
 
-  findBotTokenByHash({ tokenHash }) {
+  findBotTokenByHash({ tokenHash, now }) {
     return this.db.prepare(
       `SELECT bt.token_id, bt.user_id, bt.last_used_at,
               u.handle, u.display_name, u.roles_json
        FROM bot_tokens bt
        JOIN users u ON u.user_id = bt.user_id
-       WHERE bt.token_hash = ? AND bt.revoked_at IS NULL`
-    ).get(tokenHash) ?? null
+       WHERE bt.token_hash = ?
+         AND bt.revoked_at IS NULL
+         AND (bt.expires_at IS NULL OR bt.expires_at > ?)`
+    ).get(tokenHash, now) ?? null
   }
 
   touchBotToken({ tokenId, now }) {

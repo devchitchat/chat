@@ -68,10 +68,11 @@ export class BotService {
 
   // ── Bot tokens ─────────────────────────────────────────────────────────────
 
-  createToken({ userId, label, requestingUserId }) {
+  createToken({ userId, label, ttlMs = null, requestingUserId }) {
     this._requireAdmin(requestingUserId)
     const now = this.nowFn()
-    return this._insertToken({ userId, label, now })
+    const expiresAt = ttlMs != null ? now + ttlMs : null
+    return this._insertToken({ userId, label, now, expiresAt })
   }
 
   revokeToken({ tokenId, requestingUserId }) {
@@ -87,7 +88,7 @@ export class BotService {
   /** Called by ChatServer hello handler to authenticate a bot WS connection. */
   authenticateToken(plainToken) {
     const tokenHash = hashToken(plainToken)
-    const row = this.authRepo.findBotTokenByHash({ tokenHash })
+    const row = this.authRepo.findBotTokenByHash({ tokenHash, now: this.nowFn() })
     if (!row) throw new ServiceError('UNAUTHORIZED', 'Invalid bot token')
     this.authRepo.touchBotToken({ tokenId: row.token_id, now: this.nowFn() })
     return {
@@ -125,7 +126,7 @@ export class BotService {
 
   // ── Internals ──────────────────────────────────────────────────────────────
 
-  _insertToken({ userId, label, now }) {
+  _insertToken({ userId, label, now, expiresAt = null }) {
     const token = randomToken()
     const tokenId = newId('bt')
     this.authRepo.insertBotToken({
@@ -133,8 +134,9 @@ export class BotService {
       tokenHash: hashToken(token),
       label: label?.trim() || null,
       now,
+      expiresAt,
     })
-    return { tokenId, token }
+    return { tokenId, token, expiresAt }
   }
 
   _requireAdmin(userId) {

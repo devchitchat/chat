@@ -168,11 +168,14 @@ export const initDb = (db) => {
       token_hash   TEXT NOT NULL UNIQUE,
       label        TEXT,
       created_at   INTEGER NOT NULL,
+      expires_at   INTEGER,
       last_used_at INTEGER,
       revoked_at   INTEGER,
       FOREIGN KEY(user_id) REFERENCES users(user_id)
     );
   `)
+  // Add expires_at to existing bot_tokens tables that predate this column
+  try { db.exec('ALTER TABLE bot_tokens ADD COLUMN expires_at INTEGER') } catch { /* already exists */ }
 
   try {
     db.exec(`

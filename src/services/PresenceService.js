@@ -33,4 +33,23 @@ export class PresenceService {
       online: connections.size > 0
     }))
   }
+
+  /** Return online users who are subscribed to at least one of the given channels. */
+  listOnlineUsersInChannels(channelIds) {
+    const channelSet = new Set(channelIds)
+    const result = []
+    for (const [userId, connections] of this.userToConnections) {
+      if (connections.size === 0) continue
+      let visible = false
+      for (const connectionId of connections) {
+        const channels = this.connectionToChannels.get(connectionId) ?? new Set()
+        for (const channelId of channels) {
+          if (channelSet.has(channelId)) { visible = true; break }
+        }
+        if (visible) break
+      }
+      if (visible) result.push({ user_id: userId, online: true })
+    }
+    return result
+  }
 }

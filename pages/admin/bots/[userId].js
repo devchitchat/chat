@@ -1,5 +1,10 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
 import { botService, channelService } from '../../../src/context.js'
+import { randomToken } from '../../../src/util/crypto.js'
+
+// In-memory flash store: flashId → plaintext token. Consumed once on GET.
+// Lost on restart, which is fine — the token was already shown or is gone.
+const tokenFlashes = new Map()
 
 function getBotUserId(req) {
   return new URL(req.url).pathname.split('/').pop()
@@ -13,7 +18,10 @@ export function GET(req) {
   const bot = botService.getBot({ userId: botUserId, requestingUserId: session.user.user_id })
 
   const url = new URL(req.url)
-  const createdToken = url.searchParams.get('created_token') ?? null
+  // Consume the flash token once — removes it from the map so it can't be replayed
+  const flashId = url.searchParams.get('flash_id') ?? null
+  const createdToken = flashId ? (tokenFlashes.get(flashId) ?? null) : null
+  if (flashId) tokenFlashes.delete(flashId)
   const flash = url.searchParams.get('flash') ?? null
 
   // All channels for channel assignment checkboxes
@@ -29,8 +37,10 @@ export function GET(req) {
     tokens: bot.tokens.map(t => ({
       ...t,
       created_at_fmt: new Date(t.created_at).toLocaleString(),
+      expires_at_fmt: t.expires_at ? new Date(t.expires_at).toLocaleString() : 'Never',
       last_used_at_fmt: t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'Never',
       revoked: !!t.revoked_at,
+      expired: !t.revoked_at && t.expires_at != null && t.expires_at <= Date.now(),
     })),
     allChannels: allChannels.map(c => ({
       ...c,
@@ -49,9 +59,14 @@ export async function POST(req) {
 
   if (action === 'create_token') {
     const label = form.get('label')?.trim() || null
-    const result = botService.createToken({ userId: botUserId, label, requestingUserId: session.user.user_id })
+    const ttlDays = parseInt(form.get('ttl_days') || '', 10)
+    const ttlMs = Number.isFinite(ttlDays) && ttlDays > 0 ? ttlDays * 24 * 60 * 60 * 1000 : null
+    const result = botService.createToken({ userId: botUserId, label, ttlMs, requestingUserId: session.user.user_id })
+    // Store the token in the server-side flash map — never put it in the URL
+    const flashId = randomToken(8)
+    tokenFlashes.set(flashId, result.token)
     return Response.redirect(
-      new URL(`/admin/bots/${botUserId}?created_token=${encodeURIComponent(result.token)}`, req.url),
+      new URL(`/admin/bots/${botUserId}?flash_id=${encodeURIComponent(flashId)}`, req.url),
       303
     )
   }

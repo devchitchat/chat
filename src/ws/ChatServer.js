@@ -450,6 +450,10 @@ export class ChatServer {
 
   #handleSearchQuery(ws, msg) {
     const { channel_id, q, limit } = msg.body || {}
+    const roles = this.auth.getUser(ws.data.userId)?.roles || []
+    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
+      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
+    }
     const hits = this.searchService.searchMessages({ channelId: channel_id, query: q, limit })
     this.#sendWs(ws, { t: 'search.result', reply_to: msg.id, ok: true, body: { hits } })
   }
@@ -457,7 +461,10 @@ export class ChatServer {
   // ── Presence ───────────────────────────────────────────────────────────────
 
   #handlePresenceSubscribe(ws, msg) {
-    const users = this.presenceService.listOnlineUsers()
+    const roles = this.auth.getUser(ws.data.userId)?.roles || []
+    const accessibleChannels = this.channelService.listChannels(ws.data.userId, roles)
+    const channelIds = accessibleChannels.map(c => c.channel_id)
+    const users = this.presenceService.listOnlineUsersInChannels(channelIds)
     this.#sendWs(ws, { t: 'presence.snapshot', reply_to: msg.id, ok: true, body: { users } })
   }
 
@@ -465,6 +472,10 @@ export class ChatServer {
 
   #handleRtcCallCreate(ws, msg) {
     const { channel_id, kind = 'mesh' } = msg.body || {}
+    const roles = this.auth.getUser(ws.data.userId)?.roles || []
+    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
+      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
+    }
     const result = this.signalingService.createCall({ roomId: channel_id, createdByUserId: ws.data.userId, topology: kind })
     const iceServers = this.#getIceServers()
     this.#sendWs(ws, { t: 'rtc.call', reply_to: msg.id, ok: true, body: { ...result, channel_id, ice_servers: iceServers } })
@@ -472,6 +483,15 @@ export class ChatServer {
 
   #handleRtcJoin(ws, msg) {
     const { call_id } = msg.body || {}
+
+    // Guard: verify user can access the channel this call belongs to
+    const call = this.signalingService.getCall(call_id)
+    if (call) {
+      const roles = this.auth.getUser(ws.data.userId)?.roles || []
+      if (!this.channelService.canAccessChannel(call.room_id, ws.data.userId, roles)) {
+        return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
+      }
+    }
 
     // Guard: if already in this call, return current participant list without re-joining
     if (ws.data.peerId && ws.data.callId === call_id) {
@@ -499,31 +519,34 @@ export class ChatServer {
       }
     }
 
-    const result = this.signalingService.joinCall({ callId: call_id, userId: ws.data.userId })
+    const result = this.signalingService.joinCall({ callId: call_id, userId: ws.data.userId, displayName: ws.data.displayName })
     ws.data.peerId = result.peerId
     ws.data.callId = call_id
     this.peerConnections.set(result.peerId, ws.data.connectionId)
     ws.subscribe(`call:${call_id}`)
     this.#sendWs(ws, { t: 'rtc.joined', reply_to: msg.id, ok: true, body: { call_id, peer_id: result.peerId, peers: result.peers, ice_servers: this.#getIceServers() } })
-    this.#publishCall(call_id, { t: 'rtc.peer_event', ok: true, body: { call_id, kind: 'join', peer: { peer_id: result.peerId, user_id: ws.data.userId } } })
+    this.#publishCall(call_id, { t: 'rtc.peer_event', ok: true, body: { call_id, kind: 'join', peer: { peer_id: result.peerId, user_id: ws.data.userId, display_name: ws.data.displayName } } })
 
     // Broadcast updated call state to all channel subscribers (sidebar badges, "N in call" rows)
-    const call = this.signalingService.getCall(call_id)
-    if (call) this.#publishCallState(call.room_id, call_id, Array.from(call.peers.values()))
+    const updatedCall = this.signalingService.getCall(call_id)
+    if (updatedCall) this.#publishCallState(updatedCall.room_id, call_id, Array.from(updatedCall.peers.values()))
   }
 
   #handleRtcOffer(ws, msg) {
     const { call_id, to_peer_id, sdp } = msg.body || {}
+    if (!ws.data.peerId || ws.data.callId !== call_id) return
     this.signalingService.routeOffer({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, sdp })
   }
 
   #handleRtcAnswer(ws, msg) {
     const { call_id, to_peer_id, sdp } = msg.body || {}
+    if (!ws.data.peerId || ws.data.callId !== call_id) return
     this.signalingService.routeAnswer({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, sdp })
   }
 
   #handleRtcIce(ws, msg) {
     const { call_id, to_peer_id, candidate } = msg.body || {}
+    if (!ws.data.peerId || ws.data.callId !== call_id) return
     this.signalingService.routeIce({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, candidate })
   }
 

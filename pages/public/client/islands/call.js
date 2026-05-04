@@ -71,6 +71,7 @@ export default function CallIsland(root) {
 
   // ── RTC state ──────────────────────────────────────────────────────────────
   const peerActors     = new Map()   // peerId → { pc, audioStream, videoStream, screenStream }
+  const peerDisplayNames = new Map() // peerId → display_name string
   const remoteStreamsByPeer = new Map() // peerId → Map<mid|streamId, MediaStream>
   const pendingIceByPeer = new Map() // peerId → RTCIceCandidate[]
   const negotiationInFlight = new Set()
@@ -249,9 +250,10 @@ export default function CallIsland(root) {
     // Start audio immediately; video is opt-in
     await _startAudio()
 
-    // New joiner is offerer toward all existing peers
+    // Cache display names for existing peers, then connect as offerer
     for (const peer of peers) {
       if (peer.peer_id !== peer_id) {
+        if (peer.display_name) peerDisplayNames.set(peer.peer_id, peer.display_name)
         _ensurePeerActor(peer.peer_id)
         negotiatePeer(peer.peer_id)
       }
@@ -260,11 +262,13 @@ export default function CallIsland(root) {
 
   ws.on('rtc.peer_event', ({ call_id, kind, peer }) => {
     if (kind === 'join' && peer.peer_id !== selfPeerId()) {
+      if (peer.display_name) peerDisplayNames.set(peer.peer_id, peer.display_name)
       // Existing peer receives new joiner's event — create answerer connection
       // (new joiner will send us an offer)
       _ensurePeerActor(peer.peer_id)
     }
     if (kind === 'leave') {
+      peerDisplayNames.delete(peer.peer_id)
       _closePeer(peer.peer_id)
     }
   })
@@ -310,12 +314,11 @@ export default function CallIsland(root) {
     await actor.pc.addIceCandidate(candidate)
   })
 
-  ws.on('rtc.stream_event', ({ peer_id, stream: streamMeta }) => {
-    // Pre-create tile before WebRTC track arrives so the UI is responsive
-    if (peer_id !== selfPeerId()) {
-      const label = streamMeta?.kind === 'screen' ? `${peer_id} screen` : peer_id
-      _renderTile(`${peer_id}-${streamMeta?.kind ?? 'cam'}`, null, false, label)
-    }
+  ws.on('rtc.stream_event', () => {
+    // No pre-tile creation here — tile IDs must match between this handler
+    // (which uses kind: 'cam'/'screen') and ontrack (which uses transceiver.mid,
+    // a number like '1' or '2'). The mismatch left orphaned empty tiles.
+    // Tiles are created in ontrack once the actual stream track arrives.
   })
 
   ws.on('rtc.call_end', ({ call_id }) => {
@@ -456,7 +459,11 @@ export default function CallIsland(root) {
     if (peerActors.has(peerId)) return peerActors.get(peerId)
 
     const pc = new RTCPeerConnection({ iceServers })
-    _ensureTransceiverSlots(pc)
+    // Do NOT pre-add transceiver slots here — _ensurePeerActor is called for
+    // both offerers and answerers. Answerers must NOT add transceivers before
+    // setRemoteDescription(offer) or the m= section order will diverge from
+    // the offerer's, corrupting the transceiver-to-track mapping.
+    // Slots are added in negotiatePeerOnce (offerer path only).
 
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
@@ -465,6 +472,11 @@ export default function CallIsland(root) {
     }
 
     pc.ontrack = (event) => {
+      // If our transceiver is sendonly, the remote peer is recvonly — they are
+      // not sending anything into this slot (e.g. iPhone has no screen share).
+      // Skip tile creation to avoid rendering an empty video element.
+      if (event.transceiver?.direction === 'sendonly') return
+
       const stream = _getOrCreateInboundStream(event, peerId)
       if (!stream) return
       // Audio-only stream → just ensure an <audio> element exists
@@ -474,7 +486,8 @@ export default function CallIsland(root) {
       }
       // Video stream → render tile
       const tileId = `${peerId}-${event.transceiver?.mid ?? 'cam'}`
-      _renderTile(tileId, stream, false, peerId)
+      const peerLabel = peerDisplayNames.get(peerId) ?? peerId
+      _renderTile(tileId, stream, false, peerLabel)
       _ensureRemoteAudio(stream, peerId)
     }
 
@@ -799,6 +812,7 @@ export default function CallIsland(root) {
     try {
       if (cameraId && cameraId !== activeCameraId && videoStream) await switchCamera(cameraId)
       if (micId    && micId    !== activeMicId)                    await switchMic(micId)
+      ctrlDevices?.classList.remove('device-warning')
     } catch { /* device unavailable — leave current stream in place */ }
     _closePicker()
   }
@@ -824,10 +838,12 @@ export default function CallIsland(root) {
   function _showCallControls() {
     callStatusEl && (callStatusEl.hidden = true)
     callControlsEl?.classList.add('active')
+    if (btnStartCall) btnStartCall.hidden = true
   }
 
   function _hideCallControls() {
     callControlsEl?.classList.remove('active')
+    if (btnStartCall) btnStartCall.hidden = false
   }
 
   // ── Tile panel show / hide ─────────────────────────────────────────────────
@@ -875,6 +891,7 @@ export default function CallIsland(root) {
     let startX, startY, startRight, startTop
 
     function onMove(e) {
+      e.preventDefault()  // stop page scroll while dragging the tile panel
       const clientX = e.touches ? e.touches[0].clientX : e.clientX
       const clientY = e.touches ? e.touches[0].clientY : e.clientY
       const dx = startX - clientX
@@ -909,12 +926,13 @@ export default function CallIsland(root) {
     })
 
     header.addEventListener('touchstart', e => {
+      e.preventDefault()  // prevent scroll from starting on the drag handle
       startX = e.touches[0].clientX; startY = e.touches[0].clientY
       startRight = parseInt(panel.style.right) || 0
       startTop   = parseInt(panel.style.top)   || 0
-      document.addEventListener('touchmove', onMove, { passive: true })
+      document.addEventListener('touchmove', onMove, { passive: false })
       document.addEventListener('touchend',  onEnd)
-    }, { passive: true })
+    }, { passive: false })
   })(tilePanelEl)
 
   // ── Mini-bar (persists while navigating away during a call) ───────────────
@@ -982,6 +1000,7 @@ export default function CallIsland(root) {
   function _teardownCall() {
     for (const [, actor] of peerActors) actor.pc.close()
     peerActors.clear()
+    peerDisplayNames.clear()
     remoteStreamsByPeer.clear()
     pendingIceByPeer.clear()
     negotiationInFlight.clear()

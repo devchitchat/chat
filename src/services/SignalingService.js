@@ -67,14 +67,14 @@ export class SignalingService {
     return { call_id: callId, room_id: roomId, topology }
   }
 
-  joinCall({ callId, userId }) {
+  joinCall({ callId, userId, displayName }) {
     const call = this.calls.get(callId)
     if (!call) throw new ServiceError('NOT_FOUND', 'Call not found')
     const peerId = newId('peer')
     const now = Math.floor(this.nowFn() / 1000)
-    call.peers.set(peerId, { peer_id: peerId, user_id: userId, joined_at: now })
+    call.peers.set(peerId, { peer_id: peerId, user_id: userId, display_name: displayName ?? null, joined_at: now })
     this.signalingRepo?.insertParticipant({ callId, userId, peerId, joinedAt: now })
-    const peers = Array.from(call.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id }))
+    const peers = Array.from(call.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id, display_name: p.display_name }))
     return { peerId, peers }
   }
 

@@ -650,10 +650,15 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 
 /* ── Mode B: overlay (mobile < 1025px) ──────────────────────────────────── */
 
-@media (max-width: 1024px) {
+/* Only tablet needs position:relative — mobile .main-content is already
+   position:fixed which also creates a containing block for the absolute tile panel. */
+@media (min-width: 701px) and (max-width: 1024px) {
   .main-content.has-call {
     position: relative;
   }
+}
+
+@media (max-width: 1024px) {
   .tile-panel {
     position: absolute;
     top: 0; right: 0;
