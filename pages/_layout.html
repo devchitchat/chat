@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>{{pageTitle}} — devchitchat</title>
+  <link rel="stylesheet" href="/themes/base.css">
+  <link rel="stylesheet" href="/themes/dark.css" id="theme-stylesheet">
+  <script type="importmap">
+  {
+    "imports": {
+      "@devchitchat/rdbljs": "/vendor/rdbl.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <a href="/" class="topbar-brand" aria-label="devchitchat home">devchitchat</a>
+    <nav class="topbar-nav" aria-label="Main navigation">
+      {{#if user}}
+      <span class="topbar-user" aria-label="Signed in as {{user.handle}}">{{user.display_name}}</span>
+      {{/if}}
+      {{#if isAdmin}}
+      <a href="/admin/invites" class="topbar-link">Admin</a>
+      {{/if}}
+    </nav>
+    <div class="topbar-actions">
+      <label for="theme-picker" class="sr-only">Theme</label>
+      <select id="theme-picker" aria-label="Choose theme" autocomplete="off">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="ocean">Ocean</option>
+        <option value="forest">Forest</option>
+        <option value="rose">Rose</option>
+      </select>
+      {{#if user}}
+      <form method="POST" action="/auth/signout" class="inline">
+        <button type="submit" class="btn-ghost">Sign out</button>
+      </form>
+      {{/if}}
+    </div>
+  </header>
+
+  <main class="app-shell">
+    {{content}}
+  </main>
+
+  <script type="module" src="/client/theme.js"></script>
+  <script type="module" src="/client/app.js"></script>
+</body>
+</html>

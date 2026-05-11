@@ -1,108 +1,27 @@
-# devchitchat
+# Dev Chit Chat
 
-A small chat app. p2p video and screen sharing. The Node process acts as the control plane and message store, while media is intended to be WebRTC P2P.
+In 2009, at the Velocity conference, a couple of guys who worked at Flickr presented how development and operations fits toghether and gets along ... at Flickr.
 
-Status: PASS 2 in progress. This build includes WebRTC signaling and a minimal browser client for calls and screen sharing.
+The premise is kinda of dumb. Like, why was there even a Devs vs Ops mentality? Regardless, it was real. We were all working on systems and under pressure to build stuff that, quite frankly, was hard.
 
-## Requirements
+Anyways, that was the inspiration. Since then, I've championed just collaborating with each other as we build things together.
 
-- Node.js 22+ (uses `node:sqlite`)
+Along with this, Agile had already been getting traction in corporate America. Scrum was being used to run teams. And Daily Standups were becoing the norm.
 
-## Quickstart
+In 2013 Github released Hubot as open source, it's home grown chat bot.
 
-1. Install dependencies
+I was at GameStop at this time, managing my first team. I saw first hand what a DevOps culture felt like. We deployed the system every week. It was amazing.
 
-```
-npm install
-```
+Dev Chit Chat came out of that experience and time. Developers meeting daily chit chatting about what they were going to do today, what they learned, etc.
 
-2. Start server
+# A Story
 
-```
-npm start
-```
+I want a chat system that works like Discord, but I don't need the scalability of Discord. I'm just using it for my friends, small teams, not 1000 member community.
 
-On first start, the server logs a bootstrap token for the initial admin if no users exist. Use that token in the login form to create the admin user.
+Bun is fast and javascript is fine. So let's leverage the accessiblity of both to build a small chat system that does video, audio and screenshare live streaming.
 
-3. Open two browser tabs
+I run bun start the first time and I see a bootstrapping invite code in the console. I double-click on it and copy it to pasteboard. Then I visit https://joey-mac-mini.local:3000 (use your machine name instead of mine in hte URL) and enter it on the signup page to create the first account, it's the admin.
 
-- Sign in with the bootstrap token in the first tab
-- Create a room and start a call
-- In the second tab, redeem a new invite, join the room, then join the call
-- Use "Start mic/cam" and "Share screen" to publish streams
+Upon signing in the first time, there's no communication hubs or channels. So we need to create the first ones first so the app can be in a useable state.
 
-3. Run tests
-
-```
-npm test
-```
-
-## Configuration
-
-- `PORT` (default 3000)
-- `DB_PATH` (default `./data/chat.db`)
-- `SESSION_TTL_MS` (default 30 days)
-- `BOOTSTRAP_TOKEN` (optional, sets the first-admin token instead of auto-generating)
-- `STUN_URLS` (comma separated STUN urls)
-- `TURN_URLS` (comma separated TURN urls)
-- `TURN_USERNAME`
-- `TURN_CREDENTIAL`
-- `HTTPS_CERT_FILE` (optional; enables HTTPS when set with key file)
-- `HTTPS_KEY_FILE` (optional; enables HTTPS when set with cert file)
-
-## HTTPS on LAN (self-signed)
-
-To run on `https://joey-mini.local:3000`, generate a cert whose SAN includes that IP:
-
-```bash
-openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 \
-  -keyout certs/dev-key.pem \
-  -out certs/dev-cert.pem \
-  -subj "/CN=joey-mini.local" \
-  -addext "subjectAltName = IP:192.168.222.222"
-```
-
-Start server with TLS:
-
-```bash
-HTTPS_CERT_FILE=./certs/dev-cert.pem HTTPS_KEY_FILE=./certs/dev-key.pem npm start
-```
-
-Notes:
-- Chrome on Windows will still warn until you trust the self-signed cert.
-- Import `dev-cert.pem` into `Trusted Root Certification Authorities` on the Windows machine running Chrome.
-
-## Why signaling is centralized
-
-WebRTC peers must exchange SDP and ICE candidates to connect. A shared rendezvous point is required so peers can find each other and exchange these messages securely. The Hubot process provides that signaling while keeping media peer-to-peer.
-
-## When TURN is needed
-
-If peers cannot connect due to NAT or firewall restrictions, TURN relays are required. v0 supports passing TURN credentials to clients, but does not bundle a TURN server to keep dependencies minimal.
-
-## Why SFU is out of scope for v0
-
-An SFU centralizes media forwarding and adds complexity and resource cost. For a small group, a mesh is acceptable and aligns with the decentralized and simple design goals.
-
-## Next features
-
-- Invite UI + QR codes for LAN onboarding
-- End-to-end encryption for text (room keys)
-- Multi-device pairing and local-first sync
-- Message retention controls and purge tools
-- Moderation audit log and diagnostics page
-- Backup and restore for SQLite + attachments
-- P2P file attachments with server fallback
-- Presence enhancements and push-to-talk
-
-## If streaming isn't working for local dev, create a cert and serve up the site with https
-
-```sh
-openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 -keyout certs/dev-key.pem -out certs/dev-cert.pem -subj "/CN=joey-mini.local"
-```
-
-```sh
-HTTPS_CERT_FILE=./certs/dev-cert.pem HTTPS_KEY_FILE=./certs/dev-key.pem npm start
-```
-
-
+The system should just create a default hub and channel. That way, on bootstrap, the system is useable right off the bat. I can start chatting in a channel.

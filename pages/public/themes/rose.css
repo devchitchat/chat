@@ -1,0 +1,20 @@
+/* rose theme — warm pink */
+:root, [data-theme="rose"] {
+  --bg-base:    #1e1218;
+  --bg-topbar:  #160c11;
+  --bg-sidebar: #241520;
+  --bg-hover:   rgba(230,100,140,0.08);
+  --bg-active:  rgba(230,100,140,0.16);
+  --bg-input:   #2c1a26;
+  --bg-call:    #241520;
+
+  --text-primary:   #f0d8e4;
+  --text-secondary: #c494ae;
+  --text-muted:     #7a4860;
+
+  --border:  #36202e;
+  --accent:  #e8688a;
+
+  --color-success: #5ab87a;
+  --color-danger:  #e05050;
+}

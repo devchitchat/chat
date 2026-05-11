@@ -1,0 +1,20 @@
+/* forest theme — earthy greens */
+:root, [data-theme="forest"] {
+  --bg-base:    #141f14;
+  --bg-topbar:  #0e160e;
+  --bg-sidebar: #192419;
+  --bg-hover:   rgba(80,180,80,0.08);
+  --bg-active:  rgba(80,180,80,0.16);
+  --bg-input:   #1f2e1f;
+  --bg-call:    #192419;
+
+  --text-primary:   #d6e8d0;
+  --text-secondary: #8db88a;
+  --text-muted:     #4a6645;
+
+  --border:  #243524;
+  --accent:  #60c060;
+
+  --color-success: #4aad5a;
+  --color-danger:  #d05a3a;
+}

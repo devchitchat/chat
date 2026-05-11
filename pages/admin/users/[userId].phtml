@@ -1,0 +1,54 @@
+<div class="admin-page">
+  <nav class="admin-nav">
+    <a href="/admin/invites" class="admin-nav-link">Invites</a>
+    <a href="/admin/users" class="admin-nav-link active">Users</a>
+    <a href="/admin/bots" class="admin-nav-link">Bots</a>
+  </nav>
+
+  <h1>Edit user: <code>{{target.handle}}</code></h1>
+
+  {{#if flash}}
+  <div class="admin-notice admin-notice--success">Saved.</div>
+  {{/if}}
+
+  <section class="admin-section">
+    <h2>Display name</h2>
+    <form method="POST" class="admin-form">
+      <input type="hidden" name="action" value="set_display_name">
+      <div class="form-row">
+        <label for="display_name">Display name</label>
+        <input type="text" id="display_name" name="display_name" value="{{target.display_name}}" required>
+      </div>
+      <button type="submit" class="btn">Save</button>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <h2>Roles</h2>
+    <form method="POST" class="admin-form">
+      <input type="hidden" name="action" value="set_roles">
+      <div class="form-row">
+        <label class="checkbox-label">
+          <input type="checkbox" name="roles" value="user" {{#if isAdmin}}checked{{/if}}> user
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="roles" value="admin" {{#if isAdmin}}checked{{/if}}> admin
+        </label>
+      </div>
+      <button type="submit" class="btn">Update roles</button>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <h2>Reset password</h2>
+    <form method="POST" class="admin-form">
+      <input type="hidden" name="action" value="set_password">
+      <div class="form-row">
+        <label for="new_password">New password</label>
+        <input type="password" id="new_password" name="new_password" minlength="8" required>
+      </div>
+      <button type="submit" class="btn btn-danger">Reset password</button>
+    </form>
+    <p class="admin-hint">Resets the password and revokes all active sessions for this user.</p>
+  </section>
+</div>

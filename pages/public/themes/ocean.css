@@ -1,0 +1,20 @@
+/* ocean theme — deep teal */
+:root, [data-theme="ocean"] {
+  --bg-base:    #0d1b2a;
+  --bg-topbar:  #091320;
+  --bg-sidebar: #0f2137;
+  --bg-hover:   rgba(0,200,200,0.08);
+  --bg-active:  rgba(0,200,200,0.15);
+  --bg-input:   #152a3e;
+  --bg-call:    #0f2137;
+
+  --text-primary:   #cde8f0;
+  --text-secondary: #8ab4c2;
+  --text-muted:     #4a7080;
+
+  --border:  #1a3448;
+  --accent:  #00c8c8;
+
+  --color-success: #2fb57a;
+  --color-danger:  #e05a5a;
+}

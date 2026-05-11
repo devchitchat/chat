@@ -1,0 +1,126 @@
+<!-- Sidebar island: hub/channel nav + online presence -->
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}">
+  <section each="hubs" key="hub_id" class="hub-group">
+    {{#each hubs}}
+    <details class="hub-header" data-key="{{hub_id}}" open>
+      <summary class="hub-name" data-hub-id="{{hub_id}}">
+        <span text="name">{{name}}</span>
+        <button class="btn-hub-gear btn-icon" title="Hub settings" aria-label="Hub settings" type="button">&#9881;</button>
+        <button class="btn-hub-add btn-icon" title="Create a channel" aria-label="Create a channel" type="button">+</button>
+      </summary>
+      <ul each="channels" key="channel_id" class="channel-list">
+      {{#each channels}}
+        <li data-key="{{channel_id}}" class="channel-item {{className}}" cls="className" draggable="true">
+          <a attr="href:url" text="name" class="channel-link"
+             href="/channels/{{channel_id}}"
+             data-channel-id="{{channel_id}}"
+             data-channel-name="{{name}}"
+             data-channel-topic="{{topic}}"
+             data-channel-kind="{{kind}}">{{name}}</a>
+          <span class="call-badge" aria-label="Call active"></span>
+          <button class="btn-channel-gear btn-icon" title="Channel settings" aria-label="Channel settings" type="button">&#9881;</button>
+        </li>
+      {{/each}}
+      </ul>
+    </details>
+    {{/each}}
+  </section>
+
+  <footer class="sidebar-footer">
+    <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
+    <!-- Mini-bar: shown when the user is in a call and navigates to another channel -->
+    <div class="call-mini-bar" id="call-mini-bar">
+      <span class="call-mini-bar-channel" id="mini-bar-channel-name"></span>
+      <button class="btn-icon" id="mini-bar-mic" aria-label="Toggle mic" type="button">🎙</button>
+      <button class="btn-ghost" id="mini-bar-return" aria-label="Return to call" type="button">↩</button>
+      <button class="btn-ghost" id="mini-bar-leave" aria-label="Leave call" style="color: var(--color-danger)" type="button">✕</button>
+    </div>
+  </footer>
+</aside>
+
+<!-- Main content wrapper: slides in from right on mobile -->
+<div class="main-content">
+
+<!-- Chat + call island: messages, composer, and WebRTC -->
+<section class="chat-panel" island="/client/islands/call.js"
+  data-id="{{channel.channel_id}}"
+  data-name="{{channel.name}}"
+  data-topic="{{channel.topic}}"
+  data-kind="{{channel.kind}}"
+  data-user-id="{{user.user_id}}"
+  data-user-handle="{{user.handle}}"
+  data-user-display-name="{{user.display_name}}"
+  data-user-roles="{{user.roles}}"
+  data-seed-seq="{{seedSeq}}"
+>
+
+  <header class="chat-header">
+    <button class="btn-back-mobile" aria-label="Back to channels" type="button">&#8592;</button>
+    <hgroup>
+      <h2 class="chat-title" text="channelName">{{channel.name}}</h2>
+      <p class="chat-topic" text="channelTopic">{{channel.topic}}</p>
+    </hgroup>
+    <div class="chat-header-actions">
+      <button class="btn-ghost btn-start-call" id="btn-start-call" aria-label="Start call" type="button">
+        Start call
+      </button>
+    </div>
+  </header>
+
+  <!-- Call status row: shown when a call is active and user hasn't joined -->
+  <div class="call-status" id="call-status" hidden>
+    <span class="call-status-dot"></span>
+    <span class="call-status-info" id="call-status-info">Call in progress</span>
+    <div class="call-status-avatars" id="call-status-avatars"></div>
+    <button class="btn-primary" id="btn-join-call" style="padding: 6px 14px; font-size: 13px" type="button">
+      Join call
+    </button>
+  </div>
+
+  <!-- In-call controls bar: shown when user is in the call -->
+  <div class="call-controls-bar" id="call-controls-bar">
+    <button class="btn-icon" id="ctrl-mic" aria-label="Toggle microphone" type="button">🎙</button>
+    <button class="btn-icon" id="ctrl-cam" aria-label="Toggle camera" type="button">📷</button>
+    <button class="btn-icon" id="ctrl-screen" aria-label="Share screen" type="button">🖥</button>
+    <button class="btn-icon" id="ctrl-devices" aria-label="Switch camera or microphone" type="button">&#9881;</button>
+    <span class="call-peer-count" id="call-peer-count"></span>
+    <button class="btn-leave" id="btn-leave-call" type="button">Leave</button>
+  </div>
+
+  <!-- Server-rendered initial messages baked in -->
+  <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
+    {{#each seedMessages}}
+    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id">
+      <span class="message-handle">{{user_display_name}}</span>
+      <time class="message-time" datetime="{{ts}}">{{ts_fmt}}</time>
+      <p class="message-text">{{text}}</p>
+    </article>
+    {{/each}}
+    <template>
+    <article class="message">
+      <span class="message-handle"></span>
+      <time class="message-time" datetime=""></time>
+      <p class="message-text" text="text"></p>
+    </article>
+    </template>
+  </div>
+
+  <footer class="composer">
+    <textarea model="draft" id="message-input" placeholder="Message in {{channel.name}}" aria-label="Write a message"
+      rows="1" onkeydown="handleComposerKey">
+    </textarea>
+    <button onclick="sendMessage" class="btn-send" aria-label="Send message" type="button">Send</button>
+  </footer>
+</section><!-- /.chat-panel -->
+
+<!-- Tile panel: sibling of chat-panel, never inside it -->
+<div class="tile-panel" id="tile-panel">
+  <div class="tile-panel-header">
+    <span class="tile-panel-title" id="tile-panel-title">Call</span>
+    <button class="btn-icon tile-panel-collapse" id="tile-panel-collapse"
+            aria-label="Collapse tile panel" type="button">&#8854;</button>
+  </div>
+  <div class="tile-grid" id="tile-grid"></div>
+</div>
+
+</div><!-- /.main-content -->
