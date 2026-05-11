@@ -1,10 +1,14 @@
 {
-  "name": "@devchitchat/app",
-  "version": "2.0.0",
+  "name": "@devchitchat/chat",
+  "version": "2.0.4",
+  "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
     "start": "bun index.js",
-    "test": "bun test"
+    "test": "bun test",
+    "docker-build": "./docker-build-k3d.sh",
+    "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
+    "push": "bun docker-build && bun local-deploy"
   },
   "type": "module",
   "dependencies": {

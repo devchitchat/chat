@@ -242,11 +242,15 @@ scripts/migrate/
   003-add-webhooks.js
 ```
 
-Run migrations: `bun run migrate`
+Run migrations: `bun scripts/migrate.js`
 
 The migration runner (`scripts/migrate.js`) maintains a `_migrations` table in the database.
 Each file exports a `run(db)` function. Files are applied in filename order; already-applied files
 are skipped.
+
+> **Note:** `scripts/migrate.js` and the `scripts/migrate/` directory do not exist yet — they need
+> to be created before migrations can run. Add a `migrate` script to `package.json` once the runner
+> is in place.
 
 ```js
 // scripts/migrate/002-add-calls.js

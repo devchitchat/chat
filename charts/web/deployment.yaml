@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: devchitchat-web
+  name: chat-web
 spec:
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: devchitchat-web
+      app: chat-web
   replicas: 1
   template:
     metadata:
       labels:
-        app: devchitchat-web
+        app: chat-web
     spec:
       containers:
-      - name: devchitchat-web
-        image: local/devchitchat-web:0.1.10
+      - name: chat-web
+        image: local/chat-web:2.0.4
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
@@ -24,24 +24,24 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: DB_PATH
-          value: "/var/lib/devchitchat/chat.db"
+          value: "/var/lib/chat/chat.db"
         ports:
         - containerPort: 8080
         volumeMounts:
-        - name: sqlite-data
-          mountPath: /var/lib/devchitchat
+        - name: chat-data
+          mountPath: /var/lib/chat
       volumes:
-      - name: sqlite-data
+      - name: chat-data
         persistentVolumeClaim:
-          claimName: devchitchat-web-sqlite
+          claimName: chat-web-sqlite
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: devchitchat-web-service
+  name: chat-web-service
 spec:
   selector:
-    app: devchitchat-web
+    app: chat-web
   ports:
     - protocol: TCP
       port: 8080
@@ -49,7 +49,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: devchitchat-web-sqlite
+  name: chat-web-sqlite
 spec:
   accessModes:
     - ReadWriteOnce

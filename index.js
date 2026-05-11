@@ -32,9 +32,9 @@ initContext({
 
 const port = Number(process.env.PORT ?? 3000)
 const dev = process.env.NODE_ENV !== 'production'
-function getCertsIfAvailable() {
+async function getCertsIfAvailable() {
   let cert = Bun.file('./certs/dev-cert.pem')
-  if (cert && cert.exists()){
+  if (await cert.exists()){
     return {
       cert: cert,
       key: Bun.file('./certs/dev-key.pem')
@@ -72,7 +72,7 @@ const server = await createServer({
 
   // Bun native WebSocket handler (new index97 passthrough)
   websocket: chat.websocket,
-  tls: getCertsIfAvailable(),
+  tls: await getCertsIfAvailable(),
   onShutdown: (server) => {
     logger.info('server.shutdown', {})
     server.stop()
