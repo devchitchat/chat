@@ -1,4 +1,4 @@
-import { sessionFromRequest, channelService, hubService, messageService } from '../../src/context.js'
+import { sessionFromRequest, channelService, hubService, messageService, auth } from '../../src/context.js'
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
@@ -7,7 +7,7 @@ export async function GET(req) {
   const url = new URL(req.url)
   const channelId = url.pathname.split('/').pop()
   const user = session.user
-  const channel = channelService.getChannel(channelId)
+  let channel = channelService.getChannel(channelId)
   if (!channel || channel.deleted_at) {
     return new Response('Channel not found', { status: 404 })
   }
@@ -44,6 +44,13 @@ export async function GET(req) {
       }))
   }))
 
+  // For DM channels, replace the internal name with the other person's display name
+  if (channel.kind === 'dm') {
+    const otherUserId = channel.name.split(':').slice(1).find(id => id !== user.user_id)
+    const otherUser = otherUserId ? auth.getUser(otherUserId) : null
+    channel = { ...channel, name: otherUser?.display_name ?? 'Direct Message', topic: null }
+  }
+
   return {
     user,
     channel,
@@ -51,6 +58,7 @@ export async function GET(req) {
     seedMessages: seedMessages.map(m => ({
       ...m,
       ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      attachments_json: m.attachments?.length ? JSON.stringify(m.attachments) : '',
     })),
     seedSeq,
     hubs: hubsWithChannels,

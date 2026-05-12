@@ -71,6 +71,18 @@ details summary {
   z-index: 1;
 }
 
+.digest-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-sidebar));
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.digest-banner[hidden] { display: none; }
+
 .hub-group { padding: 8px 0; }
 .hub-header {
   padding: 6px 16px;
@@ -143,6 +155,92 @@ details summary {
   .channel-item:hover .btn-channel-gear {
     display: flex;
   }
+}
+
+/* ── Direct Messages section ─────────────────────────────────────────────── */
+.dm-section {
+  margin-top: 4px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.dm-section-title {
+  padding: 4px 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Avatar-style bullet before "Direct Messages" label */
+.dm-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.dm-list {
+  list-style: none;
+}
+
+.dm-item {
+  display: flex;
+  align-items: center;
+}
+
+.dm-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  height: 2rem;
+  padding: 0 16px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9em;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: color var(--transition), background var(--transition);
+}
+
+.dm-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.dm-item.dm-selected .dm-link {
+  color: var(--text-primary);
+  background: var(--bg-active);
+  font-weight: 600;
+}
+
+.dm-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unread dot on DM items — appended via ::after on has-mention items */
+.dm-item.has-mention .dm-link::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* ── Action sheet (mobile + iPad) ────────────────────────────────────────── */
@@ -376,18 +474,22 @@ details summary {
 
 .message { padding: 4px 0; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; }
 .message-handle { font-weight: 600; color: var(--accent); grid-column: 1; grid-row: 1; }
+.message-handle.dm-trigger { cursor: pointer; }
+.message-handle.dm-trigger:hover { text-decoration: underline; }
 .message-time { font-size: 11px; color: var(--text-muted); grid-column: 2; grid-row: 1; align-self: end; }
 .message-text { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; }
 
 .composer {
   margin-top: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 8px;
   padding: 12px 20px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--bg-base);
+  position: relative;
 }
 .composer textarea {
   flex: 1;
@@ -1078,3 +1180,127 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 .btn-danger:hover { background: color-mix(in srgb, var(--color-danger, #e74c3c) 15%, transparent); }
 
 form.inline { display: inline; }
+
+/* ── File uploads ─────────────────────────────────────────────────────────── */
+
+.attachment-chips {
+  width: 100%;
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+.attachment-chips[hidden] { display: none; }
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 200px;
+}
+.attachment-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.attachment-chip-remove:hover { color: var(--color-danger, #e74c3c); }
+.attachment-chip-error {
+  background: color-mix(in srgb, var(--color-danger, #e74c3c) 15%, transparent);
+  border-color: var(--color-danger, #e74c3c);
+  color: var(--color-danger, #e74c3c);
+  max-width: none;
+}
+
+/* Drop overlay shown when dragging a file over the composer */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
+  z-index: 10;
+}
+.drop-overlay[hidden] { display: none; }
+
+/* Attach button */
+.btn-attach {
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+/* Attachment rendering inside messages */
+.attachment-image-link { display: block; margin-top: 6px; }
+.attachment-image {
+  max-width: min(400px, 100%);
+  max-height: 300px;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  display: block;
+}
+.attachment-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  max-width: 340px;
+}
+.attachment-file:hover { background: var(--bg-hover); color: var(--text-primary); }
+.attachment-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-file-size { color: var(--text-muted); flex-shrink: 0; }
+
+/* Sidebar: channel link highlighted when a file is hovered over it */
+.channel-link.file-drop-hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: var(--radius-sm);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+/* Sidebar toast notification */
+.sidebar-toast {
+  position: absolute;
+  bottom: 60px;
+  left: 12px;
+  right: 12px;
+  padding: 8px 12px;
+  background: var(--bg-topbar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-primary);
+  z-index: 200;
+  animation: toast-in 0.15s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

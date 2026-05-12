@@ -6,10 +6,12 @@ import { HubService } from '../services/HubService.js'
 import { ChannelService } from '../services/ChannelService.js'
 import { MessageService } from '../services/MessageService.js'
 import { DeliveryService } from '../services/DeliveryService.js'
+import { NotificationService } from '../services/NotificationService.js'
 import { SearchService } from '../services/SearchService.js'
 import { PresenceService } from '../services/PresenceService.js'
 import { SignalingService } from '../services/SignalingService.js'
 import { BotService } from '../services/BotService.js'
+import { parseMentions } from '../core/mentions.js'
 import { SqliteAuthRepository } from '../adapters/SqliteAuthRepository.js'
 import { SqliteHubRepository } from '../adapters/SqliteHubRepository.js'
 import { SqliteChannelRepository } from '../adapters/SqliteChannelRepository.js'
@@ -49,6 +51,7 @@ export class ChatServer {
     this.searchService = new SearchService({ searchRepo })
     this.messageService = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService })
     this.deliveryService = new DeliveryService({ deliveryRepo })
+    this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
     this.presenceService = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
     this.botService = new BotService({ authRepo, channelRepo })
@@ -162,6 +165,9 @@ export class ChatServer {
       case 'hub.create':            return this.#handleHubCreate(ws, msg)
       case 'hub.update':            return this.#handleHubUpdate(ws, msg)
       case 'hub.delete':            return this.#handleHubDelete(ws, msg)
+      case 'hub.add_member':        return this.#handleHubAddMember(ws, msg)
+      case 'hub.remove_member':     return this.#handleHubRemoveMember(ws, msg)
+      case 'hub.list_members':      return this.#handleHubListMembers(ws, msg)
       case 'channel.list':          return this.#handleChannelList(ws, msg)
       case 'channel.create':        return this.#handleChannelCreate(ws, msg)
       case 'channel.update':        return this.#handleChannelUpdate(ws, msg)
@@ -169,8 +175,11 @@ export class ChatServer {
       case 'channel.reorder':       return this.#handleChannelReorder(ws, msg)
       case 'channel.join':          return this.#handleChannelJoin(ws, msg)
       case 'channel.leave':         return this.#handleChannelLeave(ws, msg)
-      case 'channel.invite_create': return this.#handleChannelInviteCreate(ws, msg)
       case 'channel.add_member':    return this.#handleChannelAddMember(ws, msg)
+      case 'channel.list_members':  return this.#handleChannelListMembers(ws, msg)
+      case 'user.list':             return this.#handleUserList(ws, msg)
+      case 'dm.open':               return this.#handleDmOpen(ws, msg)
+      case 'dm.list':               return this.#handleDmList(ws, msg)
       case 'msg.send':              return this.#handleMsgSend(ws, msg)
       case 'msg.list':              return this.#handleMsgList(ws, msg)
       case 'search.query':          return this.#handleSearchQuery(ws, msg)
@@ -195,6 +204,7 @@ export class ChatServer {
     let user = null
     let sessionId = null
 
+    let lastSeenAt = null
     if (bot_token) {
       const bot = this.botService.authenticateToken(bot_token)
       user = { user_id: bot.userId, handle: bot.handle, display_name: bot.displayName, roles: bot.roles }
@@ -204,6 +214,7 @@ export class ChatServer {
       if (session) {
         user = session.user
         sessionId = session.session_id
+        lastSeenAt = session.last_seen_at
         this.#attachUser(ws, user, sessionId)
       }
     }
@@ -216,6 +227,8 @@ export class ChatServer {
         limits: { max_channels: 200, max_group_members: 20, max_message_bytes: 8000, max_signaling_bytes: 64000 }
       }
     })
+
+    if (user) this.#sendDigest(ws, user.user_id, lastSeenAt)
   }
 
   async #handleInviteRedeem(ws, msg) {
@@ -224,6 +237,7 @@ export class ChatServer {
     const session = this.auth.validateSession(result.sessionToken)
     this.#attachUser(ws, session.user, session.session_id)
     this.#sendWs(ws, { t: 'auth.session', reply_to: msg.id, ok: true, body: { session_token: result.sessionToken, user: result.user } })
+    this.#sendDigest(ws, session.user.user_id, null)
   }
 
   async #handleSignIn(ws, msg) {
@@ -232,6 +246,7 @@ export class ChatServer {
     const session = this.auth.validateSession(result.sessionToken)
     this.#attachUser(ws, session.user, session.session_id)
     this.#sendWs(ws, { t: 'auth.session', reply_to: msg.id, ok: true, body: { session_token: result.sessionToken, user: result.user } })
+    this.#sendDigest(ws, session.user.user_id, session.last_seen_at)
   }
 
   #handleSignOut(ws, msg) {
@@ -242,9 +257,9 @@ export class ChatServer {
   }
 
   #handleAdminInviteCreate(ws, msg) {
-    const { ttl_ms, max_uses, note } = msg.body || {}
-    const invite = this.auth.createInvite({ createdByUserId: ws.data.userId, ttlMs: ttl_ms, maxUses: max_uses, note })
-    this.#sendWs(ws, { t: 'admin.invite', reply_to: msg.id, ok: true, body: { invite_token: invite.inviteToken, expires_at: invite.expiresAt, max_uses: invite.maxUses } })
+    const { ttl_ms, max_uses, note, roles } = msg.body || {}
+    const invite = this.auth.createInvite({ createdByUserId: ws.data.userId, ttlMs: ttl_ms, maxUses: max_uses, note, roles })
+    this.#sendWs(ws, { t: 'admin.invite', reply_to: msg.id, ok: true, body: { invite_token: invite.inviteToken, expires_at: invite.expiresAt, max_uses: invite.maxUses, roles: invite.roles } })
   }
 
   #handleAdminInviteList(ws, msg) {
@@ -327,8 +342,8 @@ export class ChatServer {
 
   #handleHubUpdate(ws, msg) {
     const user = this.auth.getUser(ws.data.userId)
-    const { hub_id, name, description } = msg.body || {}
-    const hub = this.hubService.updateHub({ hubId: hub_id, userId: ws.data.userId, roles: user?.roles || [], name, description })
+    const { hub_id, name, description, visibility } = msg.body || {}
+    const hub = this.hubService.updateHub({ hubId: hub_id, userId: ws.data.userId, roles: user?.roles || [], name, description, visibility })
     this.#sendWs(ws, { t: 'hub.updated', reply_to: msg.id, ok: true, body: { hub } })
     this.#broadcastToHubAudience(hub.hub_id, { t: 'hub.updated', ok: true, body: { hub } }, ws)
   }
@@ -341,6 +356,37 @@ export class ChatServer {
     const result = this.hubService.deleteHub({ hubId: hub_id, userId: ws.data.userId, roles: user?.roles || [] })
     this.#sendWs(ws, { t: 'hub.deleted', reply_to: msg.id, ok: true, body: result })
     audience.forEach(conn => this.#sendWs(conn, { t: 'hub.deleted', ok: true, body: result }))
+  }
+
+  #handleHubAddMember(ws, msg) {
+    const user = this.auth.getUser(ws.data.userId)
+    const { hub_id, user_id } = msg.body || {}
+    const result = this.hubService.addHubMember({ hubId: hub_id, targetUserId: user_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
+    this.#sendWs(ws, { t: 'hub.member_added', reply_to: msg.id, ok: true, body: result })
+    // Notify the added user directly (they may not be subscribed to the hub topic yet)
+    this.server?.publish(`user:${user_id}`, JSON.stringify({ v: 1, server_ts: Date.now(), t: 'hub.member_added', ok: true, body: result }))
+    this.#broadcastToHubAudience(hub_id, { t: 'hub.member_added', ok: true, body: result }, ws)
+  }
+
+  #handleHubRemoveMember(ws, msg) {
+    const user = this.auth.getUser(ws.data.userId)
+    const { hub_id, user_id } = msg.body || {}
+    const result = this.hubService.removeHubMember({ hubId: hub_id, targetUserId: user_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
+    this.#sendWs(ws, { t: 'hub.member_removed', reply_to: msg.id, ok: true, body: result })
+    this.server?.publish(`user:${user_id}`, JSON.stringify({ v: 1, server_ts: Date.now(), t: 'hub.member_removed', ok: true, body: result }))
+    this.#broadcastToHubAudience(hub_id, { t: 'hub.member_removed', ok: true, body: result }, ws)
+  }
+
+  #handleHubListMembers(ws, msg) {
+    const user = this.auth.getUser(ws.data.userId)
+    const { hub_id } = msg.body || {}
+    const members = this.hubService.listHubMembers({ hubId: hub_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
+    const enriched = members.map(m => {
+      if (m.handle) return m  // SqliteHubRepository joins users — already enriched
+      const u = this.auth.getUser(m.user_id)
+      return { user_id: m.user_id, handle: u?.handle ?? null, display_name: u?.display_name ?? null, joined_at: m.joined_at }
+    })
+    this.#sendWs(ws, { t: 'hub.list_members_result', reply_to: msg.id, ok: true, body: { hub_id, members: enriched } })
   }
 
   // ── Channel handlers ───────────────────────────────────────────────────────
@@ -364,8 +410,8 @@ export class ChatServer {
 
   #handleChannelUpdate(ws, msg) {
     const user = this.auth.getUser(ws.data.userId)
-    const { channel_id, name, topic } = msg.body || {}
-    const channel = this.channelService.updateChannel({ channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [], name, topic })
+    const { channel_id, name, topic, visibility } = msg.body || {}
+    const channel = this.channelService.updateChannel({ channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [], name, topic, visibility })
     this.#sendWs(ws, { t: 'channel.updated', reply_to: msg.id, ok: true, body: { channel } })
     this.#publishChannel(channel_id, { t: 'channel.updated', ok: true, body: { channel } })
   }
@@ -414,32 +460,110 @@ export class ChatServer {
     this.#broadcastToHubAudience(hub_id, { t: 'channel.reordered', ok: true, body: { hub_id, channels } }, null)
   }
 
-  #handleChannelInviteCreate(ws, msg) {
-    const { channel_id, ttl_ms, max_uses } = msg.body || {}
-    const invite = this.channelService.createChannelInvite({ channelId: channel_id, createdByUserId: ws.data.userId, ttlMs: ttl_ms, maxUses: max_uses })
-    this.#sendWs(ws, { t: 'channel.invite', reply_to: msg.id, ok: true, body: { invite_token: invite.inviteToken, expires_at: invite.expiresAt, max_uses: invite.maxUses } })
-  }
-
   #handleChannelAddMember(ws, msg) {
     const { channel_id, user_id } = msg.body || {}
     const result = this.channelService.addMember({ channelId: channel_id, createdByUserId: ws.data.userId, targetUserId: user_id })
     this.#sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
   }
 
+  #handleChannelListMembers(ws, msg) {
+    const { channel_id } = msg.body || {}
+    const user = this.auth.getUser(ws.data.userId)
+    const roles = user?.roles || []
+    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
+      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
+    }
+    const membership = this.channelService.getMembership(channel_id, ws.data.userId)
+    const isOwnerOrMod = membership && ['owner', 'mod'].includes(membership.role) && !membership.left_at && !membership.banned_at
+    if (!roles.includes('admin') && !isOwnerOrMod) {
+      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Owner or mod required' } })
+    }
+    const members = this.channelService.listChannelMembers(channel_id)
+    const enriched = members.map(m => {
+      const u = this.auth.getUser(m.user_id)
+      return { user_id: m.user_id, handle: u?.handle ?? null, display_name: u?.display_name ?? null, role: m.role }
+    })
+    this.#sendWs(ws, { t: 'channel.list_members_result', reply_to: msg.id, ok: true, body: { channel_id, members: enriched } })
+  }
+
+  #handleUserList(ws, msg) {
+    const users = this.auth.listUsersBasic().filter(u => !u.roles.includes('bot'))
+    this.#sendWs(ws, { t: 'user.list_result', reply_to: msg.id, ok: true, body: { users } })
+  }
+
+  #handleDmOpen(ws, msg) {
+    const { target_user_id } = msg.body || {}
+    const result = this.channelService.findOrCreateDm({ userId: ws.data.userId, targetUserId: target_user_id })
+    const targetUser = this.auth.getUser(target_user_id)
+
+    // Subscribe all active connections for both users to the DM channel topic.
+    // This ensures msg.event is delivered even if neither user has navigated there yet.
+    this.#subscribeUserToChannel(ws.data.userId, result.channel_id)
+    this.#subscribeUserToChannel(target_user_id, result.channel_id)
+
+    // Tell the initiating call.js to navigate (no notify_only — triggers navigation)
+    this.#sendWs(ws, {
+      t: 'dm.opened', reply_to: msg.id, ok: true,
+      body: { channel_id: result.channel_id, is_new: result.is_new, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
+    })
+
+    // Notify the initiating user's OTHER connections (sidebar) so the DM appears in the list
+    this.server?.publish(`user:${ws.data.userId}`, JSON.stringify({
+      v: 1, server_ts: Date.now(), t: 'dm.opened', ok: true,
+      body: { channel_id: result.channel_id, is_new: result.is_new, notify_only: true, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
+    }))
+
+    // Notify the target user's connections — add to DM list, show unread dot, don't navigate
+    this.server?.publish(`user:${target_user_id}`, JSON.stringify({
+      v: 1, server_ts: Date.now(), t: 'dm.opened', ok: true,
+      body: { channel_id: result.channel_id, is_new: result.is_new, notify_only: true, with_user: { user_id: ws.data.userId, display_name: ws.data.displayName } }
+    }))
+  }
+
+  /** Subscribe all active WS connections for a given user to a channel topic. */
+  #subscribeUserToChannel(userId, channelId) {
+    const topic = `channel:${channelId}`
+    for (const [, conn] of this.connections) {
+      if (conn.data.userId === userId) conn.subscribe(topic)
+    }
+  }
+
+  #handleDmList(ws, msg) {
+    const dms = this.channelService.listDms({ userId: ws.data.userId })
+    // Subscribe this connection to all existing DM channels so msg.event is delivered
+    for (const dm of dms) ws.subscribe(`channel:${dm.channel_id}`)
+    const enriched = dms.map(dm => {
+      const other = this.auth.getUser(dm.other_user_id)
+      return { channel_id: dm.channel_id, with_user: { user_id: dm.other_user_id, display_name: other?.display_name ?? dm.other_user_id } }
+    })
+    this.#sendWs(ws, { t: 'dm.list_result', reply_to: msg.id, ok: true, body: { dms: enriched } })
+  }
+
   // ── Message handlers ───────────────────────────────────────────────────────
 
   #handleMsgSend(ws, msg) {
-    const { channel_id, text, client_msg_id } = msg.body || {}
-    const result = this.messageService.sendMessage({ channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id })
+    const { channel_id, text, client_msg_id, priority, attachments } = msg.body || {}
+    const result = this.messageService.sendMessage({
+      channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id, priority,
+      attachments: Array.isArray(attachments) ? attachments : []
+    })
 
-    this.#sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id } })
+    this.#sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id, priority: result.priority } })
 
     this.#publishChannel(channel_id, {
       t: 'msg.event', ok: true,
-      body: { msg_id: result.msg_id, channel_id, seq: result.seq, user_id: ws.data.userId, user_display_name: ws.data.displayName, ts: result.ts, text }
+      body: {
+        msg_id: result.msg_id, channel_id, seq: result.seq,
+        user_id: ws.data.userId, user_display_name: ws.data.displayName,
+        ts: result.ts, text, priority: result.priority,
+        attachments: result.attachments ?? []
+      }
     })
 
     this.deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
+
+    // Detect @mentions and notify mentioned users
+    this.#dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq })
   }
 
   #handleMsgList(ws, msg) {
@@ -597,6 +721,37 @@ export class ChatServer {
     if (!connectionId) return
     const ws = this.connections.get(connectionId)
     if (ws) this.#sendWs(ws, event)
+  }
+
+  // ── Notification helpers ───────────────────────────────────────────────────
+
+  #sendDigest(ws, userId, lastSeenAt) {
+    try {
+      const digest = this.notificationService.buildDigest(userId, lastSeenAt)
+      if (digest.channels.length > 0 || digest.dms.length > 0) {
+        this.#sendWs(ws, { t: 'notification.digest', ok: true, body: digest })
+      }
+    } catch { /* digest is best-effort */ }
+  }
+
+  #dispatchMentions({ channelId, senderId, text, seq }) {
+    const rawMembers = this.channelService.listChannelMembers(channelId)
+    const members = rawMembers
+      .filter(m => m.user_id !== senderId)
+      .map(m => {
+        const u = this.auth.getUser(m.user_id)
+        return u ? { user_id: u.user_id, handle: u.handle } : null
+      })
+      .filter(Boolean)
+
+    const mentioned = parseMentions(text, members)
+    for (const { user_id } of mentioned) {
+      this.deliveryService.advanceMention({ channelId, userId: user_id, mentionSeq: seq })
+      this.server?.publish(`user:${user_id}`, JSON.stringify({
+        v: 1, server_ts: Date.now(), t: 'notification.mention', ok: true,
+        body: { channel_id: channelId, seq, from_user_id: senderId }
+      }))
+    }
   }
 
   // ── Broadcasting helpers ───────────────────────────────────────────────────

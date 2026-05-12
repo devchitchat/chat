@@ -22,6 +22,8 @@ export function GET(req) {
     target,
     targetRolesJson: JSON.stringify(target.roles),
     isAdmin: target.roles.includes('admin'),
+    isUser: target.roles.includes('user'),
+    isGuest: target.roles.includes('guest'),
     isBot: target.roles.includes('bot'),
     flash,
   }

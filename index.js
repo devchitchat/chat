@@ -6,6 +6,9 @@ import { ChatServer } from './src/ws/ChatServer.js'
 import { init as initContext, sessionFromRequest } from './src/context.js'
 import { UserSettingsService } from './src/services/UserSettingsService.js'
 import { SqliteUserSettingsRepository } from './src/adapters/SqliteUserSettingsRepository.js'
+import { UploadService } from './src/services/UploadService.js'
+import { LocalFileStore } from './src/adapters/LocalFileStore.js'
+import { SqliteUploadRepository } from './src/adapters/SqliteUploadRepository.js'
 
 const logger = createLogger()
 const db = openDatabase(process.env.DB_PATH ?? './data/chat.db')
@@ -13,6 +16,12 @@ initDb(db)
 
 const chat = new ChatServer({ db, logger })
 const userSettingsService = new UserSettingsService({ userSettingsRepo: new SqliteUserSettingsRepository({ db }) })
+const uploadService = new UploadService({
+  uploadRepo: new SqliteUploadRepository({ db }),
+  fileStore: new LocalFileStore(),
+  channelService: chat.channelService,
+})
+chat.messageService.setUploadService(uploadService)
 
 // Wire service context so page handlers (pages/**/*.js) can access services
 initContext({
@@ -27,6 +36,7 @@ initContext({
   signalingService: chat.signalingService,
   botService: chat.botService,
   userSettingsService,
+  uploadService,
   logger,
 })
 

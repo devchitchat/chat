@@ -7,11 +7,11 @@ export class SqliteAuthRepository {
 
   // ── Invites ────────────────────────────────────────────────────────────────
 
-  insertInvite({ inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note }) {
+  insertInvite({ inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note, initialRolesJson }) {
     this.db.prepare(
-      `INSERT INTO invites (invite_id, token_hash, created_by_user_id, created_at, expires_at, max_uses, uses, note)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
-    ).run(inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note)
+      `INSERT INTO invites (invite_id, token_hash, created_by_user_id, created_at, expires_at, max_uses, uses, note, initial_roles_json)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`
+    ).run(inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note, initialRolesJson)
   }
 
   findInviteByTokenHash({ tokenHash }) {

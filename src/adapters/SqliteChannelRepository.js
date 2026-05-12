@@ -28,16 +28,16 @@ export class SqliteChannelRepository {
     ).all(hubId)
   }
 
-  listAccessibleInHub({ hubId, userId }) {
+  listAccessibleInHub({ hubId, userId, isGuest = false }) {
     return this.db.prepare(
       `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order
        FROM channels c WHERE c.hub_id = ? AND c.deleted_at IS NULL
-       AND (c.visibility = 'public' OR EXISTS (
+       AND (EXISTS (
          SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.channel_id
          AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL
-       ))
+       ) OR (? = 0 AND c.visibility = 'public'))
        ORDER BY c.sort_order ASC, c.created_at ASC`
-    ).all(hubId, userId)
+    ).all(hubId, userId, isGuest ? 1 : 0)
   }
 
   listAll() {
@@ -49,16 +49,18 @@ export class SqliteChannelRepository {
     ).all()
   }
 
-  listAccessible({ userId }) {
+  listAccessible({ userId, isGuest = false }) {
     return this.db.prepare(
       `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name
        FROM channels c JOIN hubs h ON c.hub_id = h.hub_id
        WHERE c.deleted_at IS NULL AND h.deleted_at IS NULL
-       AND ((h.visibility = 'public' AND c.visibility = 'public')
-         OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.channel_id AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL)
-         OR EXISTS (SELECT 1 FROM hub_members hm WHERE hm.hub_id = h.hub_id AND hm.user_id = ? AND hm.left_at IS NULL))
+       AND (EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.channel_id AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL)
+         OR (? = 0 AND (
+           (h.visibility = 'public' AND c.visibility = 'public')
+           OR (c.visibility = 'public' AND EXISTS (SELECT 1 FROM hub_members hm WHERE hm.hub_id = h.hub_id AND hm.user_id = ? AND hm.left_at IS NULL))
+         )))
        ORDER BY h.name, c.sort_order ASC, c.created_at ASC`
-    ).all(userId, userId)
+    ).all(userId, isGuest ? 1 : 0, userId)
   }
 
   findById({ channelId }) {
@@ -71,6 +73,37 @@ export class SqliteChannelRepository {
 
   findByHubAndName({ hubId, name }) {
     return this.db.prepare('SELECT * FROM channels WHERE hub_id = ? AND name = ? AND deleted_at IS NULL').get(hubId, name) ?? null
+  }
+
+  findDmByName({ name }) {
+    return this.db.prepare(`SELECT * FROM channels WHERE kind = 'dm' AND name = ? AND deleted_at IS NULL`).get(name) ?? null
+  }
+
+  insertDmChannel({ channelId, name, userIdA, userIdB, now }) {
+    runTransaction(this.db, () => {
+      this.db.prepare(
+        `INSERT INTO channels (channel_id, hub_id, kind, name, topic, visibility, sort_order, created_by_user_id, created_at)
+         VALUES (?, NULL, 'dm', ?, NULL, 'private', 0, ?, ?)`
+      ).run(channelId, name, userIdA, now)
+      this.db.prepare(
+        `INSERT INTO channel_members (channel_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)`
+      ).run(channelId, userIdA, now)
+      this.db.prepare(
+        `INSERT INTO channel_members (channel_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)`
+      ).run(channelId, userIdB, now)
+    })
+  }
+
+  listDmsByUser({ userId }) {
+    return this.db.prepare(
+      `SELECT c.channel_id, c.name, c.kind,
+              other.user_id AS other_user_id
+       FROM channels c
+       JOIN channel_members cm  ON cm.channel_id = c.channel_id AND cm.user_id = ? AND cm.left_at IS NULL
+       LEFT JOIN channel_members other ON other.channel_id = c.channel_id AND other.user_id != ? AND other.left_at IS NULL
+       WHERE c.kind = 'dm' AND c.deleted_at IS NULL
+       ORDER BY c.created_at DESC`
+    ).all(userId, userId)
   }
 
   upsertMembership({ channelId, userId, role, now }) {
@@ -90,32 +123,12 @@ export class SqliteChannelRepository {
     ).all(channelId)
   }
 
-  insertInvite({ inviteId, channelId, tokenHash, createdByUserId, now, expiresAt, maxUses }) {
-    this.db.prepare(
-      `INSERT INTO channel_invites (invite_id, channel_id, token_hash, created_by_user_id, created_at, expires_at, max_uses, uses)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-    ).run(inviteId, channelId, tokenHash, createdByUserId, now, expiresAt, maxUses)
-  }
-
-  findInviteByTokenHash({ tokenHash }) {
-    return this.db.prepare('SELECT * FROM channel_invites WHERE token_hash = ?').get(tokenHash) ?? null
-  }
-
-  redeemInvite({ inviteId, channelId, userId, now }) {
-    runTransaction(this.db, () => {
-      this.db.prepare('UPDATE channel_invites SET uses = uses + 1 WHERE invite_id = ?').run(inviteId)
-      this.db.prepare(
-        `INSERT INTO channel_members (channel_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)
-         ON CONFLICT(channel_id, user_id) DO UPDATE SET left_at = NULL, banned_at = NULL`
-      ).run(channelId, userId, now)
-    })
-  }
-
-  patchChannel({ channelId, name, topic }) {
+  patchChannel({ channelId, name, topic, visibility }) {
     const updates = []
     const params = []
     if (name !== undefined) { updates.push('name = ?'); params.push(name) }
     if (topic !== undefined) { updates.push('topic = ?'); params.push(topic) }
+    if (visibility !== undefined) { updates.push('visibility = ?'); params.push(visibility) }
     params.push(channelId)
     this.db.prepare(`UPDATE channels SET ${updates.join(', ')} WHERE channel_id = ?`).run(...params)
   }

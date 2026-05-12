@@ -29,7 +29,10 @@
       <input type="hidden" name="action" value="set_roles">
       <div class="form-row">
         <label class="checkbox-label">
-          <input type="checkbox" name="roles" value="user" {{#if isAdmin}}checked{{/if}}> user
+          <input type="checkbox" name="roles" value="user" {{#if isUser}}checked{{/if}}> user
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="roles" value="guest" {{#if isGuest}}checked{{/if}}> guest
         </label>
         <label class="checkbox-label">
           <input type="checkbox" name="roles" value="admin" {{#if isAdmin}}checked{{/if}}> admin

@@ -2,7 +2,6 @@ export class InMemoryChannelRepository {
   constructor() {
     this._channels = new Map()    // channelId → channel record
     this._members = new Map()     // `${channelId}:${userId}` → membership record
-    this._invites = new Map()     // tokenHash → invite record
   }
 
   insertChannelWithOwner({ channelId, hubId, kind, name, topic, visibility, createdByUserId, now }) {
@@ -29,13 +28,14 @@ export class InMemoryChannelRepository {
       .map(c => this._toPublic(c))
   }
 
-  listAccessibleInHub({ hubId, userId }) {
+  listAccessibleInHub({ hubId, userId, isGuest = false }) {
     return [...this._channels.values()]
       .filter(c => {
         if (c.hub_id !== hubId || c.deleted_at) return false
-        if (c.visibility === 'public') return true
         const m = this._members.get(`${c.channel_id}:${userId}`)
-        return m && !m.left_at && !m.banned_at
+        if (m && !m.left_at && !m.banned_at) return true
+        if (!isGuest && c.visibility === 'public') return true
+        return false
       })
       .sort((a, b) => this._sortOrder(a, b))
       .map(c => this._toPublic(c))
@@ -48,13 +48,13 @@ export class InMemoryChannelRepository {
       .map(c => ({ ...this._toPublic(c), hub_name: c.hub_id }))
   }
 
-  listAccessible({ userId }) {
+  listAccessible({ userId, isGuest = false }) {
     return [...this._channels.values()]
       .filter(c => {
         if (c.deleted_at) return false
         const cm = this._members.get(`${c.channel_id}:${userId}`)
         if (cm && !cm.left_at && !cm.banned_at) return true
-        if (c.visibility === 'public') return true
+        if (!isGuest && c.visibility === 'public') return true
         return false
       })
       .sort((a, b) => this._sortOrder(a, b))
@@ -71,6 +71,30 @@ export class InMemoryChannelRepository {
 
   findByHubAndName({ hubId, name }) {
     return [...this._channels.values()].find(c => c.hub_id === hubId && c.name === name && !c.deleted_at) ?? null
+  }
+
+  findDmByName({ name }) {
+    return [...this._channels.values()].find(c => c.kind === 'dm' && c.name === name && !c.deleted_at) ?? null
+  }
+
+  insertDmChannel({ channelId, name, userIdA, userIdB, now }) {
+    this._channels.set(channelId, { channel_id: channelId, hub_id: null, kind: 'dm', name, topic: null, visibility: 'private', sort_order: 0, created_by_user_id: userIdA, created_at: now, deleted_at: null })
+    this._members.set(`${channelId}:${userIdA}`, { channel_id: channelId, user_id: userIdA, role: 'member', joined_at: now, left_at: null, banned_at: null })
+    this._members.set(`${channelId}:${userIdB}`, { channel_id: channelId, user_id: userIdB, role: 'member', joined_at: now, left_at: null, banned_at: null })
+  }
+
+  listDmsByUser({ userId }) {
+    return [...this._channels.values()]
+      .filter(c => c.kind === 'dm' && !c.deleted_at)
+      .filter(c => {
+        const m = this._members.get(`${c.channel_id}:${userId}`)
+        return m && !m.left_at
+      })
+      .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+      .map(c => {
+        const otherMember = [...this._members.values()].find(m => m.channel_id === c.channel_id && m.user_id !== userId && !m.left_at)
+        return { channel_id: c.channel_id, name: c.name, kind: c.kind, other_user_id: otherMember?.user_id ?? null }
+      })
   }
 
   upsertMembership({ channelId, userId, role, now }) {
@@ -91,26 +115,12 @@ export class InMemoryChannelRepository {
       .map(m => ({ user_id: m.user_id, role: m.role }))
   }
 
-  insertInvite({ inviteId, channelId, tokenHash, createdByUserId, now, expiresAt, maxUses }) {
-    this._invites.set(tokenHash, { invite_id: inviteId, channel_id: channelId, token_hash: tokenHash, created_by_user_id: createdByUserId, created_at: now, expires_at: expiresAt, max_uses: maxUses, uses: 0 })
-  }
-
-  findInviteByTokenHash({ tokenHash }) {
-    return this._invites.get(tokenHash) ?? null
-  }
-
-  redeemInvite({ inviteId, channelId, userId, now }) {
-    for (const invite of this._invites.values()) {
-      if (invite.invite_id === inviteId) { invite.uses += 1; break }
-    }
-    this.upsertMembership({ channelId, userId, role: 'member', now })
-  }
-
-  patchChannel({ channelId, name, topic }) {
+  patchChannel({ channelId, name, topic, visibility }) {
     const c = this._channels.get(channelId)
     if (!c) return
     if (name !== undefined) c.name = name
     if (topic !== undefined) c.topic = topic
+    if (visibility !== undefined) c.visibility = visibility
   }
 
   softDeleteChannel({ channelId, now }) {

@@ -13,14 +13,15 @@ export class AuthService {
     this.bootstrapToken = bootstrapToken
   }
 
-  createInvite({ createdByUserId, ttlMs = DEFAULT_TTL_MS, maxUses = 1, note = null }) {
+  createInvite({ createdByUserId, ttlMs = DEFAULT_TTL_MS, maxUses = 1, note = null, roles = ['user'] }) {
     this.requireAdmin(createdByUserId)
+    if (!Array.isArray(roles) || roles.length === 0) throw new ServiceError('BAD_REQUEST', 'roles must be a non-empty array')
     const inviteToken = randomToken()
     const inviteId = newId('invite')
     const now = this.nowFn()
     const expiresAt = now + ttlMs
-    this.authRepo.insertInvite({ inviteId, tokenHash: hashToken(inviteToken), createdByUserId, now, expiresAt, maxUses, note })
-    return { inviteToken, inviteId, expiresAt, maxUses }
+    this.authRepo.insertInvite({ inviteId, tokenHash: hashToken(inviteToken), createdByUserId, now, expiresAt, maxUses, note, initialRolesJson: JSON.stringify(roles) })
+    return { inviteToken, inviteId, expiresAt, maxUses, roles }
   }
 
   listInvites({ requestingUserId }) {
@@ -49,7 +50,7 @@ export class AuthService {
     if (!password) throw new ServiceError('BAD_REQUEST', 'Password is required')
     if (this.authRepo.isHandleTaken({ handle })) throw new ServiceError('CONFLICT', 'Handle already taken')
     const userId = newId('u')
-    const roles = this.getDefaultRoles()
+    const roles = invite.initial_roles_json ? JSON.parse(invite.initial_roles_json) : this.getDefaultRoles()
     const passwordHash = await hashPassword(password)
     const { sessionId, sessionToken, expiresAt } = this._makeSessionParts(now)
     this.authRepo.registerUser({
@@ -117,9 +118,11 @@ export class AuthService {
     const now = this.nowFn()
     const row = this.authRepo.findSessionWithUser({ tokenHash: hashToken(sessionToken) })
     if (!row || row.revoked_at || row.expires_at <= now) return null
+    const lastSeenAt = row.last_seen_at ?? null
     this.authRepo.touchSession({ sessionId: row.session_id, now })
     return {
       session_id: row.session_id,
+      last_seen_at: lastSeenAt,
       user: { user_id: row.user_id, handle: row.handle, display_name: row.display_name, roles: JSON.parse(row.roles_json) }
     }
   }
@@ -175,6 +178,15 @@ export class AuthService {
 
   findInvite(inviteToken) {
     return this.authRepo.findInviteByTokenHash({ tokenHash: hashToken(inviteToken) })
+  }
+
+  listUsersBasic() {
+    return this.authRepo.listUsers().map(row => ({
+      user_id:      row.user_id,
+      handle:       row.handle,
+      display_name: row.display_name,
+      roles:        JSON.parse(row.roles_json),
+    }))
   }
 
   getDefaultRoles() { return ['user'] }

@@ -7,8 +7,8 @@ export class InMemoryAuthRepository {
 
   // ── Invites ────────────────────────────────────────────────────────────────
 
-  insertInvite({ inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note }) {
-    this._invites.set(tokenHash, { invite_id: inviteId, token_hash: tokenHash, created_by_user_id: createdByUserId, created_at: now, expires_at: expiresAt, max_uses: maxUses, uses: 0, note, redeemed_by_user_id: null })
+  insertInvite({ inviteId, tokenHash, createdByUserId, now, expiresAt, maxUses, note, initialRolesJson }) {
+    this._invites.set(tokenHash, { invite_id: inviteId, token_hash: tokenHash, created_by_user_id: createdByUserId, created_at: now, expires_at: expiresAt, max_uses: maxUses, uses: 0, note, initial_roles_json: initialRolesJson, redeemed_by_user_id: null })
   }
 
   findInviteByTokenHash({ tokenHash }) {

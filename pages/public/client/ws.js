@@ -62,5 +62,10 @@ export class WsClient extends EventTarget {
     return this
   }
 
+  once(type, handler) {
+    this.addEventListener(type, (e) => handler(e.msg?.body ?? e.msg, e.msg), { once: true })
+    return this
+  }
+
   get ready() { return this.#ws?.readyState === WebSocket.OPEN }
 }

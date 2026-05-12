@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun --watch index.js",
     "start": "bun index.js",
+    "migrate": "bun scripts/migrate.js",
     "test": "bun test",
     "docker-build": "./docker-build-k3d.sh",
     "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/deployment.yaml -n ${KUBE_NAMESPACE:-default}",

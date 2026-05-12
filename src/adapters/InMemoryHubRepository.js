@@ -59,11 +59,19 @@ export class InMemoryHubRepository {
     if (m) m.left_at = now
   }
 
-  patchHub({ hubId, name, description }) {
+  listMembers({ hubId }) {
+    return [...this._members.values()]
+      .filter(m => m.hub_id === hubId && !m.left_at)
+      .sort((a, b) => (a.joined_at ?? 0) - (b.joined_at ?? 0))
+      .map(m => ({ user_id: m.user_id, handle: null, display_name: null, joined_at: m.joined_at }))
+  }
+
+  patchHub({ hubId, name, description, visibility }) {
     const hub = this._hubs.get(hubId)
     if (!hub) return
     if (name !== undefined) hub.name = name
     if (description !== undefined) hub.description = description
+    if (visibility !== undefined) hub.visibility = visibility
   }
 
   listActiveChannelIds({ hubId }) {

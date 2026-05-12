@@ -236,3 +236,54 @@ Scheduled backups are the operator's responsibility — a cron entry calling `bu
 - Retention policy (how many backups to keep) is left to the operator's cron script
 - The `scripts/` directory in the repository contains `backup.js` and `restore.js`
 - Point-in-time recovery is limited to the granularity of backup frequency — this is acceptable for the target deployment scale; operators who need finer granularity can enable SQLite's WAL archiving separately
+
+---
+
+## ADR-006 — Private channel membership: remove invite tokens
+
+**Date:** 2026-05-11
+**Status:** Decided — supersedes the channel invite token design implicit in the initial schema
+
+### Context
+
+The initial schema included a `channel_invites` table supporting a token-based invite flow for
+private channels: an owner or mod generates a time-limited token, shares it out-of-band, and the
+recipient redeems it to join. This mirrors the system-level invite flow used for onboarding new
+users to the instance.
+
+The question is whether this flow is warranted given the target deployment scale of 1–10 users
+where everyone on the instance is already known to the team.
+
+### Options considered
+
+**A. Keep channel invite tokens** — maintain the token generation, expiry, max-uses, and
+redemption path alongside the direct `channel.add_member` flow.
+
+**B. Remove channel invite tokens** — use only `channel.add_member` (owner or mod adds a known
+user directly by `user_id`). Delete `channel_invites` table and all associated code.
+
+### Decision
+
+**Option B — remove channel invite tokens.**
+
+For a team of 1–10 people where every user on the instance is already known, the direct
+`channel.add_member` flow is sufficient. An owner or mod sees the user list and adds members by
+name. There is no meaningful use case for generating and sharing an out-of-band token at this
+scale.
+
+The system-level invite (`invites` table, `auth.invite_redeem`) is unaffected — it remains the
+mechanism for onboarding new users to the instance. Only the per-channel token layer is removed.
+
+Private channels and direct member addition remain fully intact:
+- `channel.create` with `visibility: 'private'` — unchanged
+- `channel.add_member` — unchanged; still requires owner or mod role
+
+### Consequences
+
+- `channel_invites` table is dropped (migration required for existing databases)
+- `ChannelService.createChannelInvite`, `redeemChannelInvite` are deleted
+- `SqliteChannelRepository.insertInvite`, `findInviteByTokenHash`, `redeemInvite` are deleted
+- `ChatServer.js` `#handleChannelInviteCreate` handler and `channel.invite_create` route are deleted
+- Less surface area: fewer tokens to manage, fewer expiry edge cases, simpler mental model
+- If a Discord-style shareable join link is ever needed (e.g. for a `family` profile), it can be
+  re-introduced as a deliberate feature at that time

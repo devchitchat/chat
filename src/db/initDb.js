@@ -56,7 +56,7 @@ export const initDb = (db) => {
 
     CREATE TABLE IF NOT EXISTS channels (
       channel_id TEXT PRIMARY KEY,
-      hub_id TEXT NOT NULL,
+      hub_id TEXT,
       kind TEXT NOT NULL,
       name TEXT NOT NULL,
       topic TEXT,
@@ -65,7 +65,6 @@ export const initDb = (db) => {
       created_by_user_id TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER,
-      FOREIGN KEY(hub_id) REFERENCES hubs(hub_id),
       FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
     );
 
@@ -79,19 +78,6 @@ export const initDb = (db) => {
       PRIMARY KEY (channel_id, user_id),
       FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
       FOREIGN KEY(user_id) REFERENCES users(user_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS channel_invites (
-      invite_id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL,
-      token_hash TEXT NOT NULL,
-      created_by_user_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      max_uses INTEGER NOT NULL,
-      uses INTEGER NOT NULL,
-      FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
-      FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
     );
 
     CREATE TABLE IF NOT EXISTS events (
@@ -114,8 +100,22 @@ export const initDb = (db) => {
       text TEXT NOT NULL,
       client_msg_id TEXT,
       deleted_at INTEGER,
+      priority TEXT NOT NULL DEFAULT 'normal',
+      attachments_json TEXT,
       FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
       FOREIGN KEY(user_id) REFERENCES users(user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS uploads (
+      upload_id        TEXT    PRIMARY KEY,
+      uploader_user_id TEXT    NOT NULL REFERENCES users(user_id),
+      channel_id       TEXT    NOT NULL REFERENCES channels(channel_id),
+      msg_id           TEXT    REFERENCES messages(msg_id),
+      original_name    TEXT    NOT NULL,
+      stored_name      TEXT    NOT NULL,
+      mime_type        TEXT    NOT NULL,
+      size_bytes       INTEGER NOT NULL,
+      created_at       INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS deliveries (
@@ -159,6 +159,9 @@ export const initDb = (db) => {
 
   // Add sort_order to existing databases that pre-date this column
   try { db.exec(`ALTER TABLE channels ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
+  // Add priority + attachments_json to existing messages tables
+  try { db.exec(`ALTER TABLE messages ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }
 
   // Bot tokens — added after initial schema
   db.exec(`

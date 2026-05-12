@@ -19,7 +19,34 @@ export class SqliteDeliveryRepository {
 
   advance({ channelId, userId, afterSeq, now }) {
     this.db.prepare(
-      `UPDATE deliveries SET after_seq = ?, last_delivered_at = ? WHERE channel_id = ? AND user_id = ?`
-    ).run(afterSeq, now, channelId, userId)
+      `UPDATE deliveries
+       SET after_seq = ?, last_delivered_at = ?,
+           mention_seq = CASE WHEN mention_seq > 0 AND mention_seq <= ? THEN 0 ELSE mention_seq END
+       WHERE channel_id = ? AND user_id = ?`
+    ).run(afterSeq, now, afterSeq, channelId, userId)
+  }
+
+  advanceMention({ channelId, userId, mentionSeq }) {
+    this.db.prepare(
+      `UPDATE deliveries SET mention_seq = ? WHERE channel_id = ? AND user_id = ? AND mention_seq < ?`
+    ).run(mentionSeq, channelId, userId, mentionSeq)
+  }
+
+  buildDigestData({ userId }) {
+    return this.db.prepare(
+      `SELECT
+         d.channel_id, c.name, c.kind, d.after_seq, d.mention_seq,
+         COALESCE(
+           (SELECT MAX(seq) FROM messages WHERE channel_id = d.channel_id AND deleted_at IS NULL),
+           0
+         ) AS max_seq,
+         (SELECT cm2.user_id FROM channel_members cm2
+          WHERE cm2.channel_id = c.channel_id AND cm2.user_id != d.user_id
+            AND cm2.left_at IS NULL AND c.kind = 'dm'
+          LIMIT 1) AS other_user_id
+       FROM deliveries d
+       JOIN channels c ON d.channel_id = c.channel_id AND c.deleted_at IS NULL
+       WHERE d.user_id = ?`
+    ).all(userId)
   }
 }

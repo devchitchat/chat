@@ -103,6 +103,34 @@ export default function CallIsland(root) {
     return availableDevices
   }
 
+  // ── Hydrate seed message attachments ──────────────────────────────────────
+  // Seed messages are SSR'd without attachment HTML. Process data-attachments now.
+  // Called on initial mount and again after each SPA navigation morph.
+  function hydrateSeedMessages() {
+    messages.querySelectorAll('article.message').forEach(article => {
+      if (article.dataset.hydrated) return
+      article.dataset.hydrated = '1'
+
+      // Add dm-trigger to non-self sender handles
+      const handle = article.querySelector('.message-handle[data-user-id]')
+      if (handle && handle.dataset.userId !== userId) {
+        handle.classList.add('dm-trigger')
+        handle.title = 'Send a direct message'
+      }
+
+      // Inject attachment HTML for seed messages that have attachments_json
+      const raw = article.dataset.attachments
+      if (!raw) return
+      let attachments
+      try { attachments = JSON.parse(raw) } catch { return }
+      if (!Array.isArray(attachments) || attachments.length === 0) return
+      attachments.forEach(a => {
+        article.insertAdjacentHTML('beforeend', renderAttachment(a))
+      })
+    })
+  }
+  hydrateSeedMessages()
+
   // ── Chat: connect + join channel ───────────────────────────────────────────
 
   ws.on('open', () => {
@@ -139,11 +167,151 @@ export default function CallIsland(root) {
 
   // ── Chat: composer ─────────────────────────────────────────────────────────
 
+  // Pending attachments: [{ upload_id, url, original_name, mime_type, size_bytes }]
+  let pendingAttachments = []
+
+  const composerEl = root.querySelector('.composer')
+  const textareaEl = root.querySelector('#message-input')
+
+  // Attachment chips container — injected above the textarea
+  const chipsEl = document.createElement('div')
+  chipsEl.className = 'attachment-chips'
+  composerEl?.insertBefore(chipsEl, textareaEl)
+
+  // Hidden file input
+  const fileInputEl = document.createElement('input')
+  fileInputEl.type = 'file'
+  fileInputEl.multiple = true
+  fileInputEl.style.display = 'none'
+  fileInputEl.setAttribute('aria-hidden', 'true')
+  composerEl?.appendChild(fileInputEl)
+
+  // Attach-file button (paperclip)
+  const btnAttachEl = document.createElement('button')
+  btnAttachEl.type = 'button'
+  btnAttachEl.className = 'btn-attach btn-icon'
+  btnAttachEl.title = 'Attach file'
+  btnAttachEl.setAttribute('aria-label', 'Attach file')
+  btnAttachEl.innerHTML = '📎'
+  // Insert before the send button
+  const btnSendEl = composerEl?.querySelector('.btn-send')
+  if (btnSendEl && composerEl) composerEl.insertBefore(btnAttachEl, btnSendEl)
+
+  btnAttachEl.addEventListener('click', () => fileInputEl.click())
+  fileInputEl.addEventListener('change', () => {
+    uploadFiles([...fileInputEl.files])
+    fileInputEl.value = ''
+  })
+
+  // Drag-and-drop onto the textarea
+  let dropOverlayEl = null
+
+  function ensureDropOverlay() {
+    if (dropOverlayEl) return dropOverlayEl
+    dropOverlayEl = document.createElement('div')
+    dropOverlayEl.className = 'drop-overlay'
+    dropOverlayEl.textContent = 'Drop to attach'
+    composerEl?.appendChild(dropOverlayEl)
+    return dropOverlayEl
+  }
+
+  composerEl?.addEventListener('dragover', e => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    ensureDropOverlay().hidden = false
+  })
+
+  composerEl?.addEventListener('dragleave', e => {
+    if (composerEl.contains(e.relatedTarget)) return
+    if (dropOverlayEl) dropOverlayEl.hidden = true
+  })
+
+  composerEl?.addEventListener('drop', e => {
+    e.preventDefault()
+    if (dropOverlayEl) dropOverlayEl.hidden = true
+    const files = [...(e.dataTransfer.files ?? [])]
+    if (files.length > 0) uploadFiles(files)
+  })
+
+  async function uploadFiles(files) {
+    for (const file of files) {
+      await uploadOneFile(file, channelId)
+    }
+  }
+
+  async function uploadOneFile(file, targetChannelId) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('channel_id', targetChannelId)
+
+    let res
+    try {
+      res = await fetch('/api/uploads', { method: 'POST', body: formData })
+    } catch {
+      showComposerError(`Upload failed: network error`)
+      return null
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      showComposerError(`Upload failed: ${body.error ?? res.statusText}`)
+      return null
+    }
+
+    const attachment = await res.json()
+    pendingAttachments.push(attachment)
+    renderChips()
+    return attachment
+  }
+
+  function renderChips() {
+    chipsEl.innerHTML = pendingAttachments.map((a, i) => `
+      <span class="attachment-chip" data-index="${i}">
+        <span class="attachment-chip-name">${escHtml(a.original_name)}</span>
+        <button type="button" class="attachment-chip-remove" data-index="${i}" aria-label="Remove ${escHtml(a.original_name)}">×</button>
+      </span>
+    `).join('')
+    chipsEl.hidden = pendingAttachments.length === 0
+  }
+
+  chipsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.attachment-chip-remove')
+    if (!btn) return
+    const idx = parseInt(btn.dataset.index, 10)
+    pendingAttachments.splice(idx, 1)
+    renderChips()
+  })
+
+  function showComposerError(msg) {
+    const chip = document.createElement('span')
+    chip.className = 'attachment-chip attachment-chip-error'
+    chip.textContent = msg
+    chipsEl.appendChild(chip)
+    chipsEl.hidden = false
+    setTimeout(() => chip.remove(), 5000)
+  }
+
   function sendMessage() {
     const text = draft().trim()
-    if (!text) return
-    ws.send({ t: 'msg.send', body: { channel_id: channelId, text, client_msg_id: `local_${Date.now()}` } })
+    if (!text && pendingAttachments.length === 0) return
+    ws.send({
+      t: 'msg.send',
+      body: {
+        channel_id: channelId,
+        text,
+        client_msg_id: `local_${Date.now()}`,
+        attachments: pendingAttachments.map(a => ({
+          upload_id: a.upload_id,
+          url: a.url,
+          filename: a.original_name,
+          mime_type: a.mime_type,
+          size_bytes: a.size_bytes,
+        }))
+      }
+    })
     draft.set('')
+    pendingAttachments = []
+    renderChips()
   }
 
   function handleComposerKey(e) {
@@ -153,21 +321,61 @@ export default function CallIsland(root) {
     }
   }
 
-  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text }) {
+  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, attachments }) {
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
     const article = document.createElement('article')
     article.className = 'message'
     article.dataset.seq = seq
     article.dataset.msgId = msg_id
     const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const isSelf = user_id === userId
+    const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
     article.innerHTML = `
-      <span class="message-handle">${escHtml(user_display_name ?? user_id)}</span>
+      <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}</time>
-      <p class="message-text">${escHtml(text)}</p>
+      ${text ? `<p class="message-text">${escHtml(text)}</p>` : ''}
+      ${attachmentHtml}
     `
     messages.appendChild(article)
     messages.scrollTop = messages.scrollHeight
   }
+
+  function renderAttachment(a) {
+    const name = escHtml(a.filename ?? a.original_name ?? 'file')
+    const url  = escHtml(a.url)
+    const mime = a.mime_type ?? ''
+    if (mime.startsWith('image/')) {
+      return `<a class="attachment-image-link" href="${url}" target="_blank" rel="noopener noreferrer">
+        <img class="attachment-image" src="${url}" alt="${name}" loading="lazy">
+      </a>`
+    }
+    const size = a.size_bytes ? ` (${formatBytes(a.size_bytes)})` : ''
+    return `<a class="attachment-file" href="${url}" target="_blank" rel="noopener noreferrer" download>
+      <span class="attachment-file-icon">📎</span>
+      <span class="attachment-file-name">${name}</span>
+      <span class="attachment-file-size">${size}</span>
+    </a>`
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  // Delegated click: message sender name → open DM
+  messages.addEventListener('click', e => {
+    const handle = e.target.closest('.dm-trigger')
+    if (!handle) return
+    const targetUserId = handle.dataset.userId
+    if (!targetUserId || targetUserId === userId) return
+    ws.send({ t: 'dm.open', body: { target_user_id: targetUserId } })
+  })
+
+  ws.on('dm.opened', ({ channel_id, notify_only }) => {
+    if (notify_only) return  // target user — sidebar handles the notification
+    window.location.href = `/channels/${channel_id}`
+  })
 
   // ── Call: rtc.call_state — drives "N in call" row + sidebar badge ──────────
 
@@ -988,6 +1196,9 @@ export default function CallIsland(root) {
     document.title = `#${name} — devchitchat`
     const textarea = root.querySelector('#message-input')
     if (textarea) textarea.placeholder = `Message in ${name}`
+
+    // Hydrate attachments + dm-trigger on the freshly morphed seed articles
+    hydrateSeedMessages()
 
     // Join new channel — server responds with channel.joined + rtc.call_state.
     // channel.joined handler sends msg.list if afterSeq > 0, which will append

@@ -32,6 +32,13 @@
         <label for="note">Note (optional)</label>
         <input type="text" id="note" name="note" placeholder="e.g. For Alice">
       </div>
+      <div class="form-row">
+        <label for="roles">Account type</label>
+        <select id="roles" name="roles">
+          <option value="user">User — can see public channels</option>
+          <option value="guest">Guest — can only see channels they're added to</option>
+        </select>
+      </div>
       <button type="submit" class="btn">Create invite</button>
     </form>
   </section>
@@ -44,6 +51,7 @@
         <tr>
           <th>Note</th>
           <th>Created by</th>
+          <th>Account type</th>
           <th>Expires</th>
           <th>Uses</th>
           <th>Status</th>
@@ -55,6 +63,7 @@
         <tr>
           <td>{{note}}</td>
           <td>{{created_by_handle}}</td>
+          <td>{{#if is_guest}}<span class="tag tag--muted">Guest</span>{{else}}User{{/if}}</td>
           <td>{{expires_at_fmt}}</td>
           <td>{{uses}} / {{max_uses}}</td>
           <td>

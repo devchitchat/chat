@@ -60,11 +60,21 @@ export class SqliteHubRepository {
     this.db.prepare('UPDATE hub_members SET left_at = ? WHERE hub_id = ? AND user_id = ?').run(now, hubId, userId)
   }
 
-  patchHub({ hubId, name, description }) {
+  listMembers({ hubId }) {
+    return this.db.prepare(
+      `SELECT u.user_id, u.handle, u.display_name, hm.joined_at
+       FROM hub_members hm JOIN users u ON hm.user_id = u.user_id
+       WHERE hm.hub_id = ? AND hm.left_at IS NULL
+       ORDER BY hm.joined_at ASC`
+    ).all(hubId)
+  }
+
+  patchHub({ hubId, name, description, visibility }) {
     const updates = []
     const params = []
     if (name !== undefined) { updates.push('name = ?'); params.push(name) }
     if (description !== undefined) { updates.push('description = ?'); params.push(description) }
+    if (visibility !== undefined) { updates.push('visibility = ?'); params.push(visibility) }
     params.push(hubId)
     this.db.prepare(`UPDATE hubs SET ${updates.join(', ')} WHERE hub_id = ?`).run(...params)
   }

@@ -1,0 +1,43 @@
+/**
+ * GET /uploads/:uploadId/:filename
+ *
+ * Authenticated file download handler.
+ * `:filename` is cosmetic — the actual file is located by uploadId + stored_name from DB.
+ * Path traversal is impossible because stored_name is opaque and never interpolated from URL.
+ */
+import { sessionFromRequest, uploadService } from '../../../src/context.js'
+import { ServiceError } from '../../../src/util/errors.js'
+
+export async function GET(req) {
+  const session = sessionFromRequest(req)
+  if (!session) return new Response('Unauthorized', { status: 401 })
+
+  const parts = new URL(req.url).pathname.split('/')
+  // pathname: /uploads/<uploadId>/<filename>
+  const uploadId = parts[2]
+
+  if (!uploadId) return new Response('Not Found', { status: 404 })
+
+  try {
+    const { stream, mimeType, contentDisposition } = await uploadService.streamFile({
+      uploadId,
+      requestingUserId: session.user.user_id,
+      userRoles: session.user.roles,
+    })
+
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': contentDisposition,
+        'Cache-Control': 'private, max-age=31536000, immutable',
+      },
+    })
+  } catch (err) {
+    if (err instanceof ServiceError) {
+      const status = { FORBIDDEN: 403, NOT_FOUND: 404 }[err.code] ?? 500
+      return new Response(err.message, { status })
+    }
+    throw err
+  }
+}

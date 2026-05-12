@@ -1,6 +1,6 @@
 import { newId } from '../util/ids.js'
-import { hashToken, randomToken } from '../util/crypto.js'
 import { ServiceError } from '../util/errors.js'
+import { buildDmChannelName } from '../core/dm.js'
 
 export class ChannelService {
   constructor({ channelRepo, hubService, nowFn = () => Date.now() }) {
@@ -24,20 +24,21 @@ export class ChannelService {
 
   listChannels(userId, userRoles = [], hubId = null) {
     const isAdmin = userRoles.includes('admin')
+    const isGuest = userRoles.includes('guest')
     if (hubId) {
       return isAdmin
         ? this.channelRepo.listInHub({ hubId })
-        : this.channelRepo.listAccessibleInHub({ hubId, userId })
+        : this.channelRepo.listAccessibleInHub({ hubId, userId, isGuest })
     }
     return isAdmin
       ? this.channelRepo.listAll()
-      : this.channelRepo.listAccessible({ userId })
+      : this.channelRepo.listAccessible({ userId, isGuest })
   }
 
   joinChannel({ channelId, userId, userRoles = [] }) {
     const channel = this.getChannel(channelId)
     if (!channel || channel.deleted_at) throw new ServiceError('NOT_FOUND', 'Channel not found')
-    if (!this.hubService.canAccessHub(channel.hub_id, userId, userRoles)) throw new ServiceError('FORBIDDEN', 'Cannot access hub')
+    if (channel.hub_id !== null && !this.hubService.canAccessHub(channel.hub_id, userId, userRoles)) throw new ServiceError('FORBIDDEN', 'Cannot access hub')
 
     if (channel.visibility === 'private') {
       const member = this.getMembership(channelId, userId)
@@ -50,7 +51,12 @@ export class ChannelService {
   }
 
   leaveChannel({ channelId, userId }) {
-    this.channelRepo.setMemberLeft({ channelId, userId, now: this.nowFn() })
+    const channel = this.getChannel(channelId)
+    // DM channels have permanent membership — leaving only unsubscribes the WS topic,
+    // not the DB row, so the user can rejoin and still access history.
+    if (channel?.kind !== 'dm') {
+      this.channelRepo.setMemberLeft({ channelId, userId, now: this.nowFn() })
+    }
     return { channel_id: channelId }
   }
 
@@ -63,40 +69,14 @@ export class ChannelService {
     if (roles.includes('admin')) return true
     const channel = this.getChannel(channelId)
     if (!channel || channel.deleted_at) return false
-    if (!this.hubService.canAccessHub(channel.hub_id, userId, roles)) return false
-    if (channel.visibility === 'public') return true
+    // DM channels (hub_id = null) skip the hub access check — membership is the sole gate
+    if (channel.hub_id !== null && !this.hubService.canAccessHub(channel.hub_id, userId, roles)) return false
+    if (channel.visibility === 'public' && !roles.includes('guest')) return true
     return this.isMember(channelId, userId)
   }
 
   listChannelMembers(channelId) {
     return this.channelRepo.listActiveMembers({ channelId })
-  }
-
-  createChannelInvite({ channelId, createdByUserId, ttlMs = 24 * 60 * 60 * 1000, maxUses = 1 }) {
-    const member = this.getMembership(channelId, createdByUserId)
-    if (!member || !['owner', 'mod'].includes(member.role)) throw new ServiceError('FORBIDDEN', 'Channel invite requires owner or mod')
-    const channel = this.getChannel(channelId)
-    if (!channel || channel.visibility !== 'private') throw new ServiceError('BAD_REQUEST', 'Invites are only for private channels')
-
-    const inviteToken = randomToken()
-    const inviteId = newId('cinvite')
-    const now = this.nowFn()
-
-    this.channelRepo.insertInvite({ inviteId, channelId, tokenHash: hashToken(inviteToken), createdByUserId, now, expiresAt: now + ttlMs, maxUses })
-
-    return { inviteToken, inviteId, expiresAt: now + ttlMs, maxUses }
-  }
-
-  redeemChannelInvite({ inviteToken, userId }) {
-    const invite = this.channelRepo.findInviteByTokenHash({ tokenHash: hashToken(inviteToken) })
-    const now = this.nowFn()
-    if (!invite) throw new ServiceError('NOT_FOUND', 'Invite not found')
-    if (invite.expires_at <= now) throw new ServiceError('BAD_REQUEST', 'Invite expired')
-    if (invite.uses >= invite.max_uses) throw new ServiceError('BAD_REQUEST', 'Invite already used')
-
-    this.channelRepo.redeemInvite({ inviteId: invite.invite_id, channelId: invite.channel_id, userId, now })
-
-    return { channel_id: invite.channel_id }
   }
 
   addMember({ channelId, createdByUserId, targetUserId }) {
@@ -120,19 +100,33 @@ export class ChannelService {
     return this.channelRepo.findMembership({ channelId, userId })
   }
 
+  findOrCreateDm({ userId, targetUserId }) {
+    if (userId === targetUserId) throw new ServiceError('BAD_REQUEST', 'Cannot DM yourself')
+    const name = buildDmChannelName(userId, targetUserId)
+    const existing = this.channelRepo.findDmByName({ name })
+    if (existing) return { channel_id: existing.channel_id, is_new: false }
+    const channelId = newId('c')
+    this.channelRepo.insertDmChannel({ channelId, name, userIdA: userId, userIdB: targetUserId, now: this.nowFn() })
+    return { channel_id: channelId, is_new: true }
+  }
+
+  listDms({ userId }) {
+    return this.channelRepo.listDmsByUser({ userId })
+  }
+
   ensureDefaultChannel(hubId, createdByUserId) {
     const existing = this.channelRepo.findByHubAndName({ hubId, name: 'general' })
     if (existing) return existing
     return this.createChannel({ hubId, kind: 'text', name: 'general', topic: 'General discussions', visibility: 'public', createdByUserId, userRoles: ['admin'] })
   }
 
-  updateChannel({ channelId, userId, roles = [], name = null, topic = null }) {
+  updateChannel({ channelId, userId, roles = [], name = null, topic = null, visibility = null }) {
     const channel = this.getChannel(channelId)
     if (!channel || channel.deleted_at) throw new ServiceError('NOT_FOUND', 'Channel not found')
     const membership = this.getMembership(channelId, userId)
     const isOwner = membership && membership.role === 'owner' && !membership.left_at && !membership.banned_at
     if (!roles.includes('admin') && channel.created_by_user_id !== userId && !isOwner) throw new ServiceError('FORBIDDEN', 'Cannot update channel')
-    if (name === null && topic === null) throw new ServiceError('BAD_REQUEST', 'No fields to update')
+    if (name === null && topic === null && visibility === null) throw new ServiceError('BAD_REQUEST', 'No fields to update')
 
     const patch = {}
     if (name !== null) {
@@ -140,6 +134,10 @@ export class ChannelService {
       patch.name = name.trim()
     }
     if (topic !== null) patch.topic = topic
+    if (visibility !== null) {
+      if (!['public', 'private'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Channel visibility must be public or private')
+      patch.visibility = visibility
+    }
 
     this.channelRepo.patchChannel({ channelId, ...patch })
     return this.getChannel(channelId)

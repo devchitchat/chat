@@ -1,5 +1,6 @@
 <!-- Sidebar island: hub/channel nav + online presence -->
-<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}">
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}">
+  <div id="digest-banner" class="digest-banner" hidden></div>
   <section each="hubs" key="hub_id" class="hub-group">
     {{#each hubs}}
     <details class="hub-header" data-key="{{hub_id}}" open>
@@ -24,6 +25,13 @@
       </ul>
     </details>
     {{/each}}
+  </section>
+
+  <section class="dm-section">
+    <h3 class="dm-section-title">Direct Messages</h3>
+    <ul class="dm-list" id="dm-list">
+      <!-- populated by sidebar.js via dm.list_result -->
+    </ul>
   </section>
 
   <footer class="sidebar-footer">
@@ -90,8 +98,8 @@
   <!-- Server-rendered initial messages baked in -->
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
     {{#each seedMessages}}
-    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id">
-      <span class="message-handle">{{user_display_name}}</span>
+    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-attachments="{{attachments_json}}">
+      <span class="message-handle" data-user-id="{{user_id}}">{{user_display_name}}</span>
       <time class="message-time" datetime="{{ts}}">{{ts_fmt}}</time>
       <p class="message-text">{{text}}</p>
     </article>

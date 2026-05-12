@@ -27,7 +27,7 @@ export class HubService {
     if (roles.includes('admin')) return true
     const hub = this.getHub(hubId)
     if (!hub || hub.deleted_at) return false
-    if (hub.visibility === 'public') return true
+    if (hub.visibility === 'public' && !roles.includes('guest')) return true
     const member = this.getHubMembership(hubId, userId)
     return !!member && !member.left_at
   }
@@ -58,11 +58,11 @@ export class HubService {
     return this.createHub({ name: 'Lobby', description: 'Main hub for general discussions', visibility: 'public', createdByUserId })
   }
 
-  updateHub({ hubId, userId, roles = [], name = null, description = null }) {
+  updateHub({ hubId, userId, roles = [], name = null, description = null, visibility = null }) {
     const hub = this.getHub(hubId)
     if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')
     if (!roles.includes('admin') && hub.created_by_user_id !== userId) throw new ServiceError('FORBIDDEN', 'Cannot update hub')
-    if (name === null && description === null) throw new ServiceError('BAD_REQUEST', 'No fields to update')
+    if (name === null && description === null && visibility === null) throw new ServiceError('BAD_REQUEST', 'No fields to update')
 
     const patch = {}
     if (name !== null) {
@@ -70,9 +70,43 @@ export class HubService {
       patch.name = name.trim()
     }
     if (description !== null) patch.description = description
+    if (visibility !== null) {
+      if (!['public', 'restricted'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Hub visibility must be public or restricted')
+      patch.visibility = visibility
+    }
 
     this.hubRepo.patchHub({ hubId, ...patch })
     return this.getHub(hubId)
+  }
+
+  addHubMember({ hubId, targetUserId, requestingUserId, requestingRoles = [] }) {
+    const hub = this.getHub(hubId)
+    if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')
+    const isAdmin = requestingRoles.includes('admin')
+    const isCreator = hub.created_by_user_id === requestingUserId
+    if (!isAdmin && !isCreator) throw new ServiceError('FORBIDDEN', 'Admin or hub creator required')
+    this.hubRepo.upsertMembership({ hubId, userId: targetUserId, now: this.nowFn() })
+    return { hub_id: hubId, user_id: targetUserId }
+  }
+
+  removeHubMember({ hubId, targetUserId, requestingUserId, requestingRoles = [] }) {
+    const hub = this.getHub(hubId)
+    if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')
+    const isAdmin = requestingRoles.includes('admin')
+    const isCreator = hub.created_by_user_id === requestingUserId
+    if (!isAdmin && !isCreator) throw new ServiceError('FORBIDDEN', 'Admin or hub creator required')
+    this.hubRepo.setMemberLeft({ hubId, userId: targetUserId, now: this.nowFn() })
+    return { hub_id: hubId, user_id: targetUserId }
+  }
+
+  listHubMembers({ hubId, requestingUserId, requestingRoles = [] }) {
+    const hub = this.getHub(hubId)
+    if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')
+    const isAdmin = requestingRoles.includes('admin')
+    const membership = this.getHubMembership(hubId, requestingUserId)
+    const isMember = membership && !membership.left_at
+    if (!isAdmin && !isMember) throw new ServiceError('FORBIDDEN', 'Hub membership required')
+    return this.hubRepo.listMembers({ hubId })
   }
 
   deleteHub({ hubId, userId, roles = [] }) {
