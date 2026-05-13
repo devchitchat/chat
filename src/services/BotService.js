@@ -11,7 +11,8 @@ import { randomToken, hashToken } from '../util/crypto.js'
 import { ServiceError } from '../util/errors.js'
 
 export class BotService {
-  constructor({ authRepo, channelRepo, nowFn = () => Date.now() }) {
+  constructor({ authService, authRepo, channelRepo, nowFn = () => Date.now() }) {
+    this.authService = authService
     this.authRepo = authRepo
     this.channelRepo = channelRepo
     this.nowFn = nowFn
@@ -140,8 +141,8 @@ export class BotService {
   }
 
   _requireAdmin(userId) {
-    const row = this.authRepo.findUserById({ userId })
-    const roles = row ? JSON.parse(row.roles_json) : []
+    const user = this.authService.getUser(userId)
+    const roles = user?.roles ?? []
     if (!roles.includes('admin')) throw new ServiceError('FORBIDDEN', 'Admin role required')
   }
 }

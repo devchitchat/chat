@@ -25,7 +25,6 @@ chat.messageService.setUploadService(uploadService)
 
 // Wire service context so page handlers (pages/**/*.js) can access services
 initContext({
-  db,
   auth: chat.auth,
   hubService: chat.hubService,
   channelService: chat.channelService,

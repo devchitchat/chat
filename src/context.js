@@ -9,7 +9,6 @@
  *   import { auth, channelService, messageService } from '../../src/context.js'
  */
 
-export let db = null
 export let auth = null
 export let hubService = null
 export let channelService = null
@@ -24,7 +23,6 @@ export let uploadService = null
 export let logger = null
 
 export function init(services) {
-  db = services.db
   auth = services.auth
   hubService = services.hubService
   channelService = services.channelService

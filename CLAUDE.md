@@ -248,9 +248,7 @@ The migration runner (`scripts/migrate.js`) maintains a `_migrations` table in t
 Each file exports a `run(db)` function. Files are applied in filename order; already-applied files
 are skipped.
 
-> **Note:** `scripts/migrate.js` and the `scripts/migrate/` directory do not exist yet — they need
-> to be created before migrations can run. Add a `migrate` script to `package.json` once the runner
-> is in place.
+> The runner and migration directory are in place. `bun migrate` is wired in `package.json`.
 
 ```js
 // scripts/migrate/002-add-calls.js
@@ -283,7 +281,7 @@ Screen share renegotiation is the highest-risk area — the v1 code has the work
 |---|---|
 | `plans/ideal-customer-profile.md` | Who this is for; use as product decision criteria |
 | `plans/architecture-decisions.md` | Significant past decisions; read before revisiting them |
-| `plans/channel-design.md` | Call/video/screenshare capability model and UX |
-| `plans/mobile-nav-slide.md` | Mobile sidebar ↔ message panel navigation |
-| `plans/hub-channel-management-ui.md` | Management UI (long-press sheets, desktop modals) |
-| `plans/user-settings-persistence.md` | Local-first settings sync |
+| `plans/hub-reorder.md` | Hub drag-and-drop reordering — schema + service + client |
+| `plans/notifications-revision.md` | Notification UX revision — what to change TBD |
+| `plans/event-sourcing.md` | Future: full event sourcing (no code yet) |
+| `plans/archive/` | Fully implemented plans — kept for reference |

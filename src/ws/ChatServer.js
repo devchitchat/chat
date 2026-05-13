@@ -19,17 +19,29 @@ import { SqliteMessageRepository } from '../adapters/SqliteMessageRepository.js'
 import { SqliteDeliveryRepository } from '../adapters/SqliteDeliveryRepository.js'
 import { SqliteSearchRepository } from '../adapters/SqliteSearchRepository.js'
 import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository.js'
+import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
+import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers } from './handlers/hubHandlers.js'
+import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelListMembers, handleUserList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
+import { handleMsgSend, handleMsgList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
+import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 
 /**
  * ChatServer — Bun native WebSocket implementation.
  *
+ * Responsibilities:
+ *   1. Composition root — instantiate repos and services
+ *   2. WebSocket lifecycle — open, message, close
+ *   3. Message routing — delegate to domain handler modules
+ *   4. Shared helpers — sendWs, publish*, broadcast*, subscribeUserToChannel,
+ *      sendDigest, dispatchMentions, getIceServers, attachUser
+ *
  * Connection state lives in ws.data (set during upgrade):
- *   { connectionId, userId, sessionId, peerId, callId }
+ *   { connectionId, userId, sessionId, displayName, peerId, callId }
  *
  * Broadcasting uses Bun's topic pub/sub:
- *   ws.subscribe('channel:<id>')  — for channel message delivery
- *   ws.subscribe('call:<id>')     — for RTC signaling delivery
- *   ws.subscribe('user:<id>')     — for direct user delivery
+ *   ws.subscribe('channel:<id>')  — channel message delivery
+ *   ws.subscribe('call:<id>')     — RTC signaling delivery
+ *   ws.subscribe('user:<id>')     — direct user delivery
  *
  * The `websocket` property is passed directly to Bun.serve({ websocket }).
  */
@@ -38,28 +50,29 @@ export class ChatServer {
     this.db = db
     this.logger = logger
 
-    const authRepo = new SqliteAuthRepository({ db })
-    const hubRepo = new SqliteHubRepository({ db })
-    const channelRepo = new SqliteChannelRepository({ db })
-    const searchRepo = new SqliteSearchRepository({ db })
-    const messageRepo = new SqliteMessageRepository({ db })
+    // ── Repositories ───────────────────────────────────────────────────────────
+    const authRepo     = new SqliteAuthRepository({ db })
+    const hubRepo      = new SqliteHubRepository({ db })
+    const channelRepo  = new SqliteChannelRepository({ db })
+    const searchRepo   = new SqliteSearchRepository({ db })
+    const messageRepo  = new SqliteMessageRepository({ db })
     const deliveryRepo = new SqliteDeliveryRepository({ db })
 
-    this.auth = new AuthService({ authRepo, sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) })
-    this.hubService = new HubService({ hubRepo })
-    this.channelService = new ChannelService({ channelRepo, hubService: this.hubService })
-    this.searchService = new SearchService({ searchRepo })
-    this.messageService = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService })
-    this.deliveryService = new DeliveryService({ deliveryRepo })
+    // ── Services ───────────────────────────────────────────────────────────────
+    this.auth             = new AuthService({ authRepo, sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) })
+    this.hubService       = new HubService({ hubRepo })
+    this.channelService   = new ChannelService({ channelRepo, hubService: this.hubService })
+    this.searchService    = new SearchService({ searchRepo })
+    this.messageService   = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService })
+    this.deliveryService  = new DeliveryService({ deliveryRepo })
     this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
-    this.presenceService = new PresenceService()
+    this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
-    this.botService = new BotService({ authRepo, channelRepo })
+    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
 
-    // connectionId → ws (for direct lookup when we only have the id)
-    this.connections = new Map()
-    // peerId → connectionId (for RTC routing)
-    this.peerConnections = new Map()
+    // ── Connection state ───────────────────────────────────────────────────────
+    this.connections    = new Map()  // connectionId → ws
+    this.peerConnections = new Map() // peerId → connectionId
 
     this.signalingService.onEvent(event => this.#handleSignalingEvent(event))
 
@@ -67,9 +80,9 @@ export class ChatServer {
 
     // Expose as a plain object for Bun.serve({ websocket })
     this.websocket = {
-      open: (ws) => this.#open(ws),
+      open:    (ws)       => this.#open(ws),
       message: (ws, data) => this.#message(ws, data),
-      close: (ws) => this.#close(ws),
+      close:   (ws)       => this.#close(ws),
     }
   }
 
@@ -77,12 +90,11 @@ export class ChatServer {
 
   #open(ws) {
     const connectionId = newId('conn')
-    const userId      = ws.data?.userId      ?? null
-    const sessionId   = ws.data?.sessionId   ?? null
-    const displayName = ws.data?.displayName ?? null
+    const userId       = ws.data?.userId      ?? null
+    const sessionId    = ws.data?.sessionId   ?? null
+    const displayName  = ws.data?.displayName ?? null
     ws.data = { connectionId, userId, sessionId, displayName, peerId: null, callId: null }
     if (userId) {
-      // Pre-authenticated via cookie at upgrade time — wire presence + user topic
       ws.subscribe(`user:${userId}`)
       this.presenceService.addConnection(connectionId, userId)
     }
@@ -144,570 +156,107 @@ export class ChatServer {
   // ── Message router ─────────────────────────────────────────────────────────
 
   async #route(ws, msg) {
+    const ctx = this.#ctx()
     switch (msg.t) {
-      case 'hello':                 return this.#handleHello(ws, msg)
-      case 'auth.invite_redeem':    return this.#handleInviteRedeem(ws, msg)
-      case 'auth.signin':           return this.#handleSignIn(ws, msg)
-      case 'auth.signout':          return this.#handleSignOut(ws, msg)
-      case 'admin.invite_create':   return this.#handleAdminInviteCreate(ws, msg)
-      case 'admin.invite_list':     return this.#handleAdminInviteList(ws, msg)
-      case 'admin.invite_revoke':   return this.#handleAdminInviteRevoke(ws, msg)
-      case 'admin.user_list':       return this.#handleAdminUserList(ws, msg)
-      case 'admin.user_set_roles':  return this.#handleAdminUserSetRoles(ws, msg)
-      case 'admin.user_set_password': return this.#handleAdminUserSetPassword(ws, msg)
-      case 'admin.user_set_display_name': return this.#handleAdminUserSetDisplayName(ws, msg)
-      case 'admin.bot_create':      return this.#handleAdminBotCreate(ws, msg)
-      case 'admin.bot_list':        return this.#handleAdminBotList(ws, msg)
-      case 'admin.bot_token_create': return this.#handleAdminBotTokenCreate(ws, msg)
-      case 'admin.bot_token_revoke': return this.#handleAdminBotTokenRevoke(ws, msg)
-      case 'admin.bot_set_channels': return this.#handleAdminBotSetChannels(ws, msg)
-      case 'hub.list':              return this.#handleHubList(ws, msg)
-      case 'hub.create':            return this.#handleHubCreate(ws, msg)
-      case 'hub.update':            return this.#handleHubUpdate(ws, msg)
-      case 'hub.delete':            return this.#handleHubDelete(ws, msg)
-      case 'hub.add_member':        return this.#handleHubAddMember(ws, msg)
-      case 'hub.remove_member':     return this.#handleHubRemoveMember(ws, msg)
-      case 'hub.list_members':      return this.#handleHubListMembers(ws, msg)
-      case 'channel.list':          return this.#handleChannelList(ws, msg)
-      case 'channel.create':        return this.#handleChannelCreate(ws, msg)
-      case 'channel.update':        return this.#handleChannelUpdate(ws, msg)
-      case 'channel.delete':        return this.#handleChannelDelete(ws, msg)
-      case 'channel.reorder':       return this.#handleChannelReorder(ws, msg)
-      case 'channel.join':          return this.#handleChannelJoin(ws, msg)
-      case 'channel.leave':         return this.#handleChannelLeave(ws, msg)
-      case 'channel.add_member':    return this.#handleChannelAddMember(ws, msg)
-      case 'channel.list_members':  return this.#handleChannelListMembers(ws, msg)
-      case 'user.list':             return this.#handleUserList(ws, msg)
-      case 'dm.open':               return this.#handleDmOpen(ws, msg)
-      case 'dm.list':               return this.#handleDmList(ws, msg)
-      case 'msg.send':              return this.#handleMsgSend(ws, msg)
-      case 'msg.list':              return this.#handleMsgList(ws, msg)
-      case 'search.query':          return this.#handleSearchQuery(ws, msg)
-      case 'presence.subscribe':    return this.#handlePresenceSubscribe(ws, msg)
-      case 'rtc.call_create':       return this.#handleRtcCallCreate(ws, msg)
-      case 'rtc.join':              return this.#handleRtcJoin(ws, msg)
-      case 'rtc.offer':             return this.#handleRtcOffer(ws, msg)
-      case 'rtc.answer':            return this.#handleRtcAnswer(ws, msg)
-      case 'rtc.ice':               return this.#handleRtcIce(ws, msg)
-      case 'rtc.stream_publish':    return this.#handleRtcStreamPublish(ws, msg)
-      case 'rtc.leave':             return this.#handleRtcLeave(ws, msg)
-      case 'rtc.end_call':          return this.#handleRtcEndCall(ws, msg)
+      // Auth
+      case 'hello':                      return handleHello(ws, msg, ctx)
+      case 'auth.invite_redeem':         return handleInviteRedeem(ws, msg, ctx)
+      case 'auth.signin':                return handleSignIn(ws, msg, ctx)
+      case 'auth.signout':               return handleSignOut(ws, msg, ctx)
+      // Admin — invites
+      case 'admin.invite_create':        return handleAdminInviteCreate(ws, msg, ctx)
+      case 'admin.invite_list':          return handleAdminInviteList(ws, msg, ctx)
+      case 'admin.invite_revoke':        return handleAdminInviteRevoke(ws, msg, ctx)
+      // Admin — users
+      case 'admin.user_list':            return handleAdminUserList(ws, msg, ctx)
+      case 'admin.user_set_roles':       return handleAdminUserSetRoles(ws, msg, ctx)
+      case 'admin.user_set_password':    return handleAdminUserSetPassword(ws, msg, ctx)
+      case 'admin.user_set_display_name': return handleAdminUserSetDisplayName(ws, msg, ctx)
+      // Admin — bots
+      case 'admin.bot_create':           return handleAdminBotCreate(ws, msg, ctx)
+      case 'admin.bot_list':             return handleAdminBotList(ws, msg, ctx)
+      case 'admin.bot_token_create':     return handleAdminBotTokenCreate(ws, msg, ctx)
+      case 'admin.bot_token_revoke':     return handleAdminBotTokenRevoke(ws, msg, ctx)
+      case 'admin.bot_set_channels':     return handleAdminBotSetChannels(ws, msg, ctx)
+      // Hubs
+      case 'hub.list':                   return handleHubList(ws, msg, ctx)
+      case 'hub.create':                 return handleHubCreate(ws, msg, ctx)
+      case 'hub.update':                 return handleHubUpdate(ws, msg, ctx)
+      case 'hub.delete':                 return handleHubDelete(ws, msg, ctx)
+      case 'hub.add_member':             return handleHubAddMember(ws, msg, ctx)
+      case 'hub.remove_member':          return handleHubRemoveMember(ws, msg, ctx)
+      case 'hub.list_members':           return handleHubListMembers(ws, msg, ctx)
+      // Channels
+      case 'channel.list':               return handleChannelList(ws, msg, ctx)
+      case 'channel.create':             return handleChannelCreate(ws, msg, ctx)
+      case 'channel.update':             return handleChannelUpdate(ws, msg, ctx)
+      case 'channel.delete':             return handleChannelDelete(ws, msg, ctx)
+      case 'channel.reorder':            return handleChannelReorder(ws, msg, ctx)
+      case 'channel.join':               return handleChannelJoin(ws, msg, ctx)
+      case 'channel.leave':              return handleChannelLeave(ws, msg, ctx)
+      case 'channel.add_member':         return handleChannelAddMember(ws, msg, ctx)
+      case 'channel.list_members':       return handleChannelListMembers(ws, msg, ctx)
+      // Users & DMs
+      case 'user.list':                  return handleUserList(ws, msg, ctx)
+      case 'dm.open':                    return handleDmOpen(ws, msg, ctx)
+      case 'dm.list':                    return handleDmList(ws, msg, ctx)
+      // Messages
+      case 'msg.send':                   return handleMsgSend(ws, msg, ctx)
+      case 'msg.list':                   return handleMsgList(ws, msg, ctx)
+      case 'search.query':               return handleSearchQuery(ws, msg, ctx)
+      case 'presence.subscribe':         return handlePresenceSubscribe(ws, msg, ctx)
+      // RTC
+      case 'rtc.call_create':            return handleRtcCallCreate(ws, msg, ctx)
+      case 'rtc.join':                   return handleRtcJoin(ws, msg, ctx)
+      case 'rtc.offer':                  return handleRtcOffer(ws, msg, ctx)
+      case 'rtc.answer':                 return handleRtcAnswer(ws, msg, ctx)
+      case 'rtc.ice':                    return handleRtcIce(ws, msg, ctx)
+      case 'rtc.stream_publish':         return handleRtcStreamPublish(ws, msg, ctx)
+      case 'rtc.leave':                  return handleRtcLeave(ws, msg, ctx)
+      case 'rtc.end_call':               return handleRtcEndCall(ws, msg, ctx)
       default:
         this.#sendWs(ws, { t: 'error', ok: false, reply_to: msg.id, body: { code: 'BAD_REQUEST', message: 'Unknown message type' } })
     }
   }
 
-  // ── Auth handlers ──────────────────────────────────────────────────────────
+  // ── Shared context passed to all handlers ──────────────────────────────────
 
-  #handleHello(ws, msg) {
-    const { session_token, bot_token } = msg.body?.resume ?? {}
-    let user = null
-    let sessionId = null
-
-    let lastSeenAt = null
-    if (bot_token) {
-      const bot = this.botService.authenticateToken(bot_token)
-      user = { user_id: bot.userId, handle: bot.handle, display_name: bot.displayName, roles: bot.roles }
-      this.#attachUser(ws, user, null)
-    } else if (session_token) {
-      const session = this.auth.validateSession(session_token)
-      if (session) {
-        user = session.user
-        sessionId = session.session_id
-        lastSeenAt = session.last_seen_at
-        this.#attachUser(ws, user, sessionId)
-      }
-    }
-
-    this.#sendWs(ws, {
-      t: 'hello_ack', reply_to: msg.id, ok: true,
-      body: {
-        server: { name: 'devchitchat', ver: '2.0.0' },
-        session: { authenticated: !!user, user: user ?? null, session_token: session_token ?? null },
-        limits: { max_channels: 200, max_group_members: 20, max_message_bytes: 8000, max_signaling_bytes: 64000 }
-      }
-    })
-
-    if (user) this.#sendDigest(ws, user.user_id, lastSeenAt)
-  }
-
-  async #handleInviteRedeem(ws, msg) {
-    const { invite_token, profile, password } = msg.body || {}
-    const result = await this.auth.redeemInvite({ inviteToken: invite_token, profile, password })
-    const session = this.auth.validateSession(result.sessionToken)
-    this.#attachUser(ws, session.user, session.session_id)
-    this.#sendWs(ws, { t: 'auth.session', reply_to: msg.id, ok: true, body: { session_token: result.sessionToken, user: result.user } })
-    this.#sendDigest(ws, session.user.user_id, null)
-  }
-
-  async #handleSignIn(ws, msg) {
-    const { handle, password } = msg.body || {}
-    const result = await this.auth.signInWithPassword({ handle, password })
-    const session = this.auth.validateSession(result.sessionToken)
-    this.#attachUser(ws, session.user, session.session_id)
-    this.#sendWs(ws, { t: 'auth.session', reply_to: msg.id, ok: true, body: { session_token: result.sessionToken, user: result.user } })
-    this.#sendDigest(ws, session.user.user_id, session.last_seen_at)
-  }
-
-  #handleSignOut(ws, msg) {
-    if (ws.data.sessionId) this.auth.revokeSession(ws.data.sessionId)
-    ws.data.userId = null
-    ws.data.sessionId = null
-    this.#sendWs(ws, { t: 'auth.signed_out', reply_to: msg.id, ok: true, body: {} })
-  }
-
-  #handleAdminInviteCreate(ws, msg) {
-    const { ttl_ms, max_uses, note, roles } = msg.body || {}
-    const invite = this.auth.createInvite({ createdByUserId: ws.data.userId, ttlMs: ttl_ms, maxUses: max_uses, note, roles })
-    this.#sendWs(ws, { t: 'admin.invite', reply_to: msg.id, ok: true, body: { invite_token: invite.inviteToken, expires_at: invite.expiresAt, max_uses: invite.maxUses, roles: invite.roles } })
-  }
-
-  #handleAdminInviteList(ws, msg) {
-    const invites = this.auth.listInvites({ requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.invite_list_result', reply_to: msg.id, ok: true, body: { invites } })
-  }
-
-  #handleAdminInviteRevoke(ws, msg) {
-    const { invite_id } = msg.body || {}
-    this.auth.revokeInvite({ inviteId: invite_id, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.invite_revoked', reply_to: msg.id, ok: true, body: { invite_id } })
-  }
-
-  #handleAdminUserList(ws, msg) {
-    const users = this.auth.listUsers({ requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.user_list_result', reply_to: msg.id, ok: true, body: { users } })
-  }
-
-  #handleAdminUserSetRoles(ws, msg) {
-    const { user_id, roles } = msg.body || {}
-    this.auth.setUserRoles({ targetUserId: user_id, roles, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
-  }
-
-  async #handleAdminUserSetPassword(ws, msg) {
-    const { user_id, new_password } = msg.body || {}
-    await this.auth.adminSetPassword({ targetUserId: user_id, newPassword: new_password, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
-  }
-
-  #handleAdminUserSetDisplayName(ws, msg) {
-    const { user_id, display_name } = msg.body || {}
-    this.auth.adminUpdateDisplayName({ targetUserId: user_id, displayName: display_name, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.user_updated', reply_to: msg.id, ok: true, body: { user_id } })
-  }
-
-  #handleAdminBotCreate(ws, msg) {
-    const { handle, display_name, token_label } = msg.body || {}
-    const result = this.botService.createBot({ handle, displayName: display_name, tokenLabel: token_label, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.bot_created', reply_to: msg.id, ok: true, body: result })
-  }
-
-  #handleAdminBotList(ws, msg) {
-    const bots = this.botService.listBots({ requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.bot_list_result', reply_to: msg.id, ok: true, body: { bots } })
-  }
-
-  #handleAdminBotTokenCreate(ws, msg) {
-    const { user_id, label } = msg.body || {}
-    const result = this.botService.createToken({ userId: user_id, label, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.bot_token_created', reply_to: msg.id, ok: true, body: result })
-  }
-
-  #handleAdminBotTokenRevoke(ws, msg) {
-    const { token_id } = msg.body || {}
-    this.botService.revokeToken({ tokenId: token_id, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.bot_token_revoked', reply_to: msg.id, ok: true, body: { token_id } })
-  }
-
-  #handleAdminBotSetChannels(ws, msg) {
-    const { user_id, channel_ids } = msg.body || {}
-    this.botService.setBotChannels({ userId: user_id, channelIds: channel_ids, requestingUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'admin.bot_updated', reply_to: msg.id, ok: true, body: { user_id } })
-  }
-
-  // ── Hub handlers ───────────────────────────────────────────────────────────
-
-  #handleHubList(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const hubs = this.hubService.listHubs(ws.data.userId, user?.roles || [])
-    this.#sendWs(ws, { t: 'hub.list_result', reply_to: msg.id, ok: true, body: { hubs } })
-  }
-
-  #handleHubCreate(ws, msg) {
-    const { name, description, visibility } = msg.body || {}
-    const hub = this.hubService.createHub({ name, description, visibility, createdByUserId: ws.data.userId })
-    this.#sendWs(ws, { t: 'hub.created', reply_to: msg.id, ok: true, body: { hub } })
-    this.#broadcastToHubAudience(hub.hub_id, { t: 'hub.created', ok: true, body: { hub } }, ws)
-  }
-
-  #handleHubUpdate(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id, name, description, visibility } = msg.body || {}
-    const hub = this.hubService.updateHub({ hubId: hub_id, userId: ws.data.userId, roles: user?.roles || [], name, description, visibility })
-    this.#sendWs(ws, { t: 'hub.updated', reply_to: msg.id, ok: true, body: { hub } })
-    this.#broadcastToHubAudience(hub.hub_id, { t: 'hub.updated', ok: true, body: { hub } }, ws)
-  }
-
-  #handleHubDelete(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id } = msg.body || {}
-    // Collect audience before deletion — access checks fail once deleted_at is set
-    const audience = this.#collectHubAudience(hub_id, ws)
-    const result = this.hubService.deleteHub({ hubId: hub_id, userId: ws.data.userId, roles: user?.roles || [] })
-    this.#sendWs(ws, { t: 'hub.deleted', reply_to: msg.id, ok: true, body: result })
-    audience.forEach(conn => this.#sendWs(conn, { t: 'hub.deleted', ok: true, body: result }))
-  }
-
-  #handleHubAddMember(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id, user_id } = msg.body || {}
-    const result = this.hubService.addHubMember({ hubId: hub_id, targetUserId: user_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
-    this.#sendWs(ws, { t: 'hub.member_added', reply_to: msg.id, ok: true, body: result })
-    // Notify the added user directly (they may not be subscribed to the hub topic yet)
-    this.server?.publish(`user:${user_id}`, JSON.stringify({ v: 1, server_ts: Date.now(), t: 'hub.member_added', ok: true, body: result }))
-    this.#broadcastToHubAudience(hub_id, { t: 'hub.member_added', ok: true, body: result }, ws)
-  }
-
-  #handleHubRemoveMember(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id, user_id } = msg.body || {}
-    const result = this.hubService.removeHubMember({ hubId: hub_id, targetUserId: user_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
-    this.#sendWs(ws, { t: 'hub.member_removed', reply_to: msg.id, ok: true, body: result })
-    this.server?.publish(`user:${user_id}`, JSON.stringify({ v: 1, server_ts: Date.now(), t: 'hub.member_removed', ok: true, body: result }))
-    this.#broadcastToHubAudience(hub_id, { t: 'hub.member_removed', ok: true, body: result }, ws)
-  }
-
-  #handleHubListMembers(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id } = msg.body || {}
-    const members = this.hubService.listHubMembers({ hubId: hub_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [] })
-    const enriched = members.map(m => {
-      if (m.handle) return m  // SqliteHubRepository joins users — already enriched
-      const u = this.auth.getUser(m.user_id)
-      return { user_id: m.user_id, handle: u?.handle ?? null, display_name: u?.display_name ?? null, joined_at: m.joined_at }
-    })
-    this.#sendWs(ws, { t: 'hub.list_members_result', reply_to: msg.id, ok: true, body: { hub_id, members: enriched } })
-  }
-
-  // ── Channel handlers ───────────────────────────────────────────────────────
-
-  #handleChannelList(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const channels = this.channelService.listChannels(ws.data.userId, user?.roles || [], msg.body?.hub_id)
-    this.#sendWs(ws, { t: 'channel.list_result', reply_to: msg.id, ok: true, body: { channels, hub_id: msg.body?.hub_id } })
-  }
-
-  #handleChannelCreate(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    let { hub_id, kind, name, topic, visibility } = msg.body || {}
-    if (!hub_id || hub_id === 'default') {
-      hub_id = this.hubService.ensureDefaultHub(ws.data.userId).hub_id
-    }
-    const channel = this.channelService.createChannel({ hubId: hub_id, kind, name, topic, visibility, createdByUserId: ws.data.userId, userRoles: user?.roles || [] })
-    this.#sendWs(ws, { t: 'channel.created', reply_to: msg.id, ok: true, body: { channel } })
-    this.#broadcastToChannelAudience(channel.channel_id, { t: 'channel.created', ok: true, body: { channel } }, ws)
-  }
-
-  #handleChannelUpdate(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { channel_id, name, topic, visibility } = msg.body || {}
-    const channel = this.channelService.updateChannel({ channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [], name, topic, visibility })
-    this.#sendWs(ws, { t: 'channel.updated', reply_to: msg.id, ok: true, body: { channel } })
-    this.#publishChannel(channel_id, { t: 'channel.updated', ok: true, body: { channel } })
-  }
-
-  #handleChannelDelete(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { channel_id } = msg.body || {}
-    // Collect audience before deletion — access checks fail once deleted_at is set,
-    // and #publishChannel only reaches pub/sub subscribers (not sidebar connections)
-    const audience = this.#collectChannelAudience(channel_id, ws)
-    const result = this.channelService.deleteChannel({ channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [] })
-    this.#sendWs(ws, { t: 'channel.deleted', reply_to: msg.id, ok: true, body: result })
-    audience.forEach(conn => this.#sendWs(conn, { t: 'channel.deleted', ok: true, body: result }))
-  }
-
-  #handleChannelJoin(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { channel_id } = msg.body || {}
-    const result = this.channelService.joinChannel({ channelId: channel_id, userId: ws.data.userId, userRoles: user?.roles || [] })
-    ws.subscribe(`channel:${channel_id}`)
-    this.presenceService.joinChannel(ws.data.connectionId, channel_id)
-    this.deliveryService.getOrCreate({ channelId: channel_id, userId: ws.data.userId })
-    this.#sendWs(ws, { t: 'channel.joined', reply_to: msg.id, ok: true, body: result })
-
-    // Push current call state so the joining client immediately sees "N in call" or nothing
-    const activeCall = this.signalingService.getActiveCallForChannel(channel_id)
-    const peers = activeCall ? Array.from(activeCall.peers.values()) : []
-    this.#sendWs(ws, {
-      t: 'rtc.call_state', ok: true,
-      body: { channel_id, call_id: activeCall?.call_id ?? null, count: peers.length, users: peers.map(p => ({ user_id: p.user_id })) }
-    })
-  }
-
-  #handleChannelLeave(ws, msg) {
-    const { channel_id } = msg.body || {}
-    this.channelService.leaveChannel({ channelId: channel_id, userId: ws.data.userId })
-    ws.unsubscribe(`channel:${channel_id}`)
-    this.presenceService.leaveChannel(ws.data.connectionId, channel_id)
-    this.#sendWs(ws, { t: 'channel.left', reply_to: msg.id, ok: true, body: { channel_id } })
-  }
-
-  #handleChannelReorder(ws, msg) {
-    const user = this.auth.getUser(ws.data.userId)
-    const { hub_id, channel_ids } = msg.body || {}
-    const channels = this.channelService.reorderChannels({ hubId: hub_id, channelIds: channel_ids, userId: ws.data.userId, userRoles: user?.roles || [] })
-    this.#broadcastToHubAudience(hub_id, { t: 'channel.reordered', ok: true, body: { hub_id, channels } }, null)
-  }
-
-  #handleChannelAddMember(ws, msg) {
-    const { channel_id, user_id } = msg.body || {}
-    const result = this.channelService.addMember({ channelId: channel_id, createdByUserId: ws.data.userId, targetUserId: user_id })
-    this.#sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
-  }
-
-  #handleChannelListMembers(ws, msg) {
-    const { channel_id } = msg.body || {}
-    const user = this.auth.getUser(ws.data.userId)
-    const roles = user?.roles || []
-    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
-      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
-    }
-    const members = this.channelService.listChannelMembers(channel_id)
-    const enriched = members.map(m => {
-      const u = this.auth.getUser(m.user_id)
-      return { user_id: m.user_id, handle: u?.handle ?? null, display_name: u?.display_name ?? null, role: m.role }
-    })
-    this.#sendWs(ws, { t: 'channel.list_members_result', reply_to: msg.id, ok: true, body: { channel_id, members: enriched } })
-  }
-
-  #handleUserList(ws, msg) {
-    const users = this.auth.listUsersBasic().filter(u => !u.roles.includes('bot'))
-    this.#sendWs(ws, { t: 'user.list_result', reply_to: msg.id, ok: true, body: { users } })
-  }
-
-  #handleDmOpen(ws, msg) {
-    const { target_user_id } = msg.body || {}
-    const result = this.channelService.findOrCreateDm({ userId: ws.data.userId, targetUserId: target_user_id })
-    const targetUser = this.auth.getUser(target_user_id)
-
-    // Subscribe all active connections for both users to the DM channel topic.
-    // This ensures msg.event is delivered even if neither user has navigated there yet.
-    this.#subscribeUserToChannel(ws.data.userId, result.channel_id)
-    this.#subscribeUserToChannel(target_user_id, result.channel_id)
-
-    // Tell the initiating call.js to navigate (no notify_only — triggers navigation)
-    this.#sendWs(ws, {
-      t: 'dm.opened', reply_to: msg.id, ok: true,
-      body: { channel_id: result.channel_id, is_new: result.is_new, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
-    })
-
-    // Notify the initiating user's OTHER connections (sidebar) so the DM appears in the list
-    this.server?.publish(`user:${ws.data.userId}`, JSON.stringify({
-      v: 1, server_ts: Date.now(), t: 'dm.opened', ok: true,
-      body: { channel_id: result.channel_id, is_new: result.is_new, notify_only: true, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
-    }))
-
-    // Notify the target user's connections — add to DM list, show unread dot, don't navigate
-    this.server?.publish(`user:${target_user_id}`, JSON.stringify({
-      v: 1, server_ts: Date.now(), t: 'dm.opened', ok: true,
-      body: { channel_id: result.channel_id, is_new: result.is_new, notify_only: true, with_user: { user_id: ws.data.userId, display_name: ws.data.displayName } }
-    }))
-  }
-
-  /** Subscribe all active WS connections for a given user to a channel topic. */
-  #subscribeUserToChannel(userId, channelId) {
-    const topic = `channel:${channelId}`
-    for (const [, conn] of this.connections) {
-      if (conn.data.userId === userId) conn.subscribe(topic)
+  #ctx() {
+    const self = this
+    return {
+      // Services
+      auth:                this.auth,
+      hubService:          this.hubService,
+      channelService:      this.channelService,
+      messageService:      this.messageService,
+      deliveryService:     this.deliveryService,
+      searchService:       this.searchService,
+      presenceService:     this.presenceService,
+      signalingService:    this.signalingService,
+      notificationService: this.notificationService,
+      botService:          this.botService,
+      // Connection state (mutable references)
+      connections:         this.connections,
+      peerConnections:     this.peerConnections,
+      get server()         { return self.server },
+      // Bound helpers
+      sendWs:                    (ws, p)            => this.#sendWs(ws, p),
+      publishChannel:            (channelId, p)     => this.#publishChannel(channelId, p),
+      publishCall:               (callId, p)        => this.#publishCall(callId, p),
+      publishCallState:          (chId, callId, ps) => this.#publishCallState(chId, callId, ps),
+      broadcastToHubAudience:    (hubId, p, ex)     => this.#broadcastToHubAudience(hubId, p, ex),
+      broadcastToChannelAudience:(chId, p, ex)      => this.#broadcastToChannelAudience(chId, p, ex),
+      collectHubAudience:        (hubId, ex)        => this.#collectHubAudience(hubId, ex),
+      collectChannelAudience:    (chId, ex)         => this.#collectChannelAudience(chId, ex),
+      subscribeUserToChannel:    (userId, chId)     => this.#subscribeUserToChannel(userId, chId),
+      sendDigest:                (ws, uid, ts)      => this.#sendDigest(ws, uid, ts),
+      dispatchMentions:          (args)             => this.#dispatchMentions(args),
+      getIceServers:             ()                 => this.#getIceServers(),
+      attachUser:                (ws, user, sid)    => this.#attachUser(ws, user, sid),
     }
   }
 
-  #handleDmList(ws, msg) {
-    const dms = this.channelService.listDms({ userId: ws.data.userId })
-    // Subscribe this connection to all existing DM channels so msg.event is delivered
-    for (const dm of dms) ws.subscribe(`channel:${dm.channel_id}`)
-    const enriched = dms.map(dm => {
-      const other = this.auth.getUser(dm.other_user_id)
-      return { channel_id: dm.channel_id, with_user: { user_id: dm.other_user_id, display_name: other?.display_name ?? dm.other_user_id } }
-    })
-    this.#sendWs(ws, { t: 'dm.list_result', reply_to: msg.id, ok: true, body: { dms: enriched } })
-  }
-
-  // ── Message handlers ───────────────────────────────────────────────────────
-
-  #handleMsgSend(ws, msg) {
-    const { channel_id, text, client_msg_id, priority, attachments } = msg.body || {}
-    const result = this.messageService.sendMessage({
-      channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id, priority,
-      attachments: Array.isArray(attachments) ? attachments : []
-    })
-
-    this.#sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id, priority: result.priority } })
-
-    this.#publishChannel(channel_id, {
-      t: 'msg.event', ok: true,
-      body: {
-        msg_id: result.msg_id, channel_id, seq: result.seq,
-        user_id: ws.data.userId, user_display_name: ws.data.displayName,
-        ts: result.ts, text, priority: result.priority,
-        attachments: result.attachments ?? []
-      }
-    })
-
-    this.deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
-
-    // Detect @mentions and notify mentioned users
-    this.#dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq })
-  }
-
-  #handleMsgList(ws, msg) {
-    const { channel_id, after_seq, limit } = msg.body || {}
-    const result = this.messageService.listMessages({ channelId: channel_id, userId: ws.data.userId, afterSeq: after_seq ?? 0, limit: limit ?? 50 })
-    this.#sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: result })
-  }
-
-  #handleSearchQuery(ws, msg) {
-    const { channel_id, q, limit } = msg.body || {}
-    const roles = this.auth.getUser(ws.data.userId)?.roles || []
-    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
-      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
-    }
-    const hits = this.searchService.searchMessages({ channelId: channel_id, query: q, limit })
-    this.#sendWs(ws, { t: 'search.result', reply_to: msg.id, ok: true, body: { hits } })
-  }
-
-  // ── Presence ───────────────────────────────────────────────────────────────
-
-  #handlePresenceSubscribe(ws, msg) {
-    const roles = this.auth.getUser(ws.data.userId)?.roles || []
-    const accessibleChannels = this.channelService.listChannels(ws.data.userId, roles)
-    const channelIds = accessibleChannels.map(c => c.channel_id)
-    const users = this.presenceService.listOnlineUsersInChannels(channelIds)
-    this.#sendWs(ws, { t: 'presence.snapshot', reply_to: msg.id, ok: true, body: { users } })
-  }
-
-  // ── RTC handlers ───────────────────────────────────────────────────────────
-
-  #handleRtcCallCreate(ws, msg) {
-    const { channel_id, kind = 'mesh' } = msg.body || {}
-    const roles = this.auth.getUser(ws.data.userId)?.roles || []
-    if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
-      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
-    }
-    const result = this.signalingService.createCall({ roomId: channel_id, createdByUserId: ws.data.userId, topology: kind })
-    const iceServers = this.#getIceServers()
-    this.#sendWs(ws, { t: 'rtc.call', reply_to: msg.id, ok: true, body: { ...result, channel_id, ice_servers: iceServers } })
-  }
-
-  #handleRtcJoin(ws, msg) {
-    const { call_id } = msg.body || {}
-
-    // Guard: verify user can access the channel this call belongs to
-    const call = this.signalingService.getCall(call_id)
-    if (call) {
-      const roles = this.auth.getUser(ws.data.userId)?.roles || []
-      if (!this.channelService.canAccessChannel(call.room_id, ws.data.userId, roles)) {
-        return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
-      }
-    }
-
-    // Guard: if already in this call, return current participant list without re-joining
-    if (ws.data.peerId && ws.data.callId === call_id) {
-      const call = this.signalingService.getCall(call_id)
-      if (call?.peers.has(ws.data.peerId)) {
-        const peers = Array.from(call.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id }))
-        this.#sendWs(ws, { t: 'rtc.joined', reply_to: msg.id, ok: true, body: { call_id, peer_id: ws.data.peerId, peers, ice_servers: this.#getIceServers() } })
-        return
-      }
-    }
-
-    // If already in a different call, leave it first
-    if (ws.data.peerId && ws.data.callId && ws.data.callId !== call_id) {
-      const prevCallId = ws.data.callId
-      const prevPeerId = ws.data.peerId
-      const leaveResult = this.signalingService.leaveCall({ callId: prevCallId, peerId: prevPeerId })
-      this.peerConnections.delete(prevPeerId)
-      ws.unsubscribe(`call:${prevCallId}`)
-      if (leaveResult.removed) {
-        this.#publishCall(prevCallId, { t: 'rtc.peer_event', ok: true, body: { call_id: prevCallId, kind: 'leave', peer: { peer_id: prevPeerId, user_id: ws.data.userId } } })
-      }
-      if (leaveResult.ended && leaveResult.room_id) {
-        this.#publishChannel(leaveResult.room_id, { t: 'rtc.call_end', ok: true, body: { call_id: prevCallId, channel_id: leaveResult.room_id } })
-        this.#publishCallState(leaveResult.room_id, null, [])
-      }
-    }
-
-    const result = this.signalingService.joinCall({ callId: call_id, userId: ws.data.userId, displayName: ws.data.displayName })
-    ws.data.peerId = result.peerId
-    ws.data.callId = call_id
-    this.peerConnections.set(result.peerId, ws.data.connectionId)
-    ws.subscribe(`call:${call_id}`)
-    this.#sendWs(ws, { t: 'rtc.joined', reply_to: msg.id, ok: true, body: { call_id, peer_id: result.peerId, peers: result.peers, ice_servers: this.#getIceServers() } })
-    this.#publishCall(call_id, { t: 'rtc.peer_event', ok: true, body: { call_id, kind: 'join', peer: { peer_id: result.peerId, user_id: ws.data.userId, display_name: ws.data.displayName } } })
-
-    // Broadcast updated call state to all channel subscribers (sidebar badges, "N in call" rows)
-    const updatedCall = this.signalingService.getCall(call_id)
-    if (updatedCall) this.#publishCallState(updatedCall.room_id, call_id, Array.from(updatedCall.peers.values()))
-  }
-
-  #handleRtcOffer(ws, msg) {
-    const { call_id, to_peer_id, sdp } = msg.body || {}
-    if (!ws.data.peerId || ws.data.callId !== call_id) return
-    this.signalingService.routeOffer({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, sdp })
-  }
-
-  #handleRtcAnswer(ws, msg) {
-    const { call_id, to_peer_id, sdp } = msg.body || {}
-    if (!ws.data.peerId || ws.data.callId !== call_id) return
-    this.signalingService.routeAnswer({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, sdp })
-  }
-
-  #handleRtcIce(ws, msg) {
-    const { call_id, to_peer_id, candidate } = msg.body || {}
-    if (!ws.data.peerId || ws.data.callId !== call_id) return
-    this.signalingService.routeIce({ callId: call_id, fromPeerId: ws.data.peerId, toPeerId: to_peer_id, candidate })
-  }
-
-  #handleRtcStreamPublish(ws, msg) {
-    const { call_id, stream } = msg.body || {}
-    this.#publishCall(call_id, { t: 'rtc.stream_event', ok: true, body: { call_id, peer_id: ws.data.peerId, stream } })
-  }
-
-  #handleRtcLeave(ws, msg) {
-    const { call_id } = msg.body || {}
-    if (!ws.data.peerId) return
-    const leavingPeerId = ws.data.peerId
-    const result = this.signalingService.leaveCall({ callId: call_id, peerId: leavingPeerId })
-    ws.unsubscribe(`call:${call_id}`)
-    this.peerConnections.delete(leavingPeerId)
-    ws.data.peerId = null
-    ws.data.callId = null
-    this.#sendWs(ws, { t: 'rtc.left', reply_to: msg.id, ok: true, body: { call_id } })
-    if (result.removed) {
-      this.#publishCall(call_id, { t: 'rtc.peer_event', ok: true, body: { call_id, kind: 'leave', peer: { peer_id: leavingPeerId, user_id: ws.data.userId } } })
-    }
-    if (result.ended && result.room_id) {
-      this.#publishChannel(result.room_id, { t: 'rtc.call_end', ok: true, body: { call_id, channel_id: result.room_id } })
-      this.#publishCallState(result.room_id, null, [])
-    } else if (result.removed && result.room_id) {
-      // Still an active call — broadcast updated participant count
-      const call = this.signalingService.getCall(call_id)
-      this.#publishCallState(result.room_id, call_id, call ? Array.from(call.peers.values()) : [])
-    }
-  }
-
-  #handleRtcEndCall(ws, msg) {
-    const { call_id } = msg.body || {}
-    const result = this.signalingService.endCall({ callId: call_id })
-    if (!result) return
-    this.#publishCall(call_id, { t: 'rtc.call_end', ok: true, body: { call_id, channel_id: result.room_id } })
-    this.#publishChannel(result.room_id, { t: 'rtc.call_end', ok: true, body: { call_id, channel_id: result.room_id } })
-    this.#publishCallState(result.room_id, null, [])
-    this.#sendWs(ws, { t: 'rtc.call_ended', reply_to: msg.id, ok: true, body: { call_id } })
-  }
-
-  // ── Signaling event (from SignalingService emitter → specific peer) ────────
+  // ── Signaling event (SignalingService emitter → specific peer) ─────────────
 
   #handleSignalingEvent(event) {
     const toPeerId = event.body?.to_peer_id
@@ -751,17 +300,14 @@ export class ChatServer {
 
   // ── Broadcasting helpers ───────────────────────────────────────────────────
 
-  /** Publish to all subscribers of a channel topic */
   #publishChannel(channelId, payload) {
     this.server?.publish(`channel:${channelId}`, JSON.stringify(payload))
   }
 
-  /** Publish to all subscribers of a call topic */
   #publishCall(callId, payload) {
     this.server?.publish(`call:${callId}`, JSON.stringify(payload))
   }
 
-  /** Broadcast current call participant count to all channel subscribers */
   #publishCallState(channelId, callId, peers) {
     this.#publishChannel(channelId, {
       t: 'rtc.call_state', ok: true,
@@ -769,7 +315,6 @@ export class ChatServer {
     })
   }
 
-  /** Collect authenticated connections that can access a hub (used before deletion). */
   #collectHubAudience(hubId, excludeWs = null) {
     const audience = []
     const hub = this.hubService.getHub(hubId)
@@ -787,7 +332,6 @@ export class ChatServer {
     return audience
   }
 
-  /** Collect authenticated connections that can access a channel (used before deletion). */
   #collectChannelAudience(channelId, excludeWs = null) {
     const audience = []
     const rolesCache = new Map()
@@ -803,7 +347,6 @@ export class ChatServer {
     return audience
   }
 
-  /** Broadcast to all authenticated connections that can access a hub */
   #broadcastToHubAudience(hubId, payload, excludeWs = null) {
     const hub = this.hubService.getHub(hubId)
     if (!hub || hub.deleted_at) return
@@ -819,7 +362,6 @@ export class ChatServer {
     }
   }
 
-  /** Broadcast to all authenticated connections that can access a channel */
   #broadcastToChannelAudience(channelId, payload, excludeWs = null) {
     const rolesCache = new Map()
     for (const [, ws] of this.connections) {
@@ -833,6 +375,13 @@ export class ChatServer {
     }
   }
 
+  #subscribeUserToChannel(userId, channelId) {
+    const topic = `channel:${channelId}`
+    for (const [, conn] of this.connections) {
+      if (conn.data.userId === userId) conn.subscribe(topic)
+    }
+  }
+
   // ── Utilities ──────────────────────────────────────────────────────────────
 
   #sendWs(ws, payload) {
@@ -843,7 +392,7 @@ export class ChatServer {
 
   #attachUser(ws, user, sessionId) {
     const alreadyAttached = ws.data.userId === user.user_id
-    ws.data.userId = user.user_id
+    ws.data.userId    = user.user_id
     ws.data.sessionId = sessionId
     ws.data.displayName = user.display_name
     if (!alreadyAttached) {
