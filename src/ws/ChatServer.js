@@ -280,16 +280,26 @@ export class ChatServer {
   }
 
   #dispatchMentions({ channelId, senderId, text, seq }) {
-    const rawMembers = this.channelService.listChannelMembers(channelId)
-    const members = rawMembers
-      .filter(m => m.user_id !== senderId)
-      .map(m => {
-        const u = this.auth.getUser(m.user_id)
-        return u ? { user_id: u.user_id, handle: u.handle } : null
-      })
-      .filter(Boolean)
+    // For public channels any user on the instance is mentionable (they can see the channel).
+    // For private channels only explicit members can be mentioned.
+    const channel = this.channelService.getChannel(channelId)
+    let candidates
+    if (channel?.visibility === 'private' || channel?.kind === 'dm') {
+      const rawMembers = this.channelService.listChannelMembers(channelId)
+      candidates = rawMembers
+        .filter(m => m.user_id !== senderId)
+        .map(m => {
+          const u = this.auth.getUser(m.user_id)
+          return u ? { user_id: u.user_id, handle: u.handle } : null
+        })
+        .filter(Boolean)
+    } else {
+      candidates = this.auth.listUsersBasic()
+        .filter(u => u.user_id !== senderId && !u.roles.includes('bot'))
+        .map(u => ({ user_id: u.user_id, handle: u.handle }))
+    }
 
-    const mentioned = parseMentions(text, members)
+    const mentioned = parseMentions(text, candidates)
     for (const { user_id } of mentioned) {
       this.deliveryService.advanceMention({ channelId, userId: user_id, mentionSeq: seq })
       this.server?.publish(`user:${user_id}`, JSON.stringify({

@@ -237,7 +237,8 @@ details summary {
 }
 
 /* Unread dot on DM items — appended via ::after on has-mention items */
-.dm-item.has-mention .dm-link::after {
+.dm-item.has-mention .dm-link::after,
+.channel-item.has-mention .channel-link::after {
   content: '';
   display: inline-block;
   width: 8px;
