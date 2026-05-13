@@ -134,12 +134,17 @@ details summary {
   color: var(--text-primary);
 }
 
-/* ── Channel drag-and-drop reordering (desktop) ─────────────────────────── */
+/* ── Channel + hub drag-and-drop reordering (desktop) ───────────────────── */
 @media (min-width: 1025px) {
   .channel-item[draggable="true"] { cursor: grab; }
   .channel-item.dragging { opacity: 0.4; }
   .channel-item.drop-before { border-top: 2px solid var(--accent, #5865f2); }
   .channel-item.drop-after { border-bottom: 2px solid var(--accent, #5865f2); }
+
+  .hub-header[draggable="true"] { cursor: grab; }
+  .hub-header.dragging { opacity: 0.4; }
+  .hub-header.drop-before { border-top: 2px solid var(--accent, #5865f2); }
+  .hub-header.drop-after { border-bottom: 2px solid var(--accent, #5865f2); }
 }
 
 /* ── Sidebar gear buttons ────────────────────────────────────────────────── */

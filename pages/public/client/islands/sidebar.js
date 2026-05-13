@@ -565,6 +565,88 @@ function attachDragHandlers(sidebarEl, { ws, hubs }) {
   })
 }
 
+// ── Drag-and-drop hub reordering (desktop only) ───────────────────────────────
+
+function attachHubDragHandlers(sidebarEl, { ws, hubs }) {
+  // Uses the same WeakMap-based getItemContext pattern as channel drag handlers.
+  // Hub drag targets are details.hub-header elements; draggable="true" is set in the template.
+  let dragSrcHubId = null
+
+  function clearDropIndicators() {
+    sidebarEl.querySelectorAll('.hub-header.drop-before, .hub-header.drop-after').forEach(el => {
+      el.classList.remove('drop-before', 'drop-after')
+    })
+  }
+
+  function insertBefore(e, details) {
+    return e.clientY < details.getBoundingClientRect().top + details.offsetHeight / 2
+  }
+
+  sidebarEl.addEventListener('dragstart', e => {
+    const details = e.target.closest('.hub-header')
+    if (!details) return
+    // Ignore if the drag actually started on a channel item inside the hub
+    if (e.target.closest('.channel-item')) return
+    const ctx = getItemContext(details)
+    dragSrcHubId = ctx?.key ?? null
+    if (!dragSrcHubId) return
+    details.classList.add('dragging')
+    e.dataTransfer.effectAllowed = 'move'
+    e.stopPropagation()
+  })
+
+  sidebarEl.addEventListener('dragend', e => {
+    const details = e.target.closest('.hub-header')
+    if (details) details.classList.remove('dragging')
+    clearDropIndicators()
+    dragSrcHubId = null
+  })
+
+  sidebarEl.addEventListener('dragover', e => {
+    if (!dragSrcHubId) return
+    // Ignore drags over channel items — those belong to the channel drag handler
+    if (e.target.closest('.channel-item')) return
+    const details = e.target.closest('.hub-header')
+    if (!details) return
+    const ctx = getItemContext(details)
+    if (!ctx || ctx.key === dragSrcHubId) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    clearDropIndicators()
+    details.classList.add(insertBefore(e, details) ? 'drop-before' : 'drop-after')
+  })
+
+  sidebarEl.addEventListener('dragleave', e => {
+    if (e.target.closest('.channel-item')) return
+    const details = e.target.closest('.hub-header')
+    if (details) details.classList.remove('drop-before', 'drop-after')
+  })
+
+  sidebarEl.addEventListener('drop', e => {
+    if (!dragSrcHubId) return
+    if (e.target.closest('.channel-item')) return
+    const targetDetails = e.target.closest('.hub-header')
+    if (!targetDetails) return
+    const targetCtx = getItemContext(targetDetails)
+    const targetHubId = targetCtx?.key
+    if (!targetHubId || targetHubId === dragSrcHubId) return
+    e.preventDefault()
+    clearDropIndicators()
+
+    const ids = hubs().map(h => h.hub_id)
+    const fromIdx = ids.indexOf(dragSrcHubId)
+    const toIdx = ids.indexOf(targetHubId)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const before = insertBefore(e, targetDetails)
+    ids.splice(fromIdx, 1)
+    const newToIdx = ids.indexOf(targetHubId)
+    ids.splice(before ? newToIdx : newToIdx + 1, 0, dragSrcHubId)
+
+    ws.send({ t: 'hub.reorder', body: { hub_ids: ids } })
+  })
+}
+
 // ── File-drop onto channel links ─────────────────────────────────────────────
 
 function attachFileDropHandlers(sidebarEl, { ws }) {
@@ -871,6 +953,12 @@ export default function SidebarIsland(root) {
     }
   })
 
+  ws.on('hub.reordered', ({ hubs: updated }) => {
+    // Merge server-authoritative order into local state, preserving loaded channel arrays
+    const channelMap = new Map(hubs().map(h => [h.hub_id, h.channels]))
+    hubs.set(updated.map(h => ({ ...h, channels: channelMap.get(h.hub_id) ?? [] })))
+  })
+
   ws.on('hub.deleted', ({ hub_id }) => {
     const deletedHub = hubs().find(h => h.hub_id === hub_id)
     const affectsCurrentChannel = (deletedHub?.channels ?? []).some(c => c.channel_id === currentChannelId)
@@ -1004,6 +1092,7 @@ export default function SidebarIsland(root) {
 
   // Wire drag-and-drop reordering (desktop only — touch uses action sheet)
   attachDragHandlers(root, { ws, hubs })
+  attachHubDragHandlers(root, { ws, hubs })
 
   // Wire file-drop onto channel links
   attachFileDropHandlers(root, { ws })

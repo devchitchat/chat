@@ -57,6 +57,17 @@ export function handleHubRemoveMember(ws, msg, ctx) {
   broadcastToHubAudience(hub_id, { t: 'hub.member_removed', ok: true, body: result }, ws)
 }
 
+export function handleHubReorder(ws, msg, ctx) {
+  const { auth, hubService, sendWs, connections } = ctx
+  const user = auth.getUser(ws.data.userId)
+  const { hub_ids } = msg.body || {}
+  const hubs = hubService.reorderHubs({ hubIds: hub_ids, userId: ws.data.userId, userRoles: user?.roles || [] })
+  // Broadcast to all authenticated connections — every sidebar needs to update
+  for (const [, conn] of connections) {
+    if (conn.data.userId) sendWs(conn, { t: 'hub.reordered', ok: true, body: { hubs } })
+  }
+}
+
 export function handleHubListMembers(ws, msg, ctx) {
   const { auth, hubService, sendWs } = ctx
   const user = auth.getUser(ws.data.userId)

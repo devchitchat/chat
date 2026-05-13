@@ -20,7 +20,7 @@ import { SqliteDeliveryRepository } from '../adapters/SqliteDeliveryRepository.j
 import { SqliteSearchRepository } from '../adapters/SqliteSearchRepository.js'
 import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository.js'
 import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
-import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers } from './handlers/hubHandlers.js'
+import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers, handleHubReorder } from './handlers/hubHandlers.js'
 import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelListMembers, handleUserList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
@@ -186,6 +186,7 @@ export class ChatServer {
       case 'hub.add_member':             return handleHubAddMember(ws, msg, ctx)
       case 'hub.remove_member':          return handleHubRemoveMember(ws, msg, ctx)
       case 'hub.list_members':           return handleHubListMembers(ws, msg, ctx)
+      case 'hub.reorder':                return handleHubReorder(ws, msg, ctx)
       // Channels
       case 'channel.list':               return handleChannelList(ws, msg, ctx)
       case 'channel.create':             return handleChannelCreate(ws, msg, ctx)

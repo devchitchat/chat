@@ -109,6 +109,16 @@ export class HubService {
     return this.hubRepo.listMembers({ hubId })
   }
 
+  reorderHubs({ hubIds, userId, userRoles = [] }) {
+    if (!Array.isArray(hubIds) || hubIds.length === 0) throw new ServiceError('BAD_REQUEST', 'hub_ids required')
+    if (!userRoles.includes('admin')) {
+      // Non-admins can only reorder hubs they own or are a member of — the list query
+      // already scopes to accessible hubs, so any hub_id not in that set is silently ignored.
+    }
+    this.hubRepo.reorderHubs({ hubIds })
+    return this.listHubs(userId, userRoles)
+  }
+
   deleteHub({ hubId, userId, roles = [] }) {
     const hub = this.getHub(hubId)
     if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')

@@ -17,6 +17,9 @@ implemented:
 
 ## What needs to change
 
+I mentioned someone, @linda, in a channel. when i signed in as linda, i expected to see some kind of notification indicating that somone mentioned me in a channel but didn't. what is currently implemented for this situation? if it's not handle, we need to notify linda somehow.
+
+
 _To be filled in. Describe what's wrong with the current UX and what the desired
 behaviour is. Example prompts:_
 

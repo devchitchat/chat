@@ -21,7 +21,7 @@ export class SqliteHubRepository {
     return this.db.prepare(
       `SELECT h.hub_id, h.name, h.description, h.visibility,
          (SELECT COUNT(*) FROM channels c WHERE c.hub_id = h.hub_id AND c.deleted_at IS NULL) AS channel_count
-       FROM hubs h WHERE h.deleted_at IS NULL ORDER BY h.name`
+       FROM hubs h WHERE h.deleted_at IS NULL ORDER BY h.sort_order ASC, h.name ASC`
     ).all()
   }
 
@@ -33,8 +33,15 @@ export class SqliteHubRepository {
        AND (h.visibility = 'public' OR EXISTS (
          SELECT 1 FROM hub_members hm WHERE hm.hub_id = h.hub_id AND hm.user_id = ? AND hm.left_at IS NULL
        ))
-       ORDER BY h.name`
+       ORDER BY h.sort_order ASC, h.name ASC`
     ).all(userId)
+  }
+
+  reorderHubs({ hubIds }) {
+    runTransaction(this.db, () => {
+      const stmt = this.db.prepare('UPDATE hubs SET sort_order = ? WHERE hub_id = ?')
+      hubIds.forEach((id, i) => stmt.run(i, id))
+    })
   }
 
   findById({ hubId }) {

@@ -3,7 +3,7 @@
   <div id="digest-banner" class="digest-banner" hidden></div>
   <section each="hubs" key="hub_id" class="hub-group">
     {{#each hubs}}
-    <details class="hub-header" data-key="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" open>
+    <details class="hub-header" data-key="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" draggable="true" open>
       <summary class="hub-name" data-hub-id="{{hub_id}}">
         <span text="name">{{name}}</span>
         <button class="btn-hub-gear btn-icon" title="Hub settings" aria-label="Hub settings" type="button">&#9881;</button>
