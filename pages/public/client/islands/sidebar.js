@@ -25,16 +25,19 @@ function populateFromDom(root) {
     return {
       hub_id,
       name: el.querySelector('.hub-name span').textContent.trim(),
+      visibility:   el.dataset.visibility ?? 'public',
+      description:  el.dataset.description ?? null,
       channels: Array.from(el.querySelectorAll('li')).map(li => {
         const link = li.querySelector('a')
         return {
-          channel_id: li.dataset.key,
+          channel_id:  li.dataset.key,
           hub_id,
-          name: link.textContent.trim(),
-          url: link.href,
-          topic: link.dataset.channelTopic ?? null,
-          selected: li.dataset.selected === 'true',
-          className: li.className.trim()
+          name:        link.textContent.trim(),
+          url:         link.href,
+          topic:       link.dataset.channelTopic ?? null,
+          visibility:  link.dataset.channelVisibility ?? 'public',
+          selected:    li.dataset.selected === 'true',
+          className:   li.className.trim()
         }
       })
     }

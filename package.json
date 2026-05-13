@@ -1,6 +1,6 @@
 {
   "name": "@devchitchat/chat",
-  "version": "2.0.5",
+  "version": "2.0.8",
   "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
@@ -13,7 +13,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@devchitchat/index97": "^2.1.0",
+    "@devchitchat/index97": "^2.1.2",
     "@devchitchat/rdbljs": "^1.2.5"
   }
 }

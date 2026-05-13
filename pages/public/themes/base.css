@@ -506,6 +506,42 @@ details summary {
 }
 .composer textarea:focus { outline: none; border-color: var(--accent); }
 
+/* ── @mention inline highlight ───────────────────────────────────────────── */
+.mention      { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border-radius: 3px; padding: 0 2px; font-weight: 500; }
+.mention-self { background: color-mix(in srgb, var(--accent) 30%, transparent); font-weight: 600; }
+
+/* ── @mention picker popup ───────────────────────────────────────────────── */
+.mention-picker {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  z-index: 200;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.mention-option:hover,
+.mention-option.selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mention-option-name   { font-weight: 600; color: var(--text-primary); }
+.mention-option-handle { color: var(--text-muted); font-size: 13px; }
+
 /* ── Auth page ───────────────────────────────────────────────────────────── */
 .auth-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .auth-shell { width: 100%; max-width: 420px; padding: 40px 32px; background: var(--bg-sidebar); border-radius: var(--radius-lg); border: 1px solid var(--border); }

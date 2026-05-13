@@ -473,11 +473,6 @@ export class ChatServer {
     if (!this.channelService.canAccessChannel(channel_id, ws.data.userId, roles)) {
       return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Access denied' } })
     }
-    const membership = this.channelService.getMembership(channel_id, ws.data.userId)
-    const isOwnerOrMod = membership && ['owner', 'mod'].includes(membership.role) && !membership.left_at && !membership.banned_at
-    if (!roles.includes('admin') && !isOwnerOrMod) {
-      return this.#sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Owner or mod required' } })
-    }
     const members = this.channelService.listChannelMembers(channel_id)
     const enriched = members.map(m => {
       const u = this.auth.getUser(m.user_id)

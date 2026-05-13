@@ -60,6 +60,12 @@ export default function CallIsland(root) {
   const channelTopic = signal(root.dataset.topic ?? '')
   let afterSeq = seedSeq
 
+  // ── @mention picker state ──────────────────────────────────────────────────
+  let channelMembers  = []   // [{ user_id, handle, display_name }]
+  let mentionFiltered = []   // current filtered subset
+  let mentionStart    = -1   // index of '@' in textarea.value
+  let mentionSelIdx   = 0    // keyboard-selected row
+
   // ── Call state ─────────────────────────────────────────────────────────────
   const inCall     = signal(false)
   const callIdSig  = signal(null)   // active call_id in this channel (may exist before we join)
@@ -118,6 +124,12 @@ export default function CallIsland(root) {
         handle.title = 'Send a direct message'
       }
 
+      // Highlight @mentions in server-rendered message text
+      const textEl = article.querySelector('.message-text')
+      if (textEl && textEl.textContent) {
+        textEl.innerHTML = renderText(textEl.textContent)
+      }
+
       // Inject attachment HTML for seed messages that have attachments_json
       const raw = article.dataset.attachments
       if (!raw) return
@@ -130,6 +142,82 @@ export default function CallIsland(root) {
     })
   }
   hydrateSeedMessages()
+
+  // ── @mention picker ────────────────────────────────────────────────────────
+
+  const mentionPickerEl = document.createElement('div')
+  mentionPickerEl.id        = 'mention-picker'
+  mentionPickerEl.className = 'mention-picker'
+  mentionPickerEl.hidden    = true
+  root.querySelector('.composer')?.prepend(mentionPickerEl)
+
+  function openPicker(filtered, start) {
+    mentionFiltered = filtered
+    mentionStart    = start
+    mentionSelIdx   = 0
+    renderPicker()
+  }
+
+  function closePicker() {
+    mentionFiltered = []
+    mentionStart    = -1
+    mentionPickerEl.hidden = true
+  }
+
+  function renderPicker() {
+    if (mentionFiltered.length === 0) { closePicker(); return }
+    mentionPickerEl.innerHTML = mentionFiltered.map((m, i) => `
+      <button class="mention-option${i === mentionSelIdx ? ' selected' : ''}"
+              data-idx="${i}" type="button">
+        <span class="mention-option-name">${escHtml(m.display_name || m.handle)}</span>
+        <span class="mention-option-handle">@${escHtml(m.handle)}</span>
+      </button>`).join('')
+    mentionPickerEl.hidden = false
+  }
+
+  function selectMention(member) {
+    if (!member) return
+    const textarea = root.querySelector('#message-input')
+    if (!textarea) return
+    const cursor = textarea.selectionStart
+    const val    = textarea.value
+    const insert = `@${member.handle} `
+    textarea.value = val.substring(0, mentionStart) + insert + val.substring(cursor)
+    draft.set(textarea.value)
+    const pos = mentionStart + insert.length
+    textarea.setSelectionRange(pos, pos)
+    closePicker()
+    textarea.focus()
+  }
+
+  mentionPickerEl.addEventListener('mousedown', e => {
+    // mousedown instead of click so the textarea doesn't lose focus first
+    e.preventDefault()
+    const btn = e.target.closest('.mention-option')
+    if (!btn) return
+    selectMention(mentionFiltered[parseInt(btn.dataset.idx, 10)])
+  })
+
+  function handleComposerInput(e) {
+    const textarea = e.target
+    const cursor   = textarea.selectionStart
+    const before   = textarea.value.substring(0, cursor)
+    // Match a bare @ or @partial-handle with no space, anchored to end of text-so-far
+    const match    = before.match(/@([a-zA-Z0-9_.-]*)$/)
+    if (!match) { closePicker(); return }
+    const query    = match[1].toLowerCase()
+    const start    = cursor - match[0].length
+    const filtered = channelMembers
+      .filter(m =>
+        m.handle.toLowerCase().startsWith(query) ||
+        (m.display_name ?? '').toLowerCase().startsWith(query)
+      )
+      .slice(0, 8)
+    if (filtered.length === 0) { closePicker(); return }
+    openPicker(filtered, start)
+  }
+
+  root.querySelector('#message-input')?.addEventListener('input', handleComposerInput)
 
   // ── Chat: connect + join channel ───────────────────────────────────────────
 
@@ -145,6 +233,13 @@ export default function CallIsland(root) {
     if (afterSeq > 0) {
       ws.send({ t: 'msg.list', body: { channel_id: channelId, after_seq: afterSeq } })
     }
+    if (channelMembers.length === 0) {
+      ws.send({ t: 'user.list', body: {} })
+    }
+  })
+
+  ws.on('user.list_result', ({ users }) => {
+    channelMembers = (users ?? []).filter(m => m.handle)
   })
 
   ws.on('msg.list_result', ({ messages: msgs, next_after_seq }) => {
@@ -315,10 +410,42 @@ export default function CallIsland(root) {
   }
 
   function handleComposerKey(e) {
+    if (!mentionPickerEl.hidden) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        mentionSelIdx = Math.min(mentionSelIdx + 1, mentionFiltered.length - 1)
+        renderPicker()
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        mentionSelIdx = Math.max(mentionSelIdx - 1, 0)
+        renderPicker()
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        selectMention(mentionFiltered[mentionSelIdx])
+        return
+      }
+      if (e.key === 'Escape') {
+        closePicker()
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  // Escape HTML then wrap @handles in <span class="mention"> (or mention-self for current user).
+  function renderText(text) {
+    const escaped = escHtml(text)
+    return escaped.replace(/@([a-zA-Z0-9_.-]+)/g, (match, handle) => {
+      const isSelf = userHandle && handle.toLowerCase() === userHandle.toLowerCase()
+      return `<span class="mention${isSelf ? ' mention-self' : ''}">${match}</span>`
+    })
   }
 
   function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, attachments }) {
@@ -333,7 +460,7 @@ export default function CallIsland(root) {
     article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}</time>
-      ${text ? `<p class="message-text">${escHtml(text)}</p>` : ''}
+      ${text ? `<p class="message-text">${renderText(text)}</p>` : ''}
       ${attachmentHtml}
     `
     messages.appendChild(article)
@@ -929,7 +1056,7 @@ export default function CallIsland(root) {
       const cameraGone = activeCameraId && !cameras.find(d => d.deviceId === activeCameraId)
       const micGone    = activeMicId    && !mics.find(d => d.deviceId === activeMicId)
       if (cameraGone || micGone) _showDeviceWarning(cameraGone ? 'camera' : 'mic')
-      if (pickerEl?.classList.contains('open')) _populatePicker()
+      if (devicePickerEl?.classList.contains('open')) _populatePicker()
     })
   }
 
@@ -942,12 +1069,12 @@ export default function CallIsland(root) {
 
   // ── Device picker ──────────────────────────────────────────────────────────
 
-  let pickerEl = null
+  let devicePickerEl = null
 
   function _buildPicker() {
-    pickerEl = document.createElement('div')
-    pickerEl.className = 'device-picker'
-    pickerEl.innerHTML = `
+    devicePickerEl = document.createElement('div')
+    devicePickerEl.className = 'device-picker'
+    devicePickerEl.innerHTML = `
       <div class="device-picker-row">
         <label>Camera</label>
         <select id="dp-camera"></select>
@@ -963,32 +1090,32 @@ export default function CallIsland(root) {
         <button id="dp-apply"  class="btn-primary" type="button">Switch</button>
       </div>
     `
-    callControlsEl?.after(pickerEl)
+    callControlsEl?.after(devicePickerEl)
 
-    pickerEl.querySelector('#dp-cancel').addEventListener('click', _closePicker)
-    pickerEl.querySelector('#dp-apply').addEventListener('click', _applyPicker)
+    devicePickerEl.querySelector('#dp-cancel').addEventListener('click', _closePicker)
+    devicePickerEl.querySelector('#dp-apply').addEventListener('click', _applyPicker)
 
-    const cameraSelect = pickerEl.querySelector('#dp-camera')
-    const previewVideo = pickerEl.querySelector('#dp-preview')
+    const cameraSelect = devicePickerEl.querySelector('#dp-camera')
+    const previewVideo = devicePickerEl.querySelector('#dp-preview')
 
     cameraSelect.addEventListener('change', async () => {
-      pickerEl._previewStream?.getTracks().forEach(t => t.stop())
-      pickerEl._previewStream = null
+      devicePickerEl._previewStream?.getTracks().forEach(t => t.stop())
+      devicePickerEl._previewStream = null
       if (!cameraSelect.value) return
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { deviceId: { exact: cameraSelect.value } },
         })
         previewVideo.srcObject = stream
-        pickerEl._previewStream = stream
+        devicePickerEl._previewStream = stream
       } catch { /* camera unavailable */ }
     })
   }
 
   function _populatePicker() {
     const { cameras, mics } = availableDevices
-    const cameraSelect = pickerEl?.querySelector('#dp-camera')
-    const micSelect    = pickerEl?.querySelector('#dp-mic')
+    const cameraSelect = devicePickerEl?.querySelector('#dp-camera')
+    const micSelect    = devicePickerEl?.querySelector('#dp-mic')
     if (cameraSelect) {
       cameraSelect.innerHTML = cameras
         .map(d => `<option value="${escHtml(d.deviceId)}"${d.deviceId === activeCameraId ? ' selected' : ''}>${escHtml(d.label || 'Camera')}</option>`)
@@ -1002,21 +1129,21 @@ export default function CallIsland(root) {
   }
 
   async function _openPicker() {
-    if (!pickerEl) _buildPicker()
+    if (!devicePickerEl) _buildPicker()
     await refreshDevices()
     _populatePicker()
-    pickerEl.classList.add('open')
+    devicePickerEl.classList.add('open')
   }
 
   function _closePicker() {
-    pickerEl?._previewStream?.getTracks().forEach(t => t.stop())
-    if (pickerEl) pickerEl._previewStream = null
-    pickerEl?.classList.remove('open')
+    devicePickerEl?._previewStream?.getTracks().forEach(t => t.stop())
+    if (devicePickerEl) devicePickerEl._previewStream = null
+    devicePickerEl?.classList.remove('open')
   }
 
   async function _applyPicker() {
-    const cameraId = pickerEl?.querySelector('#dp-camera')?.value
-    const micId    = pickerEl?.querySelector('#dp-mic')?.value
+    const cameraId = devicePickerEl?.querySelector('#dp-camera')?.value
+    const micId    = devicePickerEl?.querySelector('#dp-mic')?.value
     try {
       if (cameraId && cameraId !== activeCameraId && videoStream) await switchCamera(cameraId)
       if (micId    && micId    !== activeMicId)                    await switchMic(micId)
@@ -1026,7 +1153,7 @@ export default function CallIsland(root) {
   }
 
   ctrlDevices?.addEventListener('click', () => {
-    pickerEl?.classList.contains('open') ? _closePicker() : _openPicker()
+    devicePickerEl?.classList.contains('open') ? _closePicker() : _openPicker()
   })
 
   // ── Device warning toast ───────────────────────────────────────────────────
@@ -1199,6 +1326,8 @@ export default function CallIsland(root) {
 
     // Hydrate attachments + dm-trigger on the freshly morphed seed articles
     hydrateSeedMessages()
+
+    closePicker()
 
     // Join new channel — server responds with channel.joined + rtc.call_state.
     // channel.joined handler sends msg.list if afterSeq > 0, which will append
