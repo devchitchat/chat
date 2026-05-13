@@ -71,18 +71,6 @@ details summary {
   z-index: 1;
 }
 
-.digest-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  font-size: 13px;
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-sidebar));
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
-}
-.digest-banner[hidden] { display: none; }
-
 .hub-group { padding: 8px 0; }
 .hub-header {
   padding: 6px 16px;
@@ -236,7 +224,7 @@ details summary {
   white-space: nowrap;
 }
 
-/* Unread dot on DM items — appended via ::after on has-mention items */
+/* Unread dot on DM/channel items — blue for normal mentions, red for urgent */
 .dm-item.has-mention .dm-link::after,
 .channel-item.has-mention .channel-link::after {
   content: '';
@@ -245,6 +233,17 @@ details summary {
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.dm-item.has-urgent .dm-link::after,
+.channel-item.has-urgent .channel-link::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-danger);
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -511,6 +510,25 @@ details summary {
   overflow-y: auto;
 }
 .composer textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Urgent toggle button */
+.btn-urgent-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  opacity: 0.4;
+  transition: opacity var(--transition);
+  flex-shrink: 0;
+}
+.btn-urgent-toggle:hover { opacity: 0.7; }
+.btn-urgent-toggle.is-urgent { opacity: 1; }
+
+/* Composer in urgent mode — textarea border turns red */
+.composer.composer-urgent textarea,
+.composer.composer-urgent textarea:focus { border-color: var(--color-danger); }
 
 /* ── @mention inline highlight ───────────────────────────────────────────── */
 .mention      { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border-radius: 3px; padding: 0 2px; font-weight: 500; }

@@ -102,18 +102,39 @@ export default function ChatIsland(root) {
     messages.scrollTop = messages.scrollHeight
   }
 
-  function sendMessage() {
+  // ── Urgent send ───────────────────────────────────────────────────────────
+  // Two ways to send with priority 'now':
+  //   1. Ctrl+Enter (one-shot, doesn't latch)
+  //   2. Toggle the urgent button — latches composer into urgent mode until toggled off
+  // Shift+Enter always inserts a newline. Plain Enter sends at current priority.
+
+  const urgentMode = signal(false)
+  const composerFooter = root.querySelector('.composer')
+
+  function applyUrgentStyles() {
+    composerFooter?.classList.toggle('composer-urgent', urgentMode())
+  }
+
+  function toggleUrgentMode() {
+    urgentMode.set(!urgentMode())
+    applyUrgentStyles()
+  }
+
+  function sendMessage({ priority } = {}) {
     const text = draft().trim()
     if (!text) return
-    ws.send({ t: 'msg.send', body: { channel_id: channelId, text, client_msg_id: `local_${Date.now()}` } })
+    const resolvedPriority = priority ?? (urgentMode() ? 'now' : 'normal')
+    ws.send({ t: 'msg.send', body: { channel_id: channelId, text, client_msg_id: `local_${Date.now()}`, priority: resolvedPriority } })
+    // One-shot urgent (Ctrl+Enter) doesn't clear the latch; the toggle does.
     draft.set('')
   }
 
   function handleComposerKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
+    if (e.key !== 'Enter' || e.isComposing) return
+    if (e.shiftKey) return // allow newline
+    e.preventDefault()
+    const priority = e.ctrlKey || e.metaKey ? 'now' : undefined
+    sendMessage({ priority })
   }
 
   function toggleSearch() {
@@ -140,8 +161,10 @@ export default function ChatIsland(root) {
     searchOpen,
     searchQuery,
     searchResults,
+    urgentMode,
     sendMessage,
     handleComposerKey,
+    toggleUrgentMode,
     toggleSearch
   }
 }

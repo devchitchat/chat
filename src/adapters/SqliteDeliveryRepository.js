@@ -26,16 +26,17 @@ export class SqliteDeliveryRepository {
     ).run(afterSeq, now, afterSeq, channelId, userId)
   }
 
-  advanceMention({ channelId, userId, mentionSeq }) {
+  advanceMention({ channelId, userId, mentionSeq, priority = 'normal' }) {
     this.db.prepare(
-      `UPDATE deliveries SET mention_seq = ? WHERE channel_id = ? AND user_id = ? AND mention_seq < ?`
-    ).run(mentionSeq, channelId, userId, mentionSeq)
+      `UPDATE deliveries SET mention_seq = ?, mention_priority = ?
+       WHERE channel_id = ? AND user_id = ? AND mention_seq < ?`
+    ).run(mentionSeq, priority, channelId, userId, mentionSeq)
   }
 
   buildDigestData({ userId }) {
     return this.db.prepare(
       `SELECT
-         d.channel_id, c.name, c.kind, d.after_seq, d.mention_seq,
+         d.channel_id, c.name, c.kind, d.after_seq, d.mention_seq, d.mention_priority,
          COALESCE(
            (SELECT MAX(seq) FROM messages WHERE channel_id = d.channel_id AND deleted_at IS NULL),
            0

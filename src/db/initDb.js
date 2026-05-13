@@ -30,6 +30,7 @@ export const initDb = (db) => {
       uses INTEGER NOT NULL,
       redeemed_by_user_id TEXT,
       note TEXT,
+      initial_roles_json TEXT,
       FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
     );
 
@@ -124,6 +125,7 @@ export const initDb = (db) => {
       channel_id TEXT NOT NULL,
       after_seq INTEGER NOT NULL,
       mention_seq INTEGER NOT NULL DEFAULT 0,
+      mention_priority TEXT NOT NULL DEFAULT 'normal',
       last_delivered_at INTEGER,
       status TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(user_id),
@@ -167,6 +169,8 @@ export const initDb = (db) => {
   try { db.exec(`ALTER TABLE hubs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   // Add mention_seq to existing deliveries tables that pre-date this column
   try { db.exec(`ALTER TABLE deliveries ADD COLUMN mention_seq INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
+  // Add mention_priority to existing deliveries tables
+  try { db.exec(`ALTER TABLE deliveries ADD COLUMN mention_priority TEXT NOT NULL DEFAULT 'normal'`) } catch { /* already exists */ }
   // Add priority + attachments_json to existing messages tables
   try { db.exec(`ALTER TABLE messages ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }

@@ -386,15 +386,26 @@ export default function CallIsland(root) {
     setTimeout(() => chip.remove(), 5000)
   }
 
-  function sendMessage() {
+  // ── Urgent send ───────────────────────────────────────────────────────────
+  const urgentMode = signal(false)
+  const composerFooter = root.querySelector('.composer')
+
+  function toggleUrgentMode() {
+    urgentMode.set(!urgentMode())
+    composerFooter?.classList.toggle('composer-urgent', urgentMode())
+  }
+
+  function sendMessage({ priority } = {}) {
     const text = draft().trim()
     if (!text && pendingAttachments.length === 0) return
+    const resolvedPriority = priority ?? (urgentMode() ? 'now' : 'normal')
     ws.send({
       t: 'msg.send',
       body: {
         channel_id: channelId,
         text,
         client_msg_id: `local_${Date.now()}`,
+        priority: resolvedPriority,
         attachments: pendingAttachments.map(a => ({
           upload_id: a.upload_id,
           url: a.url,
@@ -435,7 +446,8 @@ export default function CallIsland(root) {
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      const priority = e.ctrlKey || e.metaKey ? 'now' : undefined
+      sendMessage({ priority })
     }
   }
 
@@ -1385,5 +1397,5 @@ export default function CallIsland(root) {
 
   // ── Exports (rdbljs bindings) ──────────────────────────────────────────────
 
-  return { draft, channelName, channelTopic, sendMessage, handleComposerKey }
+  return { draft, channelName, channelTopic, urgentMode, sendMessage, handleComposerKey, toggleUrgentMode }
 }

@@ -34,6 +34,7 @@ export class NotificationService {
           name: row.name,
           unread,
           mentions: hasMention ? 1 : 0,
+          urgent: hasMention && row.mention_priority === 'now',
         })
       }
     }

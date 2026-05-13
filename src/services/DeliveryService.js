@@ -14,12 +14,12 @@ export class DeliveryService {
     this.deliveryRepo.advance({ channelId, userId, afterSeq, now: this.nowFn() })
   }
 
-  advanceMention({ channelId, userId, mentionSeq }) {
+  advanceMention({ channelId, userId, mentionSeq, priority = 'normal' }) {
     // Ensure a delivery row exists before updating mention_seq.
     // If Linda has never navigated to this channel, there is no row yet and
     // the UPDATE in advanceMention would silently affect 0 rows, losing the mention.
     this.getOrCreate({ channelId, userId })
-    this.deliveryRepo.advanceMention({ channelId, userId, mentionSeq })
+    this.deliveryRepo.advanceMention({ channelId, userId, mentionSeq, priority })
   }
 
   buildDigestData({ userId }) {

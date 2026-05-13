@@ -279,7 +279,7 @@ export class ChatServer {
     } catch { /* digest is best-effort */ }
   }
 
-  #dispatchMentions({ channelId, senderId, text, seq }) {
+  #dispatchMentions({ channelId, senderId, text, seq, priority = 'normal' }) {
     // For public channels any user on the instance is mentionable (they can see the channel).
     // For private channels only explicit members can be mentioned.
     const channel = this.channelService.getChannel(channelId)
@@ -301,10 +301,10 @@ export class ChatServer {
 
     const mentioned = parseMentions(text, candidates)
     for (const { user_id } of mentioned) {
-      this.deliveryService.advanceMention({ channelId, userId: user_id, mentionSeq: seq })
+      this.deliveryService.advanceMention({ channelId, userId: user_id, mentionSeq: seq, priority })
       this.server?.publish(`user:${user_id}`, JSON.stringify({
         v: 1, server_ts: Date.now(), t: 'notification.mention', ok: true,
-        body: { channel_id: channelId, seq, from_user_id: senderId }
+        body: { channel_id: channelId, seq, from_user_id: senderId, priority }
       }))
     }
   }

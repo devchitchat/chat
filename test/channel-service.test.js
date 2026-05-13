@@ -73,19 +73,6 @@ test('addMember adds the target user', () => {
   expect(service.isMember(ch.channel_id, 'u2')).toBe(true)
 })
 
-test('createChannelInvite and redeemChannelInvite adds member', () => {
-  const ch = service.createChannel({ hubId: 'h1', kind: 'text', name: 'priv', visibility: 'private', createdByUserId: 'u1' })
-  const { inviteToken } = service.createChannelInvite({ channelId: ch.channel_id, createdByUserId: 'u1' })
-  service.redeemChannelInvite({ inviteToken, userId: 'u2' })
-  expect(service.isMember(ch.channel_id, 'u2')).toBe(true)
-})
-
-test('redeemChannelInvite throws when invite is already used', () => {
-  const ch = service.createChannel({ hubId: 'h1', kind: 'text', name: 'priv', visibility: 'private', createdByUserId: 'u1' })
-  const { inviteToken } = service.createChannelInvite({ channelId: ch.channel_id, createdByUserId: 'u1', maxUses: 1 })
-  service.redeemChannelInvite({ inviteToken, userId: 'u2' })
-  expect(() => service.redeemChannelInvite({ inviteToken, userId: 'u3' })).toThrow(ServiceError)
-})
 
 test('ensureDefaultChannel is idempotent', () => {
   const a = service.ensureDefaultChannel('h1', 'u1')

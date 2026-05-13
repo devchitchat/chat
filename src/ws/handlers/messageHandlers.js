@@ -23,7 +23,7 @@ export function handleMsgSend(ws, msg, ctx) {
   })
 
   deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
-  dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq })
+  dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq, priority: result.priority })
 }
 
 export function handleMsgList(ws, msg, ctx) {

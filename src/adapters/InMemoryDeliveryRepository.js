@@ -16,7 +16,7 @@ export class InMemoryDeliveryRepository {
 
   create({ channelId, userId, now }) {
     const deliveryId = newId('del')
-    const record = { delivery_id: deliveryId, user_id: userId, channel_id: channelId, after_seq: 0, mention_seq: 0, last_delivered_at: now, status: 'active' }
+    const record = { delivery_id: deliveryId, user_id: userId, channel_id: channelId, after_seq: 0, mention_seq: 0, mention_priority: 'normal', last_delivered_at: now, status: 'active' }
     this._store.set(deliveryId, record)
     return { ...record }
   }
@@ -32,10 +32,13 @@ export class InMemoryDeliveryRepository {
     }
   }
 
-  advanceMention({ channelId, userId, mentionSeq }) {
+  advanceMention({ channelId, userId, mentionSeq, priority = 'normal' }) {
     for (const record of this._store.values()) {
       if (record.channel_id === channelId && record.user_id === userId) {
-        if ((record.mention_seq ?? 0) < mentionSeq) record.mention_seq = mentionSeq
+        if ((record.mention_seq ?? 0) < mentionSeq) {
+          record.mention_seq = mentionSeq
+          record.mention_priority = priority
+        }
         return
       }
     }
@@ -44,6 +47,6 @@ export class InMemoryDeliveryRepository {
   buildDigestData({ userId }) {
     return [...this._store.values()]
       .filter(d => d.user_id === userId)
-      .map(d => ({ channel_id: d.channel_id, name: d.channel_id, kind: 'text', after_seq: d.after_seq, mention_seq: d.mention_seq ?? 0, max_seq: 0, other_user_id: null }))
+      .map(d => ({ channel_id: d.channel_id, name: d.channel_id, kind: 'text', after_seq: d.after_seq, mention_seq: d.mention_seq ?? 0, mention_priority: d.mention_priority ?? 'normal', max_seq: 0, other_user_id: null }))
   }
 }

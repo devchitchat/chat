@@ -846,6 +846,8 @@ export default function SidebarIsland(root) {
   const dms = signal(populateDmsFromDom(root))
   // channelId → true if this channel has an unread @mention
   const mentionedChannels = signal(new Set())
+  // channelId → true if this channel has an unread urgent (@mention + now priority)
+  const urgentChannels = signal(new Set())
   const ws = new WsClient('/ws')
 
   ws.on('hub.created', ({ hub }) => {
@@ -856,23 +858,31 @@ export default function SidebarIsland(root) {
     hubs.set(hubs().map(h => h.hub_id === hub.hub_id ? { ...h, ...hub } : h))
   })
 
-  ws.on('notification.mention', ({ channel_id }) => {
+  ws.on('notification.mention', ({ channel_id, priority }) => {
     if (channel_id === currentChannelId) return // already viewing — no dot needed
-    const next = new Set(mentionedChannels())
-    next.add(channel_id)
-    mentionedChannels.set(next)
+    if (priority === 'now') {
+      const next = new Set(urgentChannels())
+      next.add(channel_id)
+      urgentChannels.set(next)
+    } else {
+      const next = new Set(mentionedChannels())
+      next.add(channel_id)
+      mentionedChannels.set(next)
+    }
     updateMentionDots()
   })
 
-  ws.on('notification.digest', (digest) => {
-    showDigestBanner(digest)
-    // Seed mention dots from the digest
-    if (digest.channels?.length) {
-      const next = new Set(mentionedChannels())
-      for (const c of digest.channels) { if (c.mentions > 0) next.add(c.channel_id) }
-      mentionedChannels.set(next)
-      updateMentionDots()
+  ws.on('notification.digest', ({ channels }) => {
+    if (!channels?.length) return
+    const nextMentioned = new Set(mentionedChannels())
+    const nextUrgent = new Set(urgentChannels())
+    for (const c of channels) {
+      if (c.urgent) nextUrgent.add(c.channel_id)
+      else if (c.mentions > 0) nextMentioned.add(c.channel_id)
     }
+    mentionedChannels.set(nextMentioned)
+    urgentChannels.set(nextUrgent)
+    updateMentionDots()
   })
 
   ws.on('hub.member_added', ({ hub_id, user_id }) => {
@@ -1019,11 +1029,14 @@ export default function SidebarIsland(root) {
     document.dispatchEvent(new CustomEvent('channelnavigated', {
       detail: { channelId: clickedChannelId }
     }))
-    // Clear mention dot for this channel
-    if (clickedChannelId && mentionedChannels().has(clickedChannelId)) {
-      const next = new Set(mentionedChannels())
-      next.delete(clickedChannelId)
-      mentionedChannels.set(next)
+    // Clear mention/urgent dot for this channel
+    if (clickedChannelId && (mentionedChannels().has(clickedChannelId) || urgentChannels().has(clickedChannelId))) {
+      const nextMentioned = new Set(mentionedChannels())
+      const nextUrgent = new Set(urgentChannels())
+      nextMentioned.delete(clickedChannelId)
+      nextUrgent.delete(clickedChannelId)
+      mentionedChannels.set(nextMentioned)
+      urgentChannels.set(nextUrgent)
       updateMentionDots()
     }
     if (window.matchMedia('(max-width: 700px)').matches) {
@@ -1034,28 +1047,14 @@ export default function SidebarIsland(root) {
   // Mention dot management
   function updateMentionDots() {
     const mentioned = mentionedChannels()
+    const urgent = urgentChannels()
     root.querySelectorAll('.channel-item').forEach(li => {
       const link = li.querySelector('.channel-link')
       const channelId = link?.dataset.channelId
       if (!channelId) return
-      li.classList.toggle('has-mention', mentioned.has(channelId))
+      li.classList.toggle('has-urgent', urgent.has(channelId))
+      li.classList.toggle('has-mention', !urgent.has(channelId) && mentioned.has(channelId))
     })
-  }
-
-  // Digest banner
-  const digestBannerEl = root.querySelector('#digest-banner')
-  function showDigestBanner(digest) {
-    if (!digestBannerEl) return
-    const total = (digest.channels?.reduce((s, c) => s + c.unread, 0) ?? 0) + (digest.dms?.reduce((s, d) => s + d.unread, 0) ?? 0)
-    if (total === 0) return
-    const awayMin = digest.away_duration_ms ? Math.round(digest.away_duration_ms / 60000) : null
-    const awayText = awayMin ? ` (away ${awayMin < 60 ? `${awayMin}m` : `${Math.round(awayMin / 60)}h`})` : ''
-    digestBannerEl.innerHTML = `
-      <span>${total} unread message${total !== 1 ? 's' : ''}${awayText}</span>
-      <button class="digest-dismiss btn-ghost" type="button" style="font-size:12px;padding:2px 6px">✕</button>
-    `
-    digestBannerEl.hidden = false
-    digestBannerEl.querySelector('.digest-dismiss').addEventListener('click', () => { digestBannerEl.hidden = true }, { once: true })
   }
 
   // DMs list rendering
