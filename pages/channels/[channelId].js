@@ -22,12 +22,14 @@ export async function GET(req) {
   }
 
   // SSR: last 50 messages baked into the page for instant render
-  const { messages: seedMessages, next_after_seq: seedSeq } = messageService.listMessages({
+  const { messages: seedMessages } = messageService.listLatestMessages({
     channelId,
     userId: user.user_id,
-    afterSeq: 0,
     limit: 50,
   })
+  const seedSeq = seedMessages.length ? seedMessages[seedMessages.length - 1].seq : 0
+  const seedFirstSeq = seedMessages.length ? seedMessages[0].seq : 0
+  const seedHasMore = seedFirstSeq > 1
 
   // Sidebar data: hubs + channels for nav
   const hubs = hubService.listHubs(user.user_id, user.roles)
@@ -56,6 +58,8 @@ export async function GET(req) {
     channel,
     currentChannelId: channelId,
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    seedFirstSeq,
+    seedHasMore,
     seedMessages: seedMessages.map(m => ({
       ...m,
       ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

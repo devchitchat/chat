@@ -39,4 +39,32 @@ export class SqliteMessageRepository {
       attachments_json: undefined,
     }))
   }
+
+  listLatestMessages({ channelId, limit }) {
+    const rows = this.db.prepare(
+      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.attachments_json
+       FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
+       WHERE m.channel_id = ?
+       ORDER BY m.seq DESC LIMIT ?`
+    ).all(channelId, limit)
+    return rows.reverse().map(r => ({
+      ...r,
+      attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
+      attachments_json: undefined,
+    }))
+  }
+
+  listMessagesBefore({ channelId, beforeSeq, limit }) {
+    const rows = this.db.prepare(
+      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.attachments_json
+       FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
+       WHERE m.channel_id = ? AND m.seq < ?
+       ORDER BY m.seq DESC LIMIT ?`
+    ).all(channelId, beforeSeq, limit)
+    return rows.reverse().map(r => ({
+      ...r,
+      attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
+      attachments_json: undefined,
+    }))
+  }
 }

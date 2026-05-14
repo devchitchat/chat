@@ -60,6 +60,8 @@
   data-user-display-name="{{user.display_name}}"
   data-user-roles="{{user.roles}}"
   data-seed-seq="{{seedSeq}}"
+  data-seed-first-seq="{{seedFirstSeq}}"
+  data-seed-has-more="{{seedHasMore}}"
 >
 
   <header class="chat-header">
@@ -97,6 +99,7 @@
 
   <!-- Server-rendered initial messages baked in -->
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
+    <div class="load-more-sentinel" id="load-more-sentinel" aria-hidden="true" hidden></div>
     {{#each seedMessages}}
     <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-attachments="{{attachments_json}}">
       <span class="message-handle" data-user-id="{{user_id}}">{{user_display_name}}</span>

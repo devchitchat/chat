@@ -565,6 +565,35 @@ details summary {
 .composer.composer-urgent textarea,
 .composer.composer-urgent textarea:focus { border-color: var(--color-danger); }
 
+/* ── Load-more sentinel ──────────────────────────────────────────────────── */
+.load-more-sentinel {
+  height: 1px;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Date separator ──────────────────────────────────────────────────────── */
+.date-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.date-separator::before,
+.date-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.date-separator-label {
+  white-space: nowrap;
+  padding: 0 6px;
+  font-weight: 500;
+}
+
 /* ── @mention inline highlight ───────────────────────────────────────────── */
 .mention      { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border-radius: 3px; padding: 0 2px; font-weight: 500; }
 .mention-self { background: color-mix(in srgb, var(--accent) 30%, transparent); font-weight: 600; }
@@ -575,10 +604,10 @@ details summary {
   bottom: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: var(--bg-secondary);
+  background: var(--bg-sidebar);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
   z-index: 200;
   max-height: 240px;
   overflow-y: auto;

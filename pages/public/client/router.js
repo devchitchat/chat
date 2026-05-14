@@ -62,11 +62,13 @@ async function navigateTo(url, scroll) {
     const d = currPanel.dataset
     document.dispatchEvent(new CustomEvent('chatpanel:navigated', {
       detail: {
-        channelId: d.id,
-        name:      d.name,
-        topic:     d.topic ?? '',
-        kind:      d.kind ?? 'text',
-        seedSeq:   parseInt(d.seedSeq ?? '0', 10),
+        channelId:    d.id,
+        name:         d.name,
+        topic:        d.topic ?? '',
+        kind:         d.kind ?? 'text',
+        seedSeq:      parseInt(d.seedSeq ?? '0', 10),
+        seedFirstSeq: parseInt(d.seedFirstSeq ?? '0', 10),
+        seedHasMore:  d.seedHasMore === 'true',
       }
     }))
 

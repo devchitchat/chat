@@ -26,9 +26,12 @@ export default function CallIsland(root) {
   const userId     = root.dataset.userId
   const userHandle = root.dataset.userHandle
   const seedSeq    = parseInt(root.dataset.seedSeq ?? '0', 10)
+  let oldestSeq    = parseInt(root.dataset.seedFirstSeq ?? '0', 10)
+  let loadingMore  = false
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
-  const messages      = document.getElementById('messages')
+  const messages       = document.getElementById('messages')
+  const sentinelEl     = document.getElementById('load-more-sentinel')
   const tilePanelEl   = document.getElementById('tile-panel')
   const tileGridEl    = document.getElementById('tile-grid')
   const callStatusEl  = document.getElementById('call-status')
@@ -113,8 +116,11 @@ export default function CallIsland(root) {
   // Seed messages are SSR'd without attachment HTML. Process data-attachments now.
   // Called on initial mount and again after each SPA navigation morph.
   function hydrateSeedMessages() {
-    messages.querySelectorAll('article.message').forEach(article => {
-      if (article.dataset.hydrated) return
+    const articles = Array.from(messages.querySelectorAll('article.message'))
+    let prevDateKey = null
+
+    for (const article of articles) {
+      if (article.dataset.hydrated) continue
       article.dataset.hydrated = '1'
 
       // Add dm-trigger to non-self sender handles
@@ -132,16 +138,116 @@ export default function CallIsland(root) {
 
       // Inject attachment HTML for seed messages that have attachments_json
       const raw = article.dataset.attachments
-      if (!raw) return
-      let attachments
-      try { attachments = JSON.parse(raw) } catch { return }
-      if (!Array.isArray(attachments) || attachments.length === 0) return
-      attachments.forEach(a => {
-        article.insertAdjacentHTML('beforeend', renderAttachment(a))
-      })
-    })
+      if (raw) {
+        let attachments
+        try { attachments = JSON.parse(raw) } catch { attachments = null }
+        if (Array.isArray(attachments) && attachments.length > 0) {
+          attachments.forEach(a => article.insertAdjacentHTML('beforeend', renderAttachment(a)))
+        }
+      }
+
+      // Date separator before this article if date changed
+      const ts = parseInt(article.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
+      if (ts) {
+        const dateKey = utcDateKey(ts)
+        if (prevDateKey && dateKey !== prevDateKey) {
+          article.before(makeDateSeparator(dateKey))
+        }
+        prevDateKey = dateKey
+      }
+    }
   }
   hydrateSeedMessages()
+
+  // ── Load-more sentinel + pagination ───────────────────────────────────────
+
+  function showSentinel() { if (sentinelEl) sentinelEl.hidden = false }
+  function hideSentinel() { if (sentinelEl) sentinelEl.hidden = true  }
+
+  if (root.dataset.seedHasMore === 'true') showSentinel()
+
+  const loadMoreObserver = new IntersectionObserver(entries => {
+    if (!entries[0].isIntersecting || loadingMore || oldestSeq <= 1) return
+    loadingMore = true
+    ws.send({ t: 'msg.list', body: { channel_id: channelId, before_seq: oldestSeq } })
+  }, { root: messages, threshold: 0.1 })
+
+  if (sentinelEl) loadMoreObserver.observe(sentinelEl)
+
+  // ── Date separator helpers ─────────────────────────────────────────────────
+
+  function utcDateKey(tsMs) {
+    const d = new Date(tsMs)
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  }
+
+  function formatDateLabel(dateKey) {
+    const [y, mo, d] = dateKey.split('-').map(Number)
+    const date = new Date(Date.UTC(y, mo - 1, d))
+    const todayKey = utcDateKey(Date.now())
+    const yestKey  = utcDateKey(Date.now() - 86_400_000)
+    if (dateKey === todayKey) return 'Today'
+    if (dateKey === yestKey)  return 'Yesterday'
+    return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
+  function makeDateSeparator(dateKey) {
+    const el = document.createElement('div')
+    el.className = 'date-separator'
+    el.dataset.date = dateKey
+    el.innerHTML = `<span class="date-separator-label">${formatDateLabel(dateKey)}</span>`
+    return el
+  }
+
+  function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, attachments }) {
+    const article = document.createElement('article')
+    article.className = 'message'
+    article.dataset.seq = seq
+    article.dataset.msgId = msg_id
+    const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const isSelf = user_id === userId
+    const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
+    article.innerHTML = `
+      <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
+      <time class="message-time" datetime="${ts}">${time}</time>
+      ${text ? `<p class="message-text">${renderText(text)}</p>` : ''}
+      ${attachmentHtml}
+    `
+    return article
+  }
+
+  function prependMessages(msgs) {
+    const prevHeight = messages.scrollHeight
+    const fragment   = document.createDocumentFragment()
+    let   prevDate   = null
+
+    const firstExisting = messages.querySelector('article.message')
+    if (firstExisting) {
+      const ts = parseInt(firstExisting.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
+      if (ts) prevDate = utcDateKey(ts)
+    }
+
+    for (const m of msgs) {
+      const dateKey = utcDateKey(m.ts)
+      if (prevDate && dateKey !== prevDate) {
+        fragment.appendChild(makeDateSeparator(prevDate))
+      }
+      fragment.appendChild(makeMessageEl(m))
+      prevDate = dateKey
+    }
+
+    // If last prepended message is different day from first existing, insert separator before existing
+    if (firstExisting && prevDate) {
+      const existingTs = parseInt(firstExisting.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
+      const existingDateKey = existingTs ? utcDateKey(existingTs) : null
+      if (existingDateKey && prevDate !== existingDateKey) {
+        messages.insertBefore(makeDateSeparator(existingDateKey), firstExisting)
+      }
+    }
+
+    sentinelEl ? sentinelEl.after(fragment) : messages.prepend(fragment)
+    messages.scrollTop += messages.scrollHeight - prevHeight
+  }
 
   // ── @mention picker ────────────────────────────────────────────────────────
 
@@ -242,9 +348,27 @@ export default function CallIsland(root) {
     channelMembers = (users ?? []).filter(m => m.handle)
   })
 
-  ws.on('msg.list_result', ({ messages: msgs, next_after_seq }) => {
+  ws.on('msg.list_result', ({ messages: msgs, next_after_seq, has_more, direction }) => {
+    if (direction === 'before') {
+      if (msgs.length === 0) {
+        hideSentinel()
+        if (sentinelEl) loadMoreObserver.unobserve(sentinelEl)
+        loadingMore = false
+        return
+      }
+      prependMessages(msgs)
+      if (msgs[0].seq < oldestSeq) oldestSeq = msgs[0].seq
+      if (!has_more || oldestSeq <= 1) {
+        hideSentinel()
+        if (sentinelEl) loadMoreObserver.unobserve(sentinelEl)
+      }
+      loadingMore = false
+      return
+    }
+    // after_seq catch-up path
     msgs.forEach(appendMessage)
-    afterSeq = next_after_seq
+    if (msgs.length) afterSeq = msgs[msgs.length - 1].seq
+    else if (next_after_seq != null) afterSeq = next_after_seq
   })
 
   ws.on('msg.event', (body) => {
@@ -462,19 +586,18 @@ export default function CallIsland(root) {
 
   function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, attachments }) {
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
-    const article = document.createElement('article')
-    article.className = 'message'
-    article.dataset.seq = seq
-    article.dataset.msgId = msg_id
-    const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const isSelf = user_id === userId
-    const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
-    article.innerHTML = `
-      <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
-      <time class="message-time" datetime="${ts}">${time}</time>
-      ${text ? `<p class="message-text">${renderText(text)}</p>` : ''}
-      ${attachmentHtml}
-    `
+
+    // Date separator if day changed
+    const dateKey = utcDateKey(ts)
+    const lastMsg = messages.querySelector('article.message:last-of-type')
+    if (lastMsg) {
+      const lastTs = parseInt(lastMsg.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
+      if (lastTs && utcDateKey(lastTs) !== dateKey) {
+        messages.appendChild(makeDateSeparator(dateKey))
+      }
+    }
+
+    const article = makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, attachments })
     messages.appendChild(article)
     messages.scrollTop = messages.scrollHeight
   }
@@ -1318,7 +1441,7 @@ export default function CallIsland(root) {
   // SPA navigation: router morphed .chat-panel and dispatched this event.
   // Re-initialise chat state for the new channel without touching RTC.
   document.addEventListener('chatpanel:navigated', (e) => {
-    const { channelId: newId, name, topic, kind, seedSeq: newSeedSeq } = e.detail
+    const { channelId: newId, name, topic, kind, seedSeq: newSeedSeq, seedFirstSeq: newFirstSeq, seedHasMore: newHasMore } = e.detail
     if (newId === channelId) return   // same channel — nothing to do
 
     // Leave old channel subscription on the server
@@ -1330,6 +1453,15 @@ export default function CallIsland(root) {
     channelName.set(name)
     channelTopic.set(topic)
     afterSeq = newSeedSeq
+
+    // Reset pagination state for new channel
+    oldestSeq   = newFirstSeq ?? 0
+    loadingMore = false
+    if (sentinelEl) {
+      sentinelEl.hidden = !newHasMore
+      if (newHasMore) loadMoreObserver.observe(sentinelEl)
+      else            loadMoreObserver.unobserve(sentinelEl)
+    }
 
     // Update browser chrome
     document.title = `#${name} — devchitchat`

@@ -50,4 +50,17 @@ export class MessageService {
     const lastSeq = rows.length ? rows[rows.length - 1].seq : afterSeq
     return { messages: rows, next_after_seq: lastSeq }
   }
+
+  listLatestMessages({ channelId, userId, limit = 50 }) {
+    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    const rows = this.messageRepo.listLatestMessages({ channelId, limit })
+    return { messages: rows }
+  }
+
+  listMessagesBefore({ channelId, userId, beforeSeq, limit = 50 }) {
+    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    const rows = this.messageRepo.listMessagesBefore({ channelId, beforeSeq, limit })
+    const hasMore = rows.length === limit
+    return { messages: rows, has_more: hasMore }
+  }
 }
