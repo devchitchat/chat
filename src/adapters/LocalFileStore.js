@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-
+import { ServiceError } from '../util/errors'
 const DEFAULT_UPLOAD_DIR = 'data/uploads'
 
 export class LocalFileStore {
@@ -24,9 +24,7 @@ export class LocalFileStore {
     const file = Bun.file(filePath)
     const exists = await file.exists()
     if (!exists) {
-      const err = new Error(`File not found: ${filePath}`)
-      err.code = 'NOT_FOUND'
-      throw err
+      throw new ServiceError('NOT_FOUND', `File not found: ${filePath}`)
     }
     return file.stream()
   }

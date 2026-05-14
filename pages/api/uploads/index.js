@@ -9,7 +9,7 @@
  * or 4xx/5xx on error.
  */
 import { sessionFromRequest, uploadService } from '../../../src/context.js'
-import { ServiceError } from '../../../src/util/errors.js'
+import { ServiceError, httpStatus } from '../../../src/util/errors.js'
 
 const MAGIC_BYTES = 16
 
@@ -53,7 +53,7 @@ export async function POST(req) {
     return Response.json(result, { status: 200 })
   } catch (err) {
     if (err instanceof ServiceError) {
-      const status = { FORBIDDEN: 403, NOT_FOUND: 404, BAD_REQUEST: 400 }[err.code] ?? 500
+      const status = httpStatus(err)
       return Response.json({ error: err.message }, { status })
     }
     if (err.code === 'UNSUPPORTED_TYPE') {

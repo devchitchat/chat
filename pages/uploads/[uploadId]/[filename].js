@@ -6,7 +6,7 @@
  * Path traversal is impossible because stored_name is opaque and never interpolated from URL.
  */
 import { sessionFromRequest, uploadService } from '../../../src/context.js'
-import { ServiceError } from '../../../src/util/errors.js'
+import { ServiceError, httpStatus } from '../../../src/util/errors.js'
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
@@ -35,7 +35,7 @@ export async function GET(req) {
     })
   } catch (err) {
     if (err instanceof ServiceError) {
-      const status = { FORBIDDEN: 403, NOT_FOUND: 404 }[err.code] ?? 500
+      const status = httpStatus(err)
       return new Response(err.message, { status })
     }
     throw err

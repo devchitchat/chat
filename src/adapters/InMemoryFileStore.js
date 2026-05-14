@@ -2,6 +2,8 @@
  * InMemoryFileStore — test double for IFileStore.
  * Stores file contents as Uint8Array values in a Map keyed by "uploadId/storedName".
  */
+
+import { ServiceError } from '../util/errors'
 export class InMemoryFileStore {
   constructor() {
     this._store = new Map()
@@ -35,9 +37,7 @@ export class InMemoryFileStore {
   async read({ uploadId, storedName }) {
     const buf = this._store.get(this.#key(uploadId, storedName))
     if (!buf) {
-      const err = new Error(`File not found: ${uploadId}/${storedName}`)
-      err.code = 'NOT_FOUND'
-      throw err
+      throw new ServiceError('NOT_FOUND', `File not found: ${uploadId}/${storedName}`)
     }
     return new ReadableStream({
       start(controller) {

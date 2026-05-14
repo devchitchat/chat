@@ -55,6 +55,7 @@ export async function GET(req) {
     user,
     channel,
     currentChannelId: channelId,
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
     seedMessages: seedMessages.map(m => ({
       ...m,
       ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

@@ -24,6 +24,9 @@ import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handl
 import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelListMembers, handleUserList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
+import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
+import { WebPushService } from '../services/WebPushService.js'
+import { SqlitePushRepository } from '../adapters/SqlitePushRepository.js'
 
 /**
  * ChatServer — Bun native WebSocket implementation.
@@ -57,6 +60,7 @@ export class ChatServer {
     const searchRepo   = new SqliteSearchRepository({ db })
     const messageRepo  = new SqliteMessageRepository({ db })
     const deliveryRepo = new SqliteDeliveryRepository({ db })
+    const pushRepo     = new SqlitePushRepository({ db })
 
     // ── Services ───────────────────────────────────────────────────────────────
     this.auth             = new AuthService({ authRepo, sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) })
@@ -69,6 +73,13 @@ export class ChatServer {
     this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
     this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
+    this.pushService      = new WebPushService({
+      vapidPublicKey:  process.env.VAPID_PUBLIC_KEY  ?? null,
+      vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
+      vapidSubject:    process.env.VAPID_SUBJECT     ?? null,
+      pushRepo,
+    })
+    this.pushRepo = pushRepo
 
     // ── Connection state ───────────────────────────────────────────────────────
     this.connections    = new Map()  // connectionId → ws
@@ -215,6 +226,9 @@ export class ChatServer {
       case 'rtc.stream_publish':         return handleRtcStreamPublish(ws, msg, ctx)
       case 'rtc.leave':                  return handleRtcLeave(ws, msg, ctx)
       case 'rtc.end_call':               return handleRtcEndCall(ws, msg, ctx)
+      // Web Push
+      case 'push.subscribe':             return handlePushSubscribe(ws, msg, ctx)
+      case 'push.unsubscribe':           return handlePushUnsubscribe(ws, msg, ctx)
       default:
         this.#sendWs(ws, { t: 'error', ok: false, reply_to: msg.id, body: { code: 'BAD_REQUEST', message: 'Unknown message type' } })
     }
@@ -236,6 +250,8 @@ export class ChatServer {
       signalingService:    this.signalingService,
       notificationService: this.notificationService,
       botService:          this.botService,
+      pushService:         this.pushService,
+      pushRepo:            this.pushRepo,
       // Connection state (mutable references)
       connections:         this.connections,
       peerConnections:     this.peerConnections,
@@ -306,6 +322,17 @@ export class ChatServer {
         v: 1, server_ts: Date.now(), t: 'notification.mention', ok: true,
         body: { channel_id: channelId, seq, from_user_id: senderId, priority }
       }))
+      if (priority === 'now' && this.pushService.isConfigured()) {
+        const sender   = this.auth.getUser(senderId)
+        const channel  = this.channelService.getChannel(channelId)
+        this.pushService.sendToUser({
+          userId:    user_id,
+          title:     `@${sender?.handle ?? 'someone'} mentioned you`,
+          body:      text.slice(0, 120),
+          url:       `/channels/${channelId}`,
+          channelId,
+        }).catch(err => this.logger.error('push.send_error', { error: err?.message }))
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 <!-- Sidebar island: hub/channel nav + online presence -->
-<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}">
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}" data-vapid-key="{{vapidPublicKey}}">
   <section each="hubs" key="hub_id" class="hub-group">
     {{#each hubs}}
     <details class="hub-header" data-key="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" draggable="true" open>

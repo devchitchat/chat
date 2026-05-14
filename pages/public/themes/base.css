@@ -24,8 +24,13 @@ input, textarea, select, button { font: inherit; }
   --transition: 150ms ease;
 }
 
-html, body { height: 100%; font-family: var(--font-sans); font-size: var(--font-size); }
+html, body { height: 100%; font-family: var(--font-sans); }
 body { background: var(--bg-base); color: var(--text-primary); }
+
+/* Reset font size */
+html, body, h1, h2, h3, h4, h5, h6, p, a, button, input, select, time {
+  font-size: var(--font-size);
+}
 
 details summary {
   cursor: pointer;
@@ -224,9 +229,11 @@ details summary {
   white-space: nowrap;
 }
 
-/* Unread dot on DM/channel items — blue for normal mentions, red for urgent */
-.dm-item.has-mention .dm-link::after,
-.channel-item.has-mention .channel-link::after {
+/* Unread dot on DM/channel items — blue for normal mentions, red for urgent.
+   Uses data attributes instead of classes so rdbljs className re-renders
+   (which only touch el.className) never wipe the dot state. */
+.dm-item[data-mention] .dm-link::after,
+.channel-item[data-mention] .channel-link::after {
   content: '';
   display: inline-block;
   width: 8px;
@@ -236,8 +243,8 @@ details summary {
   margin-left: auto;
   flex-shrink: 0;
 }
-.dm-item.has-urgent .dm-link::after,
-.channel-item.has-urgent .channel-link::after {
+.dm-item[data-urgent] .dm-link::after,
+.channel-item[data-urgent] .channel-link::after {
   content: '';
   display: inline-block;
   width: 8px;
@@ -415,6 +422,34 @@ details summary {
   border-color: var(--accent);
 }
 
+.btn-enable-push {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: 6px;
+}
+.btn-enable-push:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.btn-enable-push[data-blocked] {
+  opacity: 0.55;
+  cursor: default;
+  border-style: dashed;
+}
+.btn-enable-push[data-blocked]:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-secondary);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 .user-avatar {
   width: 30px; height: 30px; border-radius: 50%; background: var(--accent); display: inline-flex; align-items: center; justify-content: center;
   font-weight: 700; color: white; flex-shrink: 0;
@@ -516,12 +551,12 @@ details summary {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
   padding: 6px;
   border-radius: var(--radius-sm);
   opacity: 0.4;
   transition: opacity var(--transition);
   flex-shrink: 0;
+  align-self: center;
 }
 .btn-urgent-toggle:hover { opacity: 0.7; }
 .btn-urgent-toggle.is-urgent { opacity: 1; }

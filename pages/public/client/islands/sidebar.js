@@ -941,7 +941,8 @@ export default function SidebarIsland(root) {
     if (!dmListEl) return
     dmListEl.querySelectorAll('.dm-item').forEach(li => {
       const id = li.dataset.channelId
-      li.classList.toggle('has-mention', dmUnread.has(id))
+      if (dmUnread.has(id)) li.dataset.mention = ''
+      else delete li.dataset.mention
     })
   }
 
@@ -957,6 +958,14 @@ export default function SidebarIsland(root) {
   document.addEventListener('chatpanel:navigated', e => {
     const { channelId: newId } = e.detail
     currentChannelId = newId
+    // Update active class in the signal so re-renders preserve it
+    hubs.set(hubs().map(h => ({
+      ...h,
+      channels: (h.channels ?? []).map(c => {
+        const base = (c.className ?? 'channel-item').replace(/\bactive\b/g, '').trim()
+        return { ...c, className: c.channel_id === newId ? `${base} active` : base }
+      })
+    })))
     if (dmUnread.has(newId)) {
       dmUnread.delete(newId)
       updateDmDots()
@@ -1044,7 +1053,9 @@ export default function SidebarIsland(root) {
     }
   })
 
-  // Mention dot management
+  // Mention dot management.
+  // Uses data-mention / data-urgent attributes instead of CSS classes so that
+  // rdbljs className re-renders (el.className = ...) never wipe the dot state.
   function updateMentionDots() {
     const mentioned = mentionedChannels()
     const urgent = urgentChannels()
@@ -1052,8 +1063,16 @@ export default function SidebarIsland(root) {
       const link = li.querySelector('.channel-link')
       const channelId = link?.dataset.channelId
       if (!channelId) return
-      li.classList.toggle('has-urgent', urgent.has(channelId))
-      li.classList.toggle('has-mention', !urgent.has(channelId) && mentioned.has(channelId))
+      if (urgent.has(channelId)) {
+        li.dataset.urgent = ''
+        delete li.dataset.mention
+      } else if (mentioned.has(channelId)) {
+        li.dataset.mention = ''
+        delete li.dataset.urgent
+      } else {
+        delete li.dataset.mention
+        delete li.dataset.urgent
+      }
     })
   }
 
@@ -1095,6 +1114,89 @@ export default function SidebarIsland(root) {
 
   // Wire file-drop onto channel links
   attachFileDropHandlers(root, { ws })
+
+  // ── Web Push subscription ─────────────────────────────────────────────────
+  // Browsers require a user gesture to call Notification.requestPermission().
+  // Strategy: show a small "Enable notifications" button in the sidebar footer.
+  // It appears when VAPID is configured + browser supports push + permission is
+  // 'default'. Clicking it (user gesture) requests permission then subscribes.
+  const vapidKey = root.dataset.vapidKey ?? ''
+  if (vapidKey && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
+    function vapidKeyToUint8Array(b64url) {
+      const padded = b64url + '==='.slice((b64url.length + 3) % 4)
+      const b64 = padded.replace(/-/g, '+').replace(/_/g, '/')
+      return Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+    }
+
+    async function subscribeToPush(swReg) {
+      try {
+        const sub = await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKeyToUint8Array(vapidKey),
+        })
+        ws.send({ t: 'push.subscribe', body: { subscription: sub.toJSON() } })
+      } catch { /* subscribe failed or user blocked — ignore */ }
+    }
+
+    // Register SW once and hold a reference for later use.
+    // After registration, probe pushManager to confirm push actually works in
+    // this browser context — Safari Private windows register a SW fine but
+    // silently refuse push subscriptions, so we skip the button there.
+    let swReg = null
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(async reg => {
+        swReg = reg
+        // Confirm push is functional by checking the subscription API
+        try { await reg.pushManager.getSubscription() } catch {
+          return // push not available in this context (e.g. Safari Private)
+        }
+        if (Notification.permission === 'granted') subscribeToPush(reg)
+        if (Notification.permission !== 'granted') showEnableButton()
+      })
+      .catch(() => { /* http in dev, or SW blocked entirely */ })
+
+    // Inject a small "Enable notifications" button into the sidebar footer.
+    // This is the only place we can legally call requestPermission() — inside
+    // a synchronous click handler (user gesture).
+    //
+    // Three states:
+    //   'default' → clickable, opens browser permission dialog
+    //   'denied'  → non-clickable, tells user to update browser settings
+    //   'granted' → button is removed entirely
+    let enableBtn = null
+
+    function updateEnableButton() {
+      if (!enableBtn) return
+      const perm = Notification.permission
+      if (perm === 'granted') {
+        enableBtn.remove()
+        enableBtn = null
+        return
+      }
+      if (perm === 'denied') {
+        enableBtn.textContent = '🔕 Notifications blocked in browser settings'
+        enableBtn.dataset.blocked = 'true'
+      } else {
+        enableBtn.textContent = '🔔 Enable notifications'
+        delete enableBtn.dataset.blocked
+      }
+    }
+
+    function showEnableButton() {
+      if (enableBtn) return
+      enableBtn = document.createElement('button')
+      enableBtn.className = 'btn-enable-push'
+      enableBtn.type = 'button'
+      enableBtn.addEventListener('click', async () => {
+        if (enableBtn.dataset.blocked) return   // denied — browser won't show dialog
+        const permission = await Notification.requestPermission()
+        updateEnableButton()
+        if (permission === 'granted' && swReg) subscribeToPush(swReg)
+      })
+      root.querySelector('.sidebar-footer')?.prepend(enableBtn)
+      updateEnableButton()
+    }
+  }
 
   return { hubs }
 }

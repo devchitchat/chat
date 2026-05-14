@@ -77,6 +77,11 @@ const server = await createServer({
         headers: { 'Content-Type': 'text/javascript' },
       })
     },
+    // Service worker at root scope so it can receive push events for all pages
+    '/sw.js': () => new Response(
+      Bun.file(import.meta.dir + '/pages/public/sw.js'),
+      { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache, no-store' } }
+    ),
   },
 
   // Bun native WebSocket handler (new index97 passthrough)
