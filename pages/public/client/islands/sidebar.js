@@ -957,15 +957,28 @@ export default function SidebarIsland(root) {
   // Track current channel across SPA navigations and clear DM dot when landing on a DM
   document.addEventListener('chatpanel:navigated', e => {
     const { channelId: newId } = e.detail
+    const prevId = currentChannelId
     currentChannelId = newId
-    // Update active class in the signal so re-renders preserve it
-    hubs.set(hubs().map(h => ({
-      ...h,
-      channels: (h.channels ?? []).map(c => {
-        const base = (c.className ?? 'channel-item').replace(/\bactive\b/g, '').trim()
-        return { ...c, className: c.channel_id === newId ? `${base} active` : base }
-      })
-    })))
+    // Only create new objects for hubs/channels that actually changed (prev active → new
+    // active). Returning the same object reference for unchanged hubs lets rdbljs skip
+    // destroying and recreating those DOM rows, which prevents a brief empty-sidebar flash
+    // on iOS during the CSS transition animation.
+    if (prevId !== newId) {
+      hubs.set(hubs().map(h => {
+        const channels = h.channels ?? []
+        const affected = channels.some(c => c.channel_id === newId || c.channel_id === prevId)
+        if (!affected) return h  // same reference — rdbljs skips this hub entirely
+        return {
+          ...h,
+          channels: channels.map(c => {
+            if (c.channel_id !== newId && c.channel_id !== prevId) return c
+            const base = (c.className ?? 'channel-item').replace(/\bactive\b/g, '').trim()
+            const next = c.channel_id === newId ? `${base} active` : base
+            return next === c.className ? c : { ...c, className: next }
+          })
+        }
+      }))
+    }
     if (dmUnread.has(newId)) {
       dmUnread.delete(newId)
       updateDmDots()

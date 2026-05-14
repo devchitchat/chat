@@ -13,7 +13,6 @@ const LOCK_PX  = 10   // travel before we decide horizontal vs vertical
 
 function attachSwipe(el, { onLeft, onRight }) {
   let startX, startY, dir
-  console.log('started')
 
   el.addEventListener('touchstart', e => {
     startX = e.touches[0].clientX
