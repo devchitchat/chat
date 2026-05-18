@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: chat-web
-        image: local/chat-web:3.0.5
+        image: local/chat-web:3.0.6
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
@@ -55,4 +55,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 2Gi
+      storage: 20Mi

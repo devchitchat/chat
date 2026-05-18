@@ -9,6 +9,18 @@
         <button class="btn-hub-add btn-icon" title="Create a channel" aria-label="Create a channel" type="button">+</button>
       </summary>
       <ul each="channels" key="channel_id" class="channel-list">
+        <template>
+          <li class="channel-item" cls="className" draggable="true">
+            <a attr="href:url" text="name" class="channel-link"
+               data-channel-id=""
+               data-channel-name=""
+               data-channel-topic=""
+               data-channel-kind=""
+               data-channel-visibility=""></a>
+            <span class="call-badge" aria-label="Call active"></span>
+            <button class="btn-channel-gear btn-icon" title="Channel settings" aria-label="Channel settings" type="button">&#9881;</button>
+          </li>
+        </template>
       {{#each channels}}
         <li data-key="{{channel_id}}" class="channel-item {{className}}" cls="className" draggable="true">
           <a attr="href:url" text="name" class="channel-link"
