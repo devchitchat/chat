@@ -17,7 +17,6 @@ input, textarea, select, button { font: inherit; }
   --radius-lg: 16px;
 
   --sidebar-width: 240px;
-  --topbar-height: 52px;
   --composer-height: 80px;
   --call-bar-height: 0px; /* expands when a call is active */
 
@@ -36,28 +35,9 @@ details summary {
   cursor: pointer;
 }
 
-/* ── Topbar ──────────────────────────────────────────────────────────────── */
-.topbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  height: var(--topbar-height);
-  display: flex; align-items: center; gap: 12px;
-  padding: 0 16px;
-  background: var(--bg-topbar);
-  border-bottom: 1px solid var(--border);
-}
-
-.topbar-brand { font-weight: 700; color: var(--accent); text-decoration: none; letter-spacing: -0.5px; }
-.topbar-channel { flex: 1; font-weight: 600; color: var(--text-primary); }
-.topbar-nav { display: flex; align-items: center; gap: 12px; }
-.topbar-user { color: var(--text-muted); }
-.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.topbar-menu-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 6px; border-radius: var(--radius-sm); }
-.topbar-menu-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
-
 /* ── App shell ───────────────────────────────────────────────────────────── */
 .app-shell {
   display: flex;
-  padding-top: var(--topbar-height);
   height: 100%;
 }
 
@@ -70,9 +50,9 @@ details summary {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  height: calc(100vh - var(--topbar-height));
+  height: 100vh;
   position: sticky;
-  top: var(--topbar-height);
+  top: 0;
   z-index: 1;
 }
 
@@ -397,12 +377,40 @@ details summary {
 
 .sidebar-footer {
   margin-top: auto;
-  padding: 27px 16px;
+  padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.sidebar-username {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+.sidebar-footer-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sidebar-footer-controls select {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.btn-sm {
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
 .btn-new-hub {
@@ -465,7 +473,7 @@ details summary {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: calc(100vh - var(--topbar-height));
+  height: 100vh;
   z-index: 2;
 }
 
@@ -750,10 +758,10 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
      so the panels resize and the composer/footer stay above the keyboard. */
   .sidebar {
     position: fixed;
-    top: var(--topbar-height);
+    top: 0;
     left: 0;
     right: 0;
-    height: calc(100dvh - var(--topbar-height));
+    height: 100dvh;
     width: 100%;
     transform: translateX(0);
     transition: transform var(--transition);
@@ -762,10 +770,10 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 
   .main-content {
     position: fixed;
-    top: var(--topbar-height);
+    top: 0;
     left: 0;
     right: 0;
-    height: calc(100dvh - var(--topbar-height));
+    height: 100dvh;
     width: 100%;
     transform: translateX(100%);
     transition: transform var(--transition);
@@ -789,9 +797,6 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
     transform: translateX(100%);
   }
 
-  /* Hide hamburger — sidebar is always accessible via back button */
-  .topbar-menu-btn { display: none; }
-
   /* Show back button */
   .btn-back-mobile {
     display: flex;
@@ -807,10 +812,6 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
     flex-shrink: 0;
   }
   .btn-back-mobile:hover { color: var(--text-primary); }
-}
-
-@media (min-width: 701px) {
-  .topbar-menu-btn { display: none; }
 }
 
 /* ── Tile panel ───────────────────────────────────────────────────────────── */
@@ -856,7 +857,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   .tile-panel {
     width: 280px;
     flex-shrink: 0;
-    height: calc(100vh - var(--topbar-height));
+    height: 100vh;
     overflow-y: auto;
   }
   .tile-panel.collapsed {
@@ -1128,15 +1129,6 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 }
 
 /* ── Admin pages ──────────────────────────────────────────────────────────── */
-.topbar-link {
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-.topbar-link:hover { color: var(--text-primary); background: var(--bg-input); }
-
 .admin-page {
   max-width: 900px;
   margin: 0 auto;

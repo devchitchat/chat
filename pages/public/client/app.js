@@ -7,9 +7,16 @@
  * up bind(root, scope) so all directives (model=, onclick=, each=, etc.) work.
  */
 import { init } from '@devchitchat/rdbljs'
-import { getSettings, syncFromServer } from '/client/settings-sync.js'
+import { getSettings, syncFromServer, patchSettings } from '/client/settings-sync.js'
 import { initSwipeNav } from '/client/swipe-nav.js'
 import { initRouter } from '/client/router.js'
+
+// On a channel page the intent is always to view the channel — persist the
+// current channel and ensure mobile shows the chat panel, not the hub panel.
+if (location.pathname.startsWith('/channels/')) {
+  const channelId = location.pathname.split('/').pop()
+  if (channelId) patchSettings({ last_channel_id: channelId, mobile_chat_open: true })
+}
 
 // Apply settings before islands mount (prevent layout flash)
 const settings = getSettings()

@@ -6,6 +6,7 @@
  * so the existing call.js island can re-initialise its chat state without
  * tearing down WebRTC connections.
  */
+import { patchSettings } from '/client/settings-sync.js'
 
 let inFlight = false
 
@@ -71,6 +72,9 @@ async function navigateTo(url, scroll) {
         seedHasMore:  d.seedHasMore === 'true',
       }
     }))
+
+    // 4. Persist the new channel so PWA restores here on next launch
+    if (d.id) patchSettings({ last_channel_id: d.id, mobile_chat_open: true })
 
     if (scroll && currMessages) currMessages.scrollTop = currMessages.scrollHeight
   } catch {

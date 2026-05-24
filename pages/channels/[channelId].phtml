@@ -47,6 +47,27 @@
   </section>
 
   <footer class="sidebar-footer">
+    {{#if user}}
+    <span class="sidebar-username">{{user.display_name}}</span>
+    {{/if}}
+    <div class="sidebar-footer-controls">
+      <label for="theme-picker" class="sr-only">Theme</label>
+      <select id="theme-picker" aria-label="Choose theme" autocomplete="off">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="ocean">Ocean</option>
+        <option value="forest">Forest</option>
+        <option value="rose">Rose</option>
+      </select>
+      {{#if isAdmin}}
+      <a href="/admin/invites" class="btn-ghost btn-sm">Admin</a>
+      {{/if}}
+      {{#if user}}
+      <form method="POST" action="/auth/signout">
+        <button type="submit" class="btn-ghost btn-sm">Sign out</button>
+      </form>
+      {{/if}}
+    </div>
     <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
     <!-- Mini-bar: shown when the user is in a call and navigates to another channel -->
     <div class="call-mini-bar" id="call-mini-bar">
