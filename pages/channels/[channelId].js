@@ -55,6 +55,7 @@ export async function GET(req) {
 
   return {
     user,
+    isAdmin: user.roles?.includes('admin') ?? false,
     channel,
     currentChannelId: channelId,
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

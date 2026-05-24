@@ -48,10 +48,10 @@
 
   <footer class="sidebar-footer">
     <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
-    {{#if user}}
-    <span class="sidebar-username">{{user.display_name}}</span>
-    {{/if}}
     <div class="sidebar-footer-controls">
+      {{#if user}}
+      <span class="sidebar-username">{{user.display_name}}</span>
+      {{/if}}
       <label for="theme-picker" class="sr-only">Theme</label>
       <select id="theme-picker" aria-label="Choose theme" autocomplete="off">
         <option value="dark">Dark</option>
