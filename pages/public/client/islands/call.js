@@ -1118,7 +1118,7 @@ export default function CallIsland(root) {
       tile = document.createElement('div')
       tile.className = 'stream-tile'
       tile.dataset.peer = tileId
-      tile.innerHTML = `<video autoplay playsinline ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span>`
+      tile.innerHTML = `<video autoplay playsinline controls ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span>`
       tile.addEventListener('click', () => _pinTile(tileId))
       tileGridEl.appendChild(tile)
       _updateTileLayout()
