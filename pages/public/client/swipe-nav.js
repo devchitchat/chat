@@ -13,15 +13,30 @@ const LOCK_PX  = 10   // travel before we decide horizontal vs vertical
 
 function attachSwipe(el, { onLeft, onRight }) {
   let startX, startY, dir
+  let suppressSwipe = false
+
+  // Set suppressSwipe = true if selection changes during a touch gesture.
+  // This catches long-press → extend-selection-by-dragging in one gesture.
+  function onSelectionChange() {
+    suppressSwipe = true
+  }
 
   el.addEventListener('touchstart', e => {
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
     dir = null
+    // Case 1: a Range selection already exists — user is likely dragging a handle.
+    suppressSwipe = window.getSelection()?.type === 'Range'
+    // Case 2: selection might be created during this touch (long-press → drag).
+    if (!suppressSwipe) {
+      document.addEventListener('selectionchange', onSelectionChange)
+    }
     el.style.transition = 'none'
   }, { passive: true })
 
   el.addEventListener('touchmove', e => {
+    if (suppressSwipe) return
+
     const dx = e.touches[0].clientX - startX
     const dy = e.touches[0].clientY - startY
 
@@ -42,11 +57,13 @@ function attachSwipe(el, { onLeft, onRight }) {
   }, { passive: false })
 
   el.addEventListener('touchend', e => {
+    document.removeEventListener('selectionchange', onSelectionChange)
+
     // Reset inline styles — CSS transition takes over from here
     el.style.transition = ''
     el.style.transform = ''
 
-    if (dir !== 'h') return
+    if (suppressSwipe || dir !== 'h') { dir = null; return }
     const dx = e.changedTouches[0].clientX - startX
     dir = null
 
