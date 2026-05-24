@@ -26,33 +26,33 @@ export function handleRtcJoin(ws, msg, ctx) {
     }
   }
 
-  // Guard: if already in this call, return current participant list without re-joining
-  if (ws.data.peerId && ws.data.callId === call_id) {
-    const existing = signalingService.getCall(call_id)
-    if (existing?.peers.has(ws.data.peerId)) {
-      const peers = Array.from(existing.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id }))
-      sendWs(ws, { t: 'rtc.joined', reply_to: msg.id, ok: true, body: { call_id, peer_id: ws.data.peerId, peers, ice_servers: getIceServers() } })
-      return
-    }
+  const result = signalingService.joinOrSwitch({
+    callId: call_id,
+    userId: ws.data.userId,
+    displayName: ws.data.displayName,
+    currentPeerId: ws.data.peerId,
+    currentCallId: ws.data.callId,
+  })
+
+  if (result.status === 'already_in_call') {
+    sendWs(ws, { t: 'rtc.joined', reply_to: msg.id, ok: true, body: { call_id, peer_id: result.peerId, peers: result.peers, ice_servers: getIceServers() } })
+    return
   }
 
-  // If already in a different call, leave it first
-  if (ws.data.peerId && ws.data.callId && ws.data.callId !== call_id) {
-    const prevCallId = ws.data.callId
-    const prevPeerId = ws.data.peerId
-    const leaveResult = signalingService.leaveCall({ callId: prevCallId, peerId: prevPeerId })
+  // Publish transport side effects for previous call departure (status === 'switched')
+  if (result.previousLeft) {
+    const { call_id: prevCallId, room_id, peerId: prevPeerId, removed, ended } = result.previousLeft
     peerConnections.delete(prevPeerId)
     ws.unsubscribe(`call:${prevCallId}`)
-    if (leaveResult.removed) {
+    if (removed) {
       publishCall(prevCallId, { t: 'rtc.peer_event', ok: true, body: { call_id: prevCallId, kind: 'leave', peer: { peer_id: prevPeerId, user_id: ws.data.userId } } })
     }
-    if (leaveResult.ended && leaveResult.room_id) {
-      publishChannel(leaveResult.room_id, { t: 'rtc.call_end', ok: true, body: { call_id: prevCallId, channel_id: leaveResult.room_id } })
-      publishCallState(leaveResult.room_id, null, [])
+    if (ended) {
+      publishChannel(room_id, { t: 'rtc.call_end', ok: true, body: { call_id: prevCallId, channel_id: room_id } })
+      publishCallState(room_id, null, [])
     }
   }
 
-  const result = signalingService.joinCall({ callId: call_id, userId: ws.data.userId, displayName: ws.data.displayName })
   ws.data.peerId = result.peerId
   ws.data.callId = call_id
   peerConnections.set(result.peerId, ws.data.connectionId)

@@ -103,6 +103,50 @@ export class SignalingService {
     return { call_id: call.call_id, room_id: call.room_id, peers: Array.from(call.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id })) }
   }
 
+  /**
+   * Join a call, handling two state machine cases so the transport handler
+   * does not need to make these decisions:
+   *
+   *   - already_in_call: peer is already in this exact call — idempotent, no change
+   *   - switched:        peer was in a different call — leave it first, then join
+   *   - joined:          peer had no prior call — plain join
+   *
+   * @returns {{ status, peerId, peers, previousLeft? }}
+   *   previousLeft is only present when status === 'switched':
+   *   { call_id, room_id, peerId, removed, ended }
+   */
+  joinOrSwitch({ callId, userId, displayName, currentPeerId, currentCallId }) {
+    // Already in this exact call — return current state, no side effects
+    if (currentPeerId && currentCallId === callId) {
+      const call = this.calls.get(callId)
+      if (call?.peers.has(currentPeerId)) {
+        const peers = Array.from(call.peers.values()).map(p => ({ peer_id: p.peer_id, user_id: p.user_id }))
+        return { status: 'already_in_call', peerId: currentPeerId, peers }
+      }
+    }
+
+    // In a different call — leave it first
+    let previousLeft
+    if (currentPeerId && currentCallId && currentCallId !== callId) {
+      const leaveResult = this.leaveCall({ callId: currentCallId, peerId: currentPeerId })
+      previousLeft = {
+        call_id: currentCallId,
+        room_id:  leaveResult.room_id,
+        peerId:   currentPeerId,
+        removed:  leaveResult.removed,
+        ended:    leaveResult.ended,
+      }
+    }
+
+    const result = this.joinCall({ callId, userId, displayName })
+    return {
+      status: previousLeft ? 'switched' : 'joined',
+      peerId: result.peerId,
+      peers:  result.peers,
+      ...(previousLeft && { previousLeft }),
+    }
+  }
+
   getCall(callId) { return this.calls.get(callId) }
 
   getActiveCallForChannel(channelId) {
