@@ -428,6 +428,26 @@ export default function CallIsland(root) {
     if (files.length > 0) uploadFiles(files)
   })
 
+  // Paste image from clipboard (screenshots, copied images)
+  textareaEl?.addEventListener('paste', e => {
+    const items = [...(e.clipboardData?.items ?? [])]
+    const imageFiles = items
+      .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+      .map(item => {
+        const file = item.getAsFile()
+        if (!file) return null
+        if (!file.name) {
+          const ext = item.type.split('/')[1] ?? 'png'
+          return new File([file], `paste-${Date.now()}.${ext}`, { type: item.type })
+        }
+        return file
+      })
+      .filter(Boolean)
+    if (imageFiles.length === 0) return
+    e.preventDefault()
+    uploadFiles(imageFiles)
+  })
+
   async function uploadFiles(files) {
     for (const file of files) {
       await uploadOneFile(file, channelId)
