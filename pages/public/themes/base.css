@@ -1130,6 +1130,47 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 }
 
 /* ── Admin pages ──────────────────────────────────────────────────────────── */
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  height: 52px;
+  padding-top: env(safe-area-inset-top);
+  height: calc(52px + env(safe-area-inset-top));
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.admin-topbar-brand {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.admin-topbar-brand:hover { color: var(--accent); }
+
+.admin-topbar-user {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+body:has(.admin-topbar) main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
 .admin-page {
   max-width: 900px;
   margin: 0 auto;

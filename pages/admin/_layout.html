@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="devchitchat">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <title>Admin — devchitchat</title>
+  <link rel="stylesheet" href="/themes/base.css">
+  <link rel="stylesheet" href="/themes/dark.css" id="theme-stylesheet">
+  <script type="importmap">
+  {
+    "imports": {
+      "@devchitchat/rdbljs": "/vendor/rdbl.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="admin-topbar">
+    <a href="/" class="admin-topbar-brand">devchitchat</a>
+    {{#if user}}
+    <span class="admin-topbar-user">{{user.display_name}}</span>
+    {{/if}}
+    <div class="admin-topbar-actions">
+      <label for="theme-picker" class="sr-only">Theme</label>
+      <select id="theme-picker" aria-label="Choose theme" autocomplete="off">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="ocean">Ocean</option>
+        <option value="forest">Forest</option>
+        <option value="rose">Rose</option>
+      </select>
+      {{#if user}}
+      <form method="POST" action="/auth/signout">
+        <button type="submit" class="btn-ghost btn-sm">Sign out</button>
+      </form>
+      {{/if}}
+    </div>
+  </header>
+
+  <main>
+    {{content}}
+  </main>
+
+  <script type="module" src="/client/theme.js"></script>
+</body>
+</html>
