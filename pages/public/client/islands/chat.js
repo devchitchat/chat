@@ -12,6 +12,7 @@
 import { signal, computed, effect, Context } from '@devchitchat/rdbljs'
 import { WsClient } from '../ws.js'
 import { patchSettings } from '../settings-sync.js'
+import { makeMessageEl } from '../shared/messages.js'
 
 export default function ChatIsland(root) {
   const pageState = Context.read(root)?.pageState ?? {}
@@ -85,20 +86,10 @@ export default function ChatIsland(root) {
     }, 300)
   })
 
-  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text }) {
+  function appendMessage(msg) {
     // Avoid duplicates (seed messages already in DOM)
-    if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
-    const article = document.createElement('article')
-    article.className = 'message'
-    article.dataset.seq = seq
-    article.dataset.msgId = msg_id
-    const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    article.innerHTML = `
-      <span class="message-handle">${escHtml(user_display_name ?? user_id)}</span>
-      <time class="message-time" datetime="${ts}">${time}</time>
-      <p class="message-text">${escHtml(text)}</p>
-    `
-    messages.appendChild(article)
+    if (messages.querySelector(`[data-msg-id="${msg.msg_id}"]`)) return
+    messages.appendChild(makeMessageEl(msg, { userId, userHandle }))
     messages.scrollTop = messages.scrollHeight
   }
 
@@ -140,10 +131,6 @@ export default function ChatIsland(root) {
   function toggleSearch() {
     searchOpen.set(!searchOpen())
     if (!searchOpen()) searchResults.set([])
-  }
-
-  function escHtml(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   }
 
   // ── Mobile navigation ──────────────────────────────────────────────────────
