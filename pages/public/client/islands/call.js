@@ -18,6 +18,7 @@
 import { signal, effect, Context } from '@devchitchat/rdbljs'
 import { WsClient } from '../ws.js'
 import { patchSettings } from '../settings-sync.js'
+import { navigateTo } from '../router.js'
 
 export default function CallIsland(root) {
   // ── Data from HTML ─────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export default function CallIsland(root) {
   // ── Call state ─────────────────────────────────────────────────────────────
   const inCall     = signal(false)
   const callIdSig  = signal(null)   // active call_id in this channel (may exist before we join)
+  let callChannelId = null          // channel where the active call lives (may differ from channelId after navigation)
   const selfPeerId = signal(null)
   const micMuted   = signal(false)
   const camOff     = signal(false)
@@ -643,7 +645,11 @@ export default function CallIsland(root) {
 
   ws.on('rtc.call_state', (body) => {
     if (body.channel_id !== channelId) return
-    callIdSig.set(body.call_id)
+    // Don't overwrite the active call's ID when browsing a different channel —
+    // callIdSig is what miniBarLeave uses to leave the call.
+    if (!inCall() || body.channel_id === callChannelId) {
+      callIdSig.set(body.call_id)
+    }
     _updateCallStatusRow(body.call_id, body.count, body.users ?? [])
     _updateChannelBadge(body.count)
   })
@@ -711,6 +717,7 @@ export default function CallIsland(root) {
     if (body.ice_servers?.length) iceServers = body.ice_servers
     selfPeerId.set(peer_id)
     callIdSig.set(call_id)
+    callChannelId = channelId
     inCall.set(true)
     _showCallControls()
     _showTilePanel()
@@ -1423,12 +1430,11 @@ export default function CallIsland(root) {
   miniBarMic?.addEventListener('click', toggleMic)
 
   miniBarReturn?.addEventListener('click', () => {
-    window.location.href = `/channels/${channelId}`
+    if (callChannelId) navigateTo(`/channels/${callChannelId}`, false)
   })
 
   miniBarLeave?.addEventListener('click', () => {
     leaveCall()
-    _hideMiniBar()
   })
 
   // Show mini-bar when user navigates to a different channel while in a call
@@ -1509,6 +1515,7 @@ export default function CallIsland(root) {
     screenSharing.set(false)
     inCall.set(false)
     selfPeerId.set(null)
+    callChannelId = null
     pinnedPeerId = null
     activeCameraId = null
     activeMicId = null

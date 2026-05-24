@@ -47,6 +47,7 @@
   </section>
 
   <footer class="sidebar-footer">
+    <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
     {{#if user}}
     <span class="sidebar-username">{{user.display_name}}</span>
     {{/if}}
@@ -68,7 +69,6 @@
       </form>
       {{/if}}
     </div>
-    <button class="btn-new-hub" id="btn-new-hub" type="button" aria-label="Create a new hub">+ New hub</button>
     <!-- Mini-bar: shown when the user is in a call and navigates to another channel -->
     <div class="call-mini-bar" id="call-mini-bar">
       <span class="call-mini-bar-channel" id="mini-bar-channel-name"></span>
@@ -164,8 +164,7 @@
 <div class="tile-panel" id="tile-panel">
   <div class="tile-panel-header">
     <span class="tile-panel-title" id="tile-panel-title">Call</span>
-    <button class="btn-icon tile-panel-collapse" id="tile-panel-collapse"
-            aria-label="Collapse tile panel" type="button">&#8854;</button>
+    <button class="btn-icon tile-panel-collapse" id="tile-panel-collapse" aria-label="Collapse tile panel" type="button">&#8854;</button>
   </div>
   <div class="tile-grid" id="tile-grid"></div>
 </div>

@@ -31,7 +31,7 @@ async function handleClick(e) {
   await navigateTo(link.href, true)
 }
 
-async function navigateTo(url, scroll) {
+export async function navigateTo(url, scroll) {
   if (inFlight) return
   inFlight = true
   try {
