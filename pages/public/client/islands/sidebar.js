@@ -5,17 +5,12 @@
  */
 import { signal, getItemContext, effect, computed, Context } from '@devchitchat/rdbljs'
 import { WsClient } from '../ws.js'
+import { escHtml } from '../shared/messages.js'
 import { addLongPress } from '../long-press.js'
 import { showActionSheet, dismiss as dismissSheet, getItemsContainer } from '../action-sheet.js'
 import { showModal, dismiss as dismissModal } from '../modal.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function escHtml(str) {
-  return String(str ?? '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[c])
-}
 
 const isTouch = () => window.matchMedia('(pointer: coarse)').matches
 
@@ -848,6 +843,7 @@ export default function SidebarIsland(root) {
   const mentionedChannels = signal(new Set())
   // channelId → true if this channel has an unread urgent (@mention + now priority)
   const urgentChannels = signal(new Set())
+  const dmUnread = signal(new Set())
   const ws = new WsClient('/ws')
 
   ws.on('hub.created', ({ hub }) => {
@@ -869,7 +865,6 @@ export default function SidebarIsland(root) {
       next.add(channel_id)
       mentionedChannels.set(next)
     }
-    updateMentionDots()
   })
 
   ws.on('notification.digest', ({ channels }) => {
@@ -882,7 +877,6 @@ export default function SidebarIsland(root) {
     }
     mentionedChannels.set(nextMentioned)
     urgentChannels.set(nextUrgent)
-    updateMentionDots()
   })
 
   ws.on('hub.member_added', ({ hub_id, user_id }) => {
@@ -909,19 +903,16 @@ export default function SidebarIsland(root) {
 
   ws.on('dm.list_result', ({ dms: list }) => {
     dms.set(list)
-    renderDms()
   })
 
   ws.on('dm.opened', ({ channel_id, with_user, notify_only }) => {
     // Add to DM list if not already present
     if (!dms().some(d => d.channel_id === channel_id)) {
       dms.set([{ channel_id, with_user }, ...dms()])
-      renderDms()
     }
     if (notify_only) {
       // Target user — show unread dot, don't navigate
-      dmUnread.add(channel_id)
-      updateDmDots()
+      const next = new Set(dmUnread()); next.add(channel_id); dmUnread.set(next)
     } else {
       // Initiating user — navigate to the DM channel
       window.location.href = `/channels/${channel_id}`
@@ -929,29 +920,18 @@ export default function SidebarIsland(root) {
   })
 
   // Highlight DM list item when a message arrives in a DM channel not currently open
-  const dmUnread = new Set()
   ws.on('msg.event', ({ channel_id }) => {
     if (channel_id === currentChannelId) return
     if (!dms().some(d => d.channel_id === channel_id)) return
-    dmUnread.add(channel_id)
-    updateDmDots()
+    const next = new Set(dmUnread()); next.add(channel_id); dmUnread.set(next)
   })
-
-  function updateDmDots() {
-    if (!dmListEl) return
-    dmListEl.querySelectorAll('.dm-item').forEach(li => {
-      const id = li.dataset.channelId
-      if (dmUnread.has(id)) li.dataset.mention = ''
-      else delete li.dataset.mention
-    })
-  }
 
   // Clear dot when user clicks a DM link
   root.addEventListener('click', e => {
     const link = e.target.closest('.dm-link')
     if (!link) return
     const id = link.dataset.channelId
-    if (id) { dmUnread.delete(id); updateDmDots() }
+    if (id) { const next = new Set(dmUnread()); next.delete(id); dmUnread.set(next) }
   })
 
   // Track current channel across SPA navigations and clear DM dot when landing on a DM
@@ -979,9 +959,8 @@ export default function SidebarIsland(root) {
         }
       }))
     }
-    if (dmUnread.has(newId)) {
-      dmUnread.delete(newId)
-      updateDmDots()
+    if (dmUnread().has(newId)) {
+      const next = new Set(dmUnread()); next.delete(newId); dmUnread.set(next)
     }
   })
 
@@ -1059,7 +1038,6 @@ export default function SidebarIsland(root) {
       nextUrgent.delete(clickedChannelId)
       mentionedChannels.set(nextMentioned)
       urgentChannels.set(nextUrgent)
-      updateMentionDots()
     }
     if (window.matchMedia('(max-width: 700px)').matches) {
       document.body.classList.remove('sidebar-open')
@@ -1088,12 +1066,14 @@ export default function SidebarIsland(root) {
       }
     })
   }
+  effect(() => updateMentionDots())
 
-  // DMs list rendering
+  // DMs list rendering — driven by dms + dmUnread signals via effect below
   const dmListEl = root.querySelector('#dm-list')
   function renderDms() {
     if (!dmListEl) return
     const list = dms()
+    const unread = dmUnread()
     if (list.length === 0) {
       dmListEl.innerHTML = '<li class="dm-empty" style="padding:4px 8px;color:var(--text-muted);font-size:13px">No messages yet.</li>'
       return
@@ -1101,13 +1081,15 @@ export default function SidebarIsland(root) {
     dmListEl.innerHTML = list.map(d => {
       const name = escHtml(d.with_user?.display_name ?? d.channel_id)
       const selected = d.channel_id === currentChannelId ? ' dm-selected' : ''
-      return `<li class="dm-item${selected}" data-channel-id="${escHtml(d.channel_id)}">
+      const mentionAttr = unread.has(d.channel_id) ? ' data-mention=""' : ''
+      return `<li class="dm-item${selected}"${mentionAttr} data-channel-id="${escHtml(d.channel_id)}">
         <a class="dm-link channel-link" href="/channels/${escHtml(d.channel_id)}" data-channel-id="${escHtml(d.channel_id)}">
           <span class="dm-name">${name}</span>
         </a>
       </li>`
     }).join('')
   }
+  effect(() => renderDms())
 
   // Fetch DM list as soon as the socket opens — the connection is already
   // authenticated via the session cookie at upgrade time, so no hello needed.
