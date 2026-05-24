@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: chat-backup
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: local/chat-web:3.0.10
+            workingDir: /app
+            command: ["bun", "backup"]
+            env:
+            - name: DB_PATH
+              value: /var/lib/chat/chat.db
+            - name: BACKUP_DIR
+              value: /var/lib/backups
+            volumeMounts:
+            - name: chat-data
+              mountPath: /var/lib/chat
+            - name: backup-dest
+              mountPath: /var/lib/backups
+          restartPolicy: OnFailure
+          volumes:
+          - name: chat-data
+            persistentVolumeClaim:
+              claimName: chat-web-sqlite
+          - name: backup-dest
+            hostPath:
+              path: {{ required "backupHostPath must be set in values.local.yaml" .Values.backupHostPath }}
+              type: DirectoryOrCreate

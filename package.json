@@ -1,6 +1,6 @@
 {
   "name": "@devchitchat/chat",
-  "version": "3.0.6",
+  "version": "3.0.11",
   "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
@@ -8,8 +8,12 @@
     "migrate": "bun scripts/migrate.js",
     "test": "bun test",
     "generate-vapid": "bun scripts/generate-vapid.js",
+    "create-secrets": "kubectl create secret generic chat-web-vapid --from-env-file=.env --namespace=${KUBE_NAMESPACE:-default} --dry-run=client -o yaml | kubectl apply -f -",
     "docker-build": "./docker-build-k3d.sh",
-    "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
+    "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/templates/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
+    "backup": "bun scripts/backup.js",
+    "deploy-backup": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && helm upgrade --install chat-web charts/web -f charts/web/values.local.yaml -n ${KUBE_NAMESPACE:-default}",
+    "backup-now": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl create job --from=cronjob/chat-backup chat-backup-$(date +%s) -n ${KUBE_NAMESPACE:-default}",
     "push": "bun docker-build && bun local-deploy"
   },
   "type": "module",

@@ -1,0 +1,3 @@
+# Path on the host node where SQLite backups are written.
+# Override in values.local.yaml (gitignored) — do not set a real path here.
+backupHostPath: ""

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: chat-web
+version: 0.1.0
+description: devchitchat web application
