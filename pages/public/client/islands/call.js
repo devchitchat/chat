@@ -20,6 +20,7 @@ import { WsClient } from '../ws.js'
 import { patchSettings } from '../settings-sync.js'
 import { navigateTo } from '../router.js'
 import { escHtml, utcDateKey, formatDateLabel, makeDateSeparator, renderText, renderAttachment, makeMessageEl } from '../shared/messages.js'
+import { RtcPeerManager } from '../rtc-peer-manager.js'
 
 export default function CallIsland(root) {
   // ── Data from HTML ─────────────────────────────────────────────────────────
@@ -81,18 +82,29 @@ export default function CallIsland(root) {
   const screenSharing = signal(false)
   let pinnedPeerId = null
 
-  // ── RTC state ──────────────────────────────────────────────────────────────
-  const peerActors     = new Map()   // peerId → { pc, audioStream, videoStream, screenStream }
-  const peerDisplayNames = new Map() // peerId → display_name string
-  const remoteStreamsByPeer = new Map() // peerId → Map<mid|streamId, MediaStream>
-  const pendingIceByPeer = new Map() // peerId → RTCIceCandidate[]
-  const negotiationInFlight = new Set()
-  const negotiationQueued   = new Set()
-
+  // ── Local media streams ────────────────────────────────────────────────────
   let audioStream  = null  // local mic
   let videoStream  = null  // local camera
   let screenStream = null  // local screen share
   let iceServers   = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+  // ── RTC peer manager ───────────────────────────────────────────────────────
+  const rtcManager = new RtcPeerManager({
+    iceServers,
+    getLocalStreams: () => ({ audio: audioStream, video: videoStream, screen: screenStream }),
+    handlers: {
+      onOffer:        (peerId, sdp) => ws.send({ t: 'rtc.offer',  body: { call_id: callIdSig(), to_peer_id: peerId, sdp } }),
+      onAnswer:       (peerId, sdp) => ws.send({ t: 'rtc.answer', body: { call_id: callIdSig(), to_peer_id: peerId, sdp } }),
+      onIceCandidate: (peerId, candidate) => ws.send({ t: 'rtc.ice', body: { call_id: callIdSig(), to_peer_id: peerId, candidate } }),
+      onTrack:        (peerId, tileId, stream, label) => { _renderTile(tileId, stream, false, label); _ensureRemoteAudio(stream, peerId) },
+      onAudio:        (peerId, stream) => _ensureRemoteAudio(stream, peerId),
+      onPeerClosed:   (peerId) => {
+        tileGridEl?.querySelectorAll(`[data-peer^="${peerId}"]`).forEach(t => t.remove())
+        document.querySelectorAll(`audio[data-peer-id="${peerId}"]`).forEach(a => { a.srcObject = null; a.remove() })
+        _updateTileLayout()
+      },
+    },
+  })
 
   // ── Device state ───────────────────────────────────────────────────────────
   const DEVICES_KEY = 'devchitchat_devices'
@@ -639,14 +651,14 @@ export default function CallIsland(root) {
 
   ws.on('rtc.call', (body) => {
     // Server confirmed call creation / found existing call — now join it
-    if (body.ice_servers?.length) iceServers = body.ice_servers
+    if (body.ice_servers?.length) { iceServers = body.ice_servers; rtcManager.setIceServers(iceServers) }
     callIdSig.set(body.call_id)
     ws.send({ t: 'rtc.join', body: { call_id: body.call_id } })
   })
 
   ws.on('rtc.joined', async (body) => {
     const { call_id, peer_id, peers } = body
-    if (body.ice_servers?.length) iceServers = body.ice_servers
+    if (body.ice_servers?.length) { iceServers = body.ice_servers; rtcManager.setIceServers(iceServers) }
     selfPeerId.set(peer_id)
     callIdSig.set(call_id)
     callChannelId = channelId
@@ -662,65 +674,35 @@ export default function CallIsland(root) {
     // Cache display names for existing peers, then connect as offerer
     for (const peer of peers) {
       if (peer.peer_id !== peer_id) {
-        if (peer.display_name) peerDisplayNames.set(peer.peer_id, peer.display_name)
-        _ensurePeerActor(peer.peer_id)
-        negotiatePeer(peer.peer_id)
+        rtcManager.setDisplayName(peer.peer_id, peer.display_name)
+        rtcManager.ensurePeer(peer.peer_id)
+        rtcManager.negotiate(peer.peer_id)
       }
     }
   })
 
   ws.on('rtc.peer_event', ({ call_id, kind, peer }) => {
     if (kind === 'join' && peer.peer_id !== selfPeerId()) {
-      if (peer.display_name) peerDisplayNames.set(peer.peer_id, peer.display_name)
+      rtcManager.setDisplayName(peer.peer_id, peer.display_name)
       // Existing peer receives new joiner's event — create answerer connection
       // (new joiner will send us an offer)
-      _ensurePeerActor(peer.peer_id)
+      rtcManager.ensurePeer(peer.peer_id)
     }
     if (kind === 'leave') {
-      peerDisplayNames.delete(peer.peer_id)
-      _closePeer(peer.peer_id)
+      rtcManager.closePeer(peer.peer_id)
     }
   })
 
   ws.on('rtc.offer_event', async ({ call_id, from_peer_id, sdp }) => {
-    const actor = _ensurePeerActor(from_peer_id)
-    const pc = actor.pc
-
-    await pc.setRemoteDescription({ type: 'offer', sdp })
-
-    // Drain any ICE candidates that arrived before the remote description
-    const pending = pendingIceByPeer.get(from_peer_id) ?? []
-    for (const c of pending) await pc.addIceCandidate(c)
-    pendingIceByPeer.delete(from_peer_id)
-
-    await _attachLocalTracks(pc)
-
-    const answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-    ws.send({ t: 'rtc.answer', body: { call_id, to_peer_id: from_peer_id, sdp: answer.sdp } })
+    await rtcManager.handleRemoteOffer(from_peer_id, call_id, sdp)
   })
 
   ws.on('rtc.answer_event', async ({ call_id, from_peer_id, sdp }) => {
-    const actor = peerActors.get(from_peer_id)
-    if (!actor) return
-    await actor.pc.setRemoteDescription({ type: 'answer', sdp })
-
-    // Drain pending ICE
-    const pending = pendingIceByPeer.get(from_peer_id) ?? []
-    for (const c of pending) await actor.pc.addIceCandidate(c)
-    pendingIceByPeer.delete(from_peer_id)
+    await rtcManager.handleRemoteAnswer(from_peer_id, sdp)
   })
 
   ws.on('rtc.ice_event', async ({ from_peer_id, candidate }) => {
-    if (!candidate) return
-    const actor = peerActors.get(from_peer_id)
-    if (!actor || !actor.pc.remoteDescription) {
-      // Queue until remote description is set
-      if (!pendingIceByPeer.has(from_peer_id)) pendingIceByPeer.set(from_peer_id, [])
-      pendingIceByPeer.get(from_peer_id).push(candidate)
-      return
-    }
-    await actor.pc.addIceCandidate(candidate)
+    await rtcManager.handleIceCandidate(from_peer_id, candidate)
   })
 
   ws.on('rtc.stream_event', () => {
@@ -738,224 +720,8 @@ export default function CallIsland(root) {
     // Server confirmed our leave
   })
 
-  // ── Negotiation queue (v1 pattern) ─────────────────────────────────────────
-
-  async function negotiatePeer(peerId) {
-    if (negotiationInFlight.has(peerId)) {
-      negotiationQueued.add(peerId)
-      return
-    }
-    negotiationInFlight.add(peerId)
-    try {
-      do {
-        negotiationQueued.delete(peerId)
-        await negotiatePeerOnce(peerId)
-      } while (negotiationQueued.has(peerId))
-    } finally {
-      negotiationInFlight.delete(peerId)
-    }
-  }
-
-  async function negotiatePeerOnce(peerId) {
-    const actor = peerActors.get(peerId)
-    if (!actor) return
-    const pc = actor.pc
-
-    const stable = await waitForStableSignaling(pc)
-    if (!stable) return  // timed out — don't attempt offer in bad state
-
-    _ensureTransceiverSlots(pc)
-    await _attachLocalTracks(pc)
-
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    ws.send({ t: 'rtc.offer', body: { call_id: callIdSig(), to_peer_id: peerId, sdp: offer.sdp } })
-  }
-
-  async function waitForStableSignaling(pc, timeoutMs = 3000) {
-    if (!pc || pc.signalingState === 'stable') return true
-    return new Promise(resolve => {
-      const timer = setTimeout(() => { cleanup(); resolve(false) }, timeoutMs)
-      const handler = () => {
-        if (pc.signalingState !== 'stable') return
-        cleanup(); resolve(true)
-      }
-      const cleanup = () => { clearTimeout(timer); pc.removeEventListener('signalingstatechange', handler) }
-      pc.addEventListener('signalingstatechange', handler)
-    })
-  }
-
-  // ── Transceiver slot management (v1 pattern) ───────────────────────────────
-  // Pre-allocate 1 audio + 2 video transceivers (camera slot + screen slot).
-  // Using replaceTrack() + direction toggle avoids creating new m= sections
-  // on every track change, which prevents SDP renegotiation races.
-
-  function _ensureTransceiverSlots(pc) {
-    const audio   = pc.getTransceivers().filter(t => t.receiver?.track?.kind === 'audio')
-    const video   = pc.getTransceivers().filter(t => t.receiver?.track?.kind === 'video')
-    const allVideo = pc.getTransceivers().filter(t => {
-      const kind = t.receiver?.track?.kind ?? t.sender?.track?.kind
-      return kind === 'video' || (!t.receiver?.track && !t.sender?.track && t.mid)
-    })
-    // Ensure at least 1 audio transceiver
-    while (pc.getTransceivers().filter(t => {
-      const k = t.receiver?.track?.kind ?? t.sender?.track?.kind
-      return k === 'audio'
-    }).length < 1) {
-      pc.addTransceiver('audio', { direction: 'recvonly' })
-    }
-    // Ensure at least 2 video transceivers (camera + screen)
-    const videoCount = pc.getTransceivers().filter(t => {
-      const k = t.receiver?.track?.kind ?? t.sender?.track?.kind
-      return k === 'video'
-    }).length
-    let added = videoCount
-    while (added < 2) {
-      pc.addTransceiver('video', { direction: 'recvonly' })
-      added++
-    }
-  }
-
-  function _getTransceiverSlots(pc) {
-    const all = pc.getTransceivers()
-    const audioSlot  = all.find(t => (t.receiver?.track?.kind ?? t.sender?.track?.kind) === 'audio') ??
-                       all.find(t => !t.receiver?.track && !t.sender?.track) ?? null
-    const videoSlots = all.filter(t => (t.receiver?.track?.kind ?? t.sender?.track?.kind) === 'video')
-    // If no video kind is detectable yet, use index order
-    const byMid = [...all].filter(t => {
-      const k = t.receiver?.track?.kind ?? t.sender?.track?.kind
-      return k === 'video' || (!t.receiver?.track && !t.sender?.track)
-    })
-    return {
-      audio:  audioSlot,
-      camera: videoSlots[0] ?? byMid[0] ?? null,
-      screen: videoSlots[1] ?? byMid[1] ?? null,
-    }
-  }
-
-  async function _attachLocalTracks(pc) {
-    _ensureTransceiverSlots(pc)
-    const slots = _getTransceiverSlots(pc)
-    const audioTrack  = audioStream?.getAudioTracks()[0]  ?? null
-    const cameraTrack = videoStream?.getVideoTracks()[0]  ?? null
-    const screenTrack = screenStream?.getVideoTracks()[0] ?? null
-    await Promise.all([
-      _setTransceiverTrack(slots.audio,  audioTrack),
-      _setTransceiverTrack(slots.camera, cameraTrack),
-      _setTransceiverTrack(slots.screen, screenTrack),
-    ])
-  }
-
-  async function _setTransceiverTrack(transceiver, track) {
-    if (!transceiver?.sender) return
-    if (transceiver.sender.track?.id === track?.id) return
-    if (track) {
-      if (transceiver.direction === 'recvonly' || transceiver.direction === 'inactive') {
-        transceiver.direction = 'sendrecv'
-      }
-      await transceiver.sender.replaceTrack(track)
-    } else {
-      await transceiver.sender.replaceTrack(null)
-      if (transceiver.direction === 'sendrecv' || transceiver.direction === 'sendonly') {
-        transceiver.direction = 'recvonly'
-      }
-    }
-  }
-
-  // ── Peer actor management ──────────────────────────────────────────────────
-
-  function _ensurePeerActor(peerId) {
-    if (peerActors.has(peerId)) return peerActors.get(peerId)
-
-    const pc = new RTCPeerConnection({ iceServers })
-    // Do NOT pre-add transceiver slots here — _ensurePeerActor is called for
-    // both offerers and answerers. Answerers must NOT add transceivers before
-    // setRemoteDescription(offer) or the m= section order will diverge from
-    // the offerer's, corrupting the transceiver-to-track mapping.
-    // Slots are added in negotiatePeerOnce (offerer path only).
-
-    pc.onicecandidate = ({ candidate }) => {
-      if (candidate) {
-        ws.send({ t: 'rtc.ice', body: { call_id: callIdSig(), to_peer_id: peerId, candidate } })
-      }
-    }
-
-    pc.ontrack = (event) => {
-      // If our transceiver is sendonly, the remote peer is recvonly — they are
-      // not sending anything into this slot (e.g. iPhone has no screen share).
-      // Skip tile creation to avoid rendering an empty video element.
-      if (event.transceiver?.direction === 'sendonly') return
-
-      const stream = _getOrCreateInboundStream(event, peerId)
-      if (!stream) return
-      // Audio-only stream → just ensure an <audio> element exists
-      if (stream.getVideoTracks().length === 0) {
-        _ensureRemoteAudio(stream, peerId)
-        return
-      }
-      // Video stream → render tile
-      const tileId = `${peerId}-${event.transceiver?.mid ?? 'cam'}`
-      const peerLabel = peerDisplayNames.get(peerId) ?? peerId
-      _renderTile(tileId, stream, false, peerLabel)
-      _ensureRemoteAudio(stream, peerId)
-    }
-
-    pc.onconnectionstatechange = () => {
-      if (['failed', 'closed'].includes(pc.connectionState)) {
-        _closePeer(peerId)
-      }
-    }
-
-    const actor = { pc }
-    peerActors.set(peerId, actor)
-    return actor
-  }
-
-  function _closePeer(peerId) {
-    const actor = peerActors.get(peerId)
-    if (actor) { actor.pc.close(); peerActors.delete(peerId) }
-    remoteStreamsByPeer.delete(peerId)
-    pendingIceByPeer.delete(peerId)
-    negotiationInFlight.delete(peerId)
-    negotiationQueued.delete(peerId)
-    // Remove all tiles for this peer
-    tileGridEl?.querySelectorAll(`[data-peer^="${peerId}"]`).forEach(t => t.remove())
-    document.querySelectorAll(`audio[data-peer-id="${peerId}"]`).forEach(a => { a.srcObject = null; a.remove() })
-    _updateTileLayout()
-  }
-
-  // ── Inbound stream resolution (v1 RtcInboundStream pattern) ───────────────
-  // Track events don't always carry an associated stream in all browsers.
-  // Index by transceiver mid first, then stream id, synthesise if needed.
-
-  function _getOrCreateInboundStream(event, peerId) {
-    if (!remoteStreamsByPeer.has(peerId)) remoteStreamsByPeer.set(peerId, new Map())
-    const peerStreams = remoteStreamsByPeer.get(peerId)
-
-    const signaledStream = event.streams?.[0]
-    if (signaledStream) {
-      peerStreams.set(`stream:${signaledStream.id}`, signaledStream)
-      const mid = event.transceiver?.mid
-      if (mid != null) peerStreams.set(`mid:${mid}`, signaledStream)
-      return signaledStream
-    }
-
-    if (!event.track) return null
-    const mid = event.transceiver?.mid
-    const key = mid != null ? `mid:${mid}` : `track:${event.track.kind}:${event.track.id}`
-
-    let stream = peerStreams.get(key) ?? [...peerStreams.values()].find(s => s.getTracks().some(t => t.id === event.track.id)) ?? null
-    if (!stream) { stream = new MediaStream(); peerStreams.set(key, stream) }
-
-    // Replace any stale track of the same kind
-    stream.getTracks().filter(t => t.kind === event.track.kind && t.id !== event.track.id).forEach(t => {
-      try { stream.removeTrack(t) } catch { /* ignore */ }
-    })
-    if (!stream.getTracks().some(t => t.id === event.track.id)) stream.addTrack(event.track)
-    return stream
-  }
-
   // ── Local media ────────────────────────────────────────────────────────────
+  // Peer negotiation, transceiver slots, ICE queuing → RtcPeerManager
 
   async function _startAudio() {
     if (audioStream) return
@@ -968,7 +734,7 @@ export default function CallIsland(root) {
       activeMicId = audioStream.getAudioTracks()[0]?.getSettings().deviceId ?? null
       audioStream.getAudioTracks().forEach(t => { t.enabled = !micMuted() })
       await refreshDevices()  // labels now available after permission granted
-      for (const [peerId] of peerActors) negotiatePeer(peerId)
+      for (const peerId of rtcManager.peerIds()) rtcManager.negotiate(peerId)
     } catch {
       micMuted.set(true)
     }
@@ -987,7 +753,7 @@ export default function CallIsland(root) {
       _removeTile('local-cam')
       videoStream = null
       camOff.set(true)
-      for (const [peerId] of peerActors) negotiatePeer(peerId)
+      for (const peerId of rtcManager.peerIds()) rtcManager.negotiate(peerId)
       if (ctrlCam) ctrlCam.textContent = '📷'
       return
     }
@@ -1001,7 +767,7 @@ export default function CallIsland(root) {
       camOff.set(false)
       _renderTile('local-cam', videoStream, true, `${userHandle ?? 'You'} (cam)`)
       ws.send({ t: 'rtc.stream_publish', body: { call_id: callIdSig(), stream: { kind: 'camera' } } })
-      for (const [peerId] of peerActors) negotiatePeer(peerId)
+      for (const peerId of rtcManager.peerIds()) rtcManager.negotiate(peerId)
       if (ctrlCam) ctrlCam.textContent = '📷✓'
     } catch {
       // Camera denied
@@ -1014,7 +780,7 @@ export default function CallIsland(root) {
       _removeTile('local-screen')
       screenStream = null
       screenSharing.set(false)
-      for (const [peerId] of peerActors) negotiatePeer(peerId)
+      for (const peerId of rtcManager.peerIds()) rtcManager.negotiate(peerId)
       if (ctrlScreen) ctrlScreen.textContent = '🖥'
       return
     }
@@ -1025,7 +791,7 @@ export default function CallIsland(root) {
       _renderTile('local-screen', screenStream, true, `${userHandle ?? 'You'} (screen)`)
       ws.send({ t: 'rtc.stream_publish', body: { call_id: callIdSig(), stream: { kind: 'screen' } } })
       screenStream.getVideoTracks()[0].addEventListener('ended', () => toggleScreen())
-      for (const [peerId] of peerActors) negotiatePeer(peerId)
+      for (const peerId of rtcManager.peerIds()) rtcManager.negotiate(peerId)
       if (ctrlScreen) ctrlScreen.textContent = '🖥✓'
     } catch { /* user cancelled */ }
   }
@@ -1090,11 +856,7 @@ export default function CallIsland(root) {
       video: { deviceId: { exact: deviceId } },
     })
     const newTrack = newStream.getVideoTracks()[0]
-
-    for (const { pc } of peerActors.values()) {
-      const slots = _getTransceiverSlots(pc)
-      if (slots.camera?.sender) await slots.camera.sender.replaceTrack(newTrack)
-    }
+    await rtcManager.replaceTrack('camera', newTrack)
 
     videoStream?.getTracks().forEach(t => t.stop())
     videoStream = newStream
@@ -1111,11 +873,7 @@ export default function CallIsland(root) {
     })
     const newTrack = newStream.getAudioTracks()[0]
     newTrack.enabled = !micMuted()
-
-    for (const { pc } of peerActors.values()) {
-      const slots = _getTransceiverSlots(pc)
-      if (slots.audio?.sender) await slots.audio.sender.replaceTrack(newTrack)
-    }
+    await rtcManager.replaceTrack('audio', newTrack)
 
     audioStream?.getTracks().forEach(t => t.stop())
     audioStream = newStream
@@ -1420,13 +1178,7 @@ export default function CallIsland(root) {
   // ── Teardown ───────────────────────────────────────────────────────────────
 
   function _teardownCall() {
-    for (const [, actor] of peerActors) actor.pc.close()
-    peerActors.clear()
-    peerDisplayNames.clear()
-    remoteStreamsByPeer.clear()
-    pendingIceByPeer.clear()
-    negotiationInFlight.clear()
-    negotiationQueued.clear()
+    rtcManager.teardown()
 
     audioStream?.getTracks().forEach(t => t.stop()); audioStream = null
     videoStream?.getTracks().forEach(t => t.stop()); videoStream = null
