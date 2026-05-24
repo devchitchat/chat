@@ -1,0 +1,11 @@
+{
+  "name": "devchitchat",
+  "short_name": "devchitchat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1b1e",
+  "theme_color": "#141517",
+  "icons": [
+    { "src": "/icon.png", "sizes": "300x300", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
