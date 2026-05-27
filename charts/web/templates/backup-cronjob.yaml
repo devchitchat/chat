@@ -8,6 +8,13 @@ spec:
     spec:
       template:
         spec:
+          initContainers:
+          - name: fix-backup-perms
+            image: busybox
+            command: ["sh", "-c", "chmod 777 /var/lib/backups"]
+            volumeMounts:
+            - name: backup-dest
+              mountPath: /var/lib/backups
           containers:
           - name: backup
             image: local/chat-web:3.0.10

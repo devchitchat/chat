@@ -85,6 +85,14 @@ export function handleChannelAddMember(ws, msg, ctx) {
   sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
 }
 
+export function handleChannelRemoveMember(ws, msg, ctx) {
+  const { channelService, sendWs, publishChannel } = ctx
+  const { channel_id, user_id } = msg.body || {}
+  const result = channelService.removeMember({ channelId: channel_id, removedByUserId: ws.data.userId, targetUserId: user_id })
+  sendWs(ws, { t: 'channel.member_removed', reply_to: msg.id, ok: true, body: result })
+  publishChannel(channel_id, { t: 'channel.member_removed', ok: true, body: result })
+}
+
 export function handleChannelListMembers(ws, msg, ctx) {
   const { auth, channelService, sendWs } = ctx
   const { channel_id } = msg.body || {}

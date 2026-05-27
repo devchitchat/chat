@@ -6,7 +6,7 @@
  *   const session = requireAdminSession(req)
  *   if (session instanceof Response) return session  // redirect to login
  */
-import { sessionFromRequest } from './context.js'
+import { sessionFromRequest, logger } from './context.js'
 
 /**
  * Returns the validated admin session, or a redirect Response if the user
@@ -18,6 +18,7 @@ export function requireAdminSession(req) {
     return Response.redirect(new URL('/login', req.url), 302)
   }
   if (!session.user.roles.includes('admin')) {
+    logger?.warn('admin.access_denied', { userId: session.user.user_id, url: req.url })
     return new Response('Forbidden', { status: 403 })
   }
   return session

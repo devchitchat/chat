@@ -21,7 +21,7 @@ import { SqliteSearchRepository } from '../adapters/SqliteSearchRepository.js'
 import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository.js'
 import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
 import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers, handleHubReorder } from './handlers/hubHandlers.js'
-import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelListMembers, handleUserList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
+import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
@@ -207,6 +207,7 @@ export class ChatServer {
       case 'channel.join':               return handleChannelJoin(ws, msg, ctx)
       case 'channel.leave':              return handleChannelLeave(ws, msg, ctx)
       case 'channel.add_member':         return handleChannelAddMember(ws, msg, ctx)
+      case 'channel.remove_member':      return handleChannelRemoveMember(ws, msg, ctx)
       case 'channel.list_members':       return handleChannelListMembers(ws, msg, ctx)
       // Users & DMs
       case 'user.list':                  return handleUserList(ws, msg, ctx)

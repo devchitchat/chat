@@ -91,6 +91,7 @@ const server = await createServer({
     logger.info('server.shutdown', {})
     server.stop()
     db.close()
+    process.exit(0)
   },
 })
 

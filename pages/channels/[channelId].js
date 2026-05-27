@@ -1,4 +1,4 @@
-import { sessionFromRequest, channelService, hubService, messageService, auth } from '../../src/context.js'
+import { sessionFromRequest, channelService, hubService, messageService, auth, logger } from '../../src/context.js'
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
@@ -9,14 +9,21 @@ export async function GET(req) {
   const user = session.user
   let channel = channelService.getChannel(channelId)
   if (!channel || channel.deleted_at) {
+    logger?.warn('channel.not_found', { channelId, userId: user.user_id })
     return new Response('Channel not found', { status: 404 })
   }
 
   // Auto-join public channels on first visit
   if (!channelService.isMember(channelId, user.user_id)) {
     if (channel.visibility === 'public') {
-      channelService.joinChannel({ channelId, userId: user.user_id, userRoles: user.roles })
+      try {
+        channelService.joinChannel({ channelId, userId: user.user_id, userRoles: user.roles })
+      } catch (err) {
+        logger?.error('channel.join_failed', { channelId, userId: user.user_id, error: err.message })
+        return new Response('Forbidden', { status: 403 })
+      }
     } else {
+      logger?.warn('channel.access_denied', { channelId, userId: user.user_id, visibility: channel.visibility })
       return new Response('Forbidden', { status: 403 })
     }
   }

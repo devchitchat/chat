@@ -251,7 +251,7 @@ function buildChannelForm(container, { channelId, channelName, channelTopic, cha
         listEl.querySelectorAll('.ch-remove-member').forEach(btn => {
           btn.addEventListener('click', () => {
             const uid = btn.dataset.userId
-            ws.send({ t: 'channel.leave', body: { channel_id: channelId, user_id: uid } })
+            ws.send({ t: 'channel.remove_member', body: { channel_id: channelId, user_id: uid } })
             members = members.filter(m => m.user_id !== uid)
             render()
           })

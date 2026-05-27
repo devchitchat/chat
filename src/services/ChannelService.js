@@ -52,9 +52,11 @@ export class ChannelService {
 
   leaveChannel({ channelId, userId }) {
     const channel = this.getChannel(channelId)
-    // DM channels have permanent membership — leaving only unsubscribes the WS topic,
-    // not the DB row, so the user can rejoin and still access history.
-    if (channel?.kind !== 'dm') {
+    // DM and private channels have permanent membership — the WS topic unsubscribes
+    // but the DB row is preserved. Private channel members cannot re-add themselves,
+    // so clearing left_at here would lock them out until an owner re-adds them.
+    const isPermanent = channel?.kind === 'dm' || channel?.visibility === 'private'
+    if (!isPermanent) {
       this.channelRepo.setMemberLeft({ channelId, userId, now: this.nowFn() })
     }
     return { channel_id: channelId }
@@ -88,6 +90,18 @@ export class ChannelService {
     if (existing && !existing.left_at && !existing.banned_at) throw new ServiceError('BAD_REQUEST', 'User is already a member')
 
     this.channelRepo.upsertMembership({ channelId, userId: targetUserId, role: 'member', now: this.nowFn() })
+
+    return { channel_id: channelId, user_id: targetUserId }
+  }
+
+  removeMember({ channelId, removedByUserId, targetUserId }) {
+    const remover = this.getMembership(channelId, removedByUserId)
+    if (!remover || !['owner', 'mod'].includes(remover.role)) throw new ServiceError('FORBIDDEN', 'Only owner or mod can remove members')
+    if (removedByUserId === targetUserId) throw new ServiceError('BAD_REQUEST', 'Use leaveChannel to leave a channel')
+    const target = this.getMembership(channelId, targetUserId)
+    if (!target || target.left_at || target.banned_at) throw new ServiceError('BAD_REQUEST', 'User is not a member')
+
+    this.channelRepo.setMemberLeft({ channelId, userId: targetUserId, now: this.nowFn() })
 
     return { channel_id: channelId, user_id: targetUserId }
   }

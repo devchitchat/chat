@@ -8,10 +8,15 @@ export async function GET(req) {
 
   const user = session.user
 
-  // Fresh-device fallback: redirect to last visited channel if recorded
+  // Fresh-device fallback: redirect to last visited channel if recorded and still accessible.
+  // Clear the setting and fall through if the channel is gone or the user lost access,
+  // so they are never trapped in a redirect loop.
   const { settings } = userSettingsService.getSettings(user.user_id)
   if (settings.last_channel_id) {
-    return Response.redirect(new URL(`/channels/${settings.last_channel_id}`, req.url), 302)
+    if (channelService.canAccessChannel(settings.last_channel_id, user.user_id, user.roles)) {
+      return Response.redirect(new URL(`/channels/${settings.last_channel_id}`, req.url), 302)
+    }
+    userSettingsService.putSettings(user.user_id, { last_channel_id: null }, Date.now())
   }
 
   const channels = channelService.listChannels(user.user_id, user.roles)
