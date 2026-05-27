@@ -106,11 +106,87 @@ Copy that URL and open it in a browser to create the first account, which become
 bun test
 ```
 
+## Backup and restore
+
+### Backup
+
+```bash
+bun scripts/backup.js
+```
+
+Creates a clean binary copy of the database in `data/backups/chat-<timestamp>.db` using SQLite's `VACUUM INTO`. Safe to run against a live server.
+
+Override defaults with environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_PATH` | `data/chat.db` | Path to the source database |
+| `BACKUP_DIR` | `data/backups` | Directory where backups are written |
+
+### Restore
+
+#### Local (bare Bun process)
+
+1. Stop the server.
+2. Copy the backup over the live database:
+   ```bash
+   cp data/backups/chat-<timestamp>.db data/chat.db
+   ```
+3. Restart the server.
+
+#### Kubernetes (k3d / k3s)
+
+The `chat-backup` CronJob writes backups directly to `/Users/joeyguerra/src/devchitchat/backups` on the local disk (via the k3d `--volume` bind mount). To restore one:
+
+```bash
+bun restore /Users/joeyguerra/src/devchitchat/backups/chat-<timestamp>.db
+```
+
+The script (`scripts/restore.js`) handles the full SOP automatically:
+
+1. Switches to the correct kubectl context
+2. Scales `chat-web` down to 0 replicas
+3. Starts a temporary `busybox` helper pod mounting the `chat-web-sqlite` PVC
+4. Uploads the local backup file to the pod
+5. Moves it into place as `/var/lib/chat/chat.db`
+6. Deletes the helper pod
+7. Scales `chat-web` back to 1 and waits for rollout
+
+If any step fails the helper pod is cleaned up and the deployment is scaled back to 1 before exiting.
+
+Override the target cluster with environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `KUBE_CONTEXT` | `k3d-local` | kubectl context |
+| `KUBE_NAMESPACE` | `default` | Kubernetes namespace |
+
 ---
 
 # Docker / Kubernetes (k3d)
 
 The included scripts build a Docker image and load it into a local [k3d](https://k3d.io) cluster.
+
+## Cluster setup
+
+The k3d cluster must be created with the backup directory bind-mounted into the node so that the `chat-backup` CronJob can write files directly to your local disk. **This is a one-time step — if you recreate the cluster, repeat it.**
+
+```bash
+k3d cluster create local \
+  --volume /Users/joeyguerra/src/devchitchat/backups:/backups@all
+```
+
+> The `backupHostPath` value in `charts/web/values.local.yaml` must match the left-hand side of the `--volume` flag. The CronJob mounts it at `/backups` inside the pod and sets `BACKUP_DIR=/backups`, so `VACUUM INTO` writes directly to your local disk.
+
+If the cluster already exists without the volume mount, recreate it:
+
+```bash
+k3d cluster delete local
+k3d cluster create local \
+  --volume /Users/joeyguerra/src/devchitchat/backups:/backups@all
+```
+
+Then redeploy: `bun run push`
 
 ## Build and import into k3d
 

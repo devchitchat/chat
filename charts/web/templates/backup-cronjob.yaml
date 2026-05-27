@@ -8,34 +8,50 @@ spec:
     spec:
       template:
         spec:
-          initContainers:
-          - name: fix-backup-perms
-            image: busybox
-            command: ["sh", "-c", "chmod 777 /var/lib/backups"]
-            volumeMounts:
-            - name: backup-dest
-              mountPath: /var/lib/backups
           containers:
           - name: backup
             image: local/chat-web:3.0.10
             workingDir: /app
-            command: ["bun", "backup"]
+            command:
+            - sh
+            - -c
+            - |
+              bun backup && bun backup-uploads
             env:
             - name: DB_PATH
               value: /var/lib/chat/chat.db
             - name: BACKUP_DIR
-              value: /var/lib/backups
+              value: {{ if .Values.dbBackupNodePath }}{{ .Values.dbBackupNodePath }}{{ else }}/var/lib/chat/backups{{ end }}
+            - name: UPLOAD_DIR
+              value: /var/lib/chat/uploads
+            - name: UPLOADS_BACKUP_DIR
+              value: {{ if .Values.uploadsBackupNodePath }}{{ .Values.uploadsBackupNodePath }}{{ else }}/var/lib/chat/backups/uploads{{ end }}
             volumeMounts:
             - name: chat-data
               mountPath: /var/lib/chat
-            - name: backup-dest
-              mountPath: /var/lib/backups
+              readOnly: true
+            {{- if .Values.dbBackupNodePath }}
+            - name: db-backups
+              mountPath: {{ .Values.dbBackupNodePath }}
+            {{- end }}
+            {{- if .Values.uploadsBackupNodePath }}
+            - name: uploads-backups
+              mountPath: {{ .Values.uploadsBackupNodePath }}
+            {{- end }}
           restartPolicy: OnFailure
           volumes:
           - name: chat-data
             persistentVolumeClaim:
               claimName: chat-web-sqlite
-          - name: backup-dest
+          {{- if .Values.dbBackupNodePath }}
+          - name: db-backups
             hostPath:
-              path: {{ required "backupHostPath must be set in values.local.yaml" .Values.backupHostPath }}
+              path: {{ .Values.dbBackupNodePath }}
               type: DirectoryOrCreate
+          {{- end }}
+          {{- if .Values.uploadsBackupNodePath }}
+          - name: uploads-backups
+            hostPath:
+              path: {{ .Values.uploadsBackupNodePath }}
+              type: DirectoryOrCreate
+          {{- end }}

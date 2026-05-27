@@ -1,3 +1,11 @@
-# Path on the host node where SQLite backups are written.
-# Override in values.local.yaml (gitignored) — do not set a real path here.
-backupHostPath: ""
+# Node-side paths for backups.
+# These are paths on the k3d node, bind-mounted from the host via --volume at cluster creation.
+# Set the actual paths in values.local.yaml (gitignored). Leave empty to disable.
+#
+# k3d cluster create local --volume /Users/yourname/k3ds/backups:/k3d-backups@all
+#
+# Then set these to the node-side paths:
+#   dbBackupNodePath: /k3d-backups/chat-web/db-backups
+#   uploadsBackupNodePath: /k3d-backups/chat-web/uploads-backups
+dbBackupNodePath: ""
+uploadsBackupNodePath: ""

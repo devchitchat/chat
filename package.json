@@ -12,8 +12,11 @@
     "docker-build": "./docker-build-k3d.sh",
     "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/templates/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
     "backup": "bun scripts/backup.js",
+    "backup-uploads": "bun scripts/backup-uploads.js",
     "deploy-backup": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && helm upgrade --install chat-web charts/web -f charts/web/values.local.yaml -n ${KUBE_NAMESPACE:-default}",
     "backup-now": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl create job --from=cronjob/chat-backup chat-backup-$(date +%s) -n ${KUBE_NAMESPACE:-default}",
+    "backup-pull": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl cp $(kubectl get pod -l app=chat-web -o jsonpath='{.items[0].metadata.name}' -n ${KUBE_NAMESPACE:-default}):/var/lib/chat/backups ../backups -n ${KUBE_NAMESPACE:-default}",
+    "restore": "bun scripts/restore.js",
     "push": "bun docker-build && bun local-deploy"
   },
   "type": "module",
