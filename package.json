@@ -23,5 +23,6 @@
   "dependencies": {
     "@devchitchat/index97": "^2.1.2",
     "@devchitchat/rdbljs": "^2.0.0"
-  }
+  },
+  "module": "index.js"
 }

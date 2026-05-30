@@ -117,6 +117,12 @@ export function handleUserList(ws, msg, ctx) {
   sendWs(ws, { t: 'user.list_result', reply_to: msg.id, ok: true, body: { users } })
 }
 
+export function handleBotList(ws, msg, ctx) {
+  const { auth, sendWs } = ctx
+  const bots = auth.listUsersBasic().filter(u => u.roles.includes('bot'))
+  sendWs(ws, { t: 'bot.list_result', reply_to: msg.id, ok: true, body: { bots } })
+}
+
 // ── Direct messages ────────────────────────────────────────────────────────────
 
 export function handleDmOpen(ws, msg, ctx) {

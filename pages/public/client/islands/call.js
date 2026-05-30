@@ -67,7 +67,8 @@ export default function CallIsland(root) {
   let afterSeq = seedSeq
 
   // ── @mention picker state ──────────────────────────────────────────────────
-  let channelMembers  = []   // [{ user_id, handle, display_name }]
+  let channelMembers  = []   // [{ user_id, handle, display_name }] — non-bot users
+  let channelBots     = []   // [{ user_id, handle, display_name }] — bot users
   let mentionFiltered = []   // current filtered subset
   let mentionStart    = -1   // index of '@' in textarea.value
   let mentionSelIdx   = 0    // keyboard-selected row
@@ -289,7 +290,7 @@ export default function CallIsland(root) {
     if (!match) { closePicker(); return }
     const query    = match[1].toLowerCase()
     const start    = cursor - match[0].length
-    const filtered = channelMembers
+    const filtered = [...channelMembers, ...channelBots]
       .filter(m =>
         m.handle.toLowerCase().startsWith(query) ||
         (m.display_name ?? '').toLowerCase().startsWith(query)
@@ -317,11 +318,16 @@ export default function CallIsland(root) {
     }
     if (channelMembers.length === 0) {
       ws.send({ t: 'user.list', body: {} })
+      ws.send({ t: 'bot.list', body: {} })
     }
   })
 
   ws.on('user.list_result', ({ users }) => {
     channelMembers = (users ?? []).filter(m => m.handle)
+  })
+
+  ws.on('bot.list_result', ({ bots }) => {
+    channelBots = (bots ?? []).filter(b => b.handle)
   })
 
   ws.on('msg.list_result', ({ messages: msgs, next_after_seq, has_more, direction }) => {

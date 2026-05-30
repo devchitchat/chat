@@ -214,7 +214,7 @@ to the WebSocket using a long-lived API token (not a session cookie). The bot
 appears in channels like a regular user and can send messages, but it cannot
 log in through the browser.
 
-The llm-bot service (from `plans/chatbot-system.md`) connects using one of these
+The chatops-bot service (from `plans/chatbot-system.md`) connects using one of these
 bot tokens.
 
 ### Schema additions
@@ -261,13 +261,13 @@ Admin › Bots
 
 Handle         Display name   Channels          Tokens    Action
 ──────────────────────────────────────────────────────────────────
-@llm-bot       LLM Bot        #general, #dev    1 active  [Manage]
+@chatops-bot   Chatops Bot        #general, #dev    1 active  [Manage]
 ```
 
 Bot detail / manage view (`/admin/bots/:userId`):
 
 ```
-@llm-bot  —  LLM Bot
+@chatops-bot  —  Chatops Bot
 
 Tokens
 ──────────────────────────────
@@ -497,6 +497,6 @@ Invite management requires only new repository query methods (no migration —
   surface it in the list later
 - OAuth / SSO bot auth — bot tokens are sufficient for self-hosted use
 - Bot rate limiting — follow-on
-- Bot message formatting / slash command routing — that lives in the llm-bot service,
+- Bot message formatting / slash command routing — that lives in the chatops-bot service,
   not in devchitchat itself
-- The llm-bot and chatops-bot services themselves — covered in `plans/chatbot-system.md`
+- The llm-bun and chatops-bot services themselves — covered in `plans/chatbot-system.md`
