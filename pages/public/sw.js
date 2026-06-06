@@ -8,11 +8,11 @@ self.addEventListener('push', event => {
   try { data = event.data?.json() ?? {} } catch { /* ignore malformed payloads */ }
 
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'devchitchat', {
+    self.registration.showNotification(data.title ?? 'chat', {
       body:  data.body  ?? '',
       icon:  '/public/favicon.png',
       badge: '/public/favicon.png',
-      tag:   data.channel_id ?? 'devchitchat', // collapse multiple from the same channel
+      tag:   data.channel_id ?? 'chat', // collapse multiple from the same channel
       data:  { url: data.url ?? '/' },
     })
   )

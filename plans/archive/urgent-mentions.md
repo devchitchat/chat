@@ -127,7 +127,7 @@ separate HTTP endpoint needed.
 self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'devchitchat', {
+    self.registration.showNotification(data.title ?? 'chat', {
       body: data.body,
       icon: '/favicon.png',
       data: { url: data.url },
