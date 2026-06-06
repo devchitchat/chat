@@ -835,6 +835,48 @@ export default function CallIsland(root) {
 
   // ── Tile grid ──────────────────────────────────────────────────────────────
 
+  function _captureFrame(tile, label) {
+    const video = tile.querySelector('video')
+    if (!video || !video.videoWidth) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = `capture-${label.replace(/[^a-z0-9]/gi, '-')}-${Date.now()}.png`
+    a.click()
+  }
+
+  function _startCapture(tile, label, delay) {
+    const countdown = tile.querySelector('.tile-countdown')
+    const captureBtn = tile.querySelector('.tile-capture')
+    if (tile._captureTimer) {
+      clearInterval(tile._captureTimer)
+      tile._captureTimer = null
+      countdown.hidden = true
+      captureBtn.textContent = '📸'
+      return
+    }
+    if (delay === 0) { _captureFrame(tile, label); return }
+    let remaining = delay
+    countdown.textContent = remaining
+    countdown.hidden = false
+    captureBtn.textContent = '✕'
+    tile._captureTimer = setInterval(() => {
+      remaining--
+      if (remaining <= 0) {
+        clearInterval(tile._captureTimer)
+        tile._captureTimer = null
+        countdown.hidden = true
+        captureBtn.textContent = '📸'
+        _captureFrame(tile, label)
+      } else {
+        countdown.textContent = remaining
+      }
+    }, 1000)
+  }
+
   function _renderTile(tileId, stream, muted, label) {
     if (!tileGridEl) return
     let tile = tileGridEl.querySelector(`[data-peer="${tileId}"]`)
@@ -842,8 +884,21 @@ export default function CallIsland(root) {
       tile = document.createElement('div')
       tile.className = 'stream-tile'
       tile.dataset.peer = tileId
-      tile.innerHTML = `<video autoplay playsinline controls ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span>`
+      tile.innerHTML = `<video autoplay playsinline controls ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span><div class="tile-capture-wrap"><button class="tile-capture" title="Capture photo">📸</button><div class="tile-capture-menu" hidden><button class="tile-capture-opt" data-delay="0">0s</button><button class="tile-capture-opt" data-delay="1">1s</button><button class="tile-capture-opt" data-delay="3">3s</button><button class="tile-capture-opt" data-delay="5">5s</button></div></div><div class="tile-countdown" hidden></div>`
       tile.addEventListener('click', () => _pinTile(tileId))
+      const menu = tile.querySelector('.tile-capture-menu')
+      tile.querySelector('.tile-capture').addEventListener('click', e => {
+        e.stopPropagation()
+        if (tile._captureTimer) { _startCapture(tile, label, 0); return }
+        menu.hidden = !menu.hidden
+      })
+      menu.querySelectorAll('.tile-capture-opt').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation()
+          menu.hidden = true
+          _startCapture(tile, label, parseInt(btn.dataset.delay))
+        })
+      })
       tileGridEl.appendChild(tile)
       _updateTileLayout()
     }
