@@ -53,11 +53,14 @@ export function sessionFromRequest(req) {
  * Returns { user_id, handle, displayName, roles } or null if not authenticated.
  */
 export async function botUserFromRequest(req) {
-  const auth = req.headers.get('authorization') ?? ''
-  const match = auth.match(/^Bearer\s+(.+)$/i)
+  const authHeader = req.headers.get('authorization') ?? ''
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
   if (!match) return null
   try {
-    return await botService.authenticateToken(match[1])
+    const bot = await botService.authenticateToken(match[1])
+    if (!bot) return null
+    // Normalize to the same shape as session.user so callers use user_id consistently.
+    return { user_id: bot.userId, handle: bot.handle, displayName: bot.displayName, roles: bot.roles }
   } catch {
     return null
   }
