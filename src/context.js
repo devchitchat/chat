@@ -49,6 +49,21 @@ export function sessionFromRequest(req) {
 }
 
 /**
+ * Authenticate a bot via an Authorization: Bearer <token> header.
+ * Returns { user_id, handle, displayName, roles } or null if not authenticated.
+ */
+export async function botUserFromRequest(req) {
+  const auth = req.headers.get('authorization') ?? ''
+  const match = auth.match(/^Bearer\s+(.+)$/i)
+  if (!match) return null
+  try {
+    return await botService.authenticateToken(match[1])
+  } catch {
+    return null
+  }
+}
+
+/**
  * Build a Set-Cookie header string for a session token.
  */
 export function sessionCookie(token, { maxAgeSec = 30 * 24 * 60 * 60, clear = false } = {}) {

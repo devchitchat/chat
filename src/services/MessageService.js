@@ -33,14 +33,28 @@ export class MessageService {
       this.searchService.indexMessage({ msg_id: msgId, channel_id: channelId, seq, user_id: userId, ts: now, text: trimmed })
     }
 
+    let enrichedAttachments = attachments
     if (this.uploadService && attachments.length > 0) {
       const uploadIds = attachments.map(a => a.upload_id).filter(Boolean)
       if (uploadIds.length > 0) {
         this.uploadService.linkToMessage({ uploadIds, msgId, userId, channelId })
+        // Enrich with full upload details so consumers get url, mime_type, original_name.
+        enrichedAttachments = attachments.map(a => {
+          if (!a.upload_id) return a
+          const row = this.uploadService.getUpload({ uploadId: a.upload_id })
+          if (!row) return a
+          return {
+            upload_id:     row.upload_id,
+            url:           `/uploads/${row.upload_id}/${encodeURIComponent(row.original_name)}`,
+            original_name: row.original_name,
+            mime_type:     row.mime_type,
+            size_bytes:    row.size_bytes,
+          }
+        })
       }
     }
 
-    return { msg_id: msgId, seq, ts: now, priority, attachments }
+    return { msg_id: msgId, seq, ts: now, priority, attachments: enrichedAttachments }
   }
 
   listMessages({ channelId, userId, afterSeq = 0, limit = 50 }) {

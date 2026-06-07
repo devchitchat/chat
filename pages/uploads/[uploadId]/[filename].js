@@ -5,12 +5,14 @@
  * `:filename` is cosmetic — the actual file is located by uploadId + stored_name from DB.
  * Path traversal is impossible because stored_name is opaque and never interpolated from URL.
  */
-import { sessionFromRequest, uploadService } from '../../../src/context.js'
+import { sessionFromRequest, botUserFromRequest, uploadService } from '../../../src/context.js'
 import { ServiceError, httpStatus } from '../../../src/util/errors.js'
 
 export async function GET(req) {
-  const session = sessionFromRequest(req)
-  if (!session) return new Response('Unauthorized', { status: 401 })
+  const session  = sessionFromRequest(req)
+  const botUser  = session ? null : await botUserFromRequest(req)
+  const reqUser  = session?.user ?? botUser
+  if (!reqUser) return new Response('Unauthorized', { status: 401 })
 
   const parts = new URL(req.url).pathname.split('/')
   // pathname: /uploads/<uploadId>/<filename>
@@ -21,8 +23,8 @@ export async function GET(req) {
   try {
     const { stream, mimeType, contentDisposition } = await uploadService.streamFile({
       uploadId,
-      requestingUserId: session.user.user_id,
-      userRoles: session.user.roles,
+      requestingUserId: reqUser.user_id,
+      userRoles: reqUser.roles ?? [],
     })
 
     return new Response(stream, {

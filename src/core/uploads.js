@@ -8,6 +8,7 @@ const MAGIC = [
   // Images
   { bytes: [0xff, 0xd8, 0xff],                              mime: 'image/jpeg' },
   { bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], mime: 'image/png' },
+  { bytes: [0x00, 0x00, 0x01, 0x00],                         mime: 'image/x-icon' },
   { bytes: [0x47, 0x49, 0x46, 0x38],                         mime: 'image/gif' },
   { bytes: [0x52, 0x49, 0x46, 0x46],                         mime: 'image/webp', offset: 0, extra: { offset: 8, bytes: [0x57, 0x45, 0x42, 0x50] } },
   // PDF
