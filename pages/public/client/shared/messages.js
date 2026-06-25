@@ -36,12 +36,62 @@ export function makeDateSeparator(dateKey) {
  * @param {string} text
  * @param {{ userHandle?: string }} [opts]
  */
+// Combined regex (operates on raw text before HTML-escaping):
+//   group 1 (+ inner 2, 3) — markdown link: [text](url)
+//   group 4                — bare https?:// URL (excludes []() so it can't swallow a markdown link)
+//   group 5                — @mention
+const INLINE_RE = /(\[([^\]]*)\]\((https?:\/\/[^)]+)\))|(https?:\/\/[^\s<>"'[\]()]+)|(@[a-zA-Z0-9_.-]+)/g
+
 export function renderText(text, { userHandle } = {}) {
-  const escaped = escHtml(text)
-  return escaped.replace(/@([a-zA-Z0-9_.-]+)/g, (match, handle) => {
-    const isSelf = userHandle && handle.toLowerCase() === userHandle.toLowerCase()
-    return `<span class="mention${isSelf ? ' mention-self' : ''}">${match}</span>`
-  })
+  let result = ''
+  let lastIndex = 0
+  INLINE_RE.lastIndex = 0
+  let m
+  while ((m = INLINE_RE.exec(text)) !== null) {
+    result += escHtml(text.slice(lastIndex, m.index))
+    const [full, , mdText, mdUrl, bareUrl, mention] = m
+    if (mdUrl) {
+      // [link text](https://url)
+      result += `<a href="${escHtml(mdUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(mdText)}</a>`
+    } else if (bareUrl) {
+      const trimmed = bareUrl.replace(/[.,!?;:)]+$/, '')
+      const trailing = bareUrl.slice(trimmed.length)
+      result += `<a href="${escHtml(trimmed)}" target="_blank" rel="noopener noreferrer">${escHtml(trimmed)}</a>${escHtml(trailing)}`
+    } else if (mention) {
+      const handle = mention.slice(1)
+      const isSelf = userHandle && handle.toLowerCase() === userHandle.toLowerCase()
+      result += `<span class="mention${isSelf ? ' mention-self' : ''}">${escHtml(mention)}</span>`
+    }
+    lastIndex = m.index + full.length
+  }
+  result += escHtml(text.slice(lastIndex))
+  return result
+}
+
+/**
+ * Apply inline rendering (URLs, @mentions) to text nodes inside an element,
+ * leaving existing HTML structure (e.g. server-rendered <a> tags) intact.
+ * Used by hydrateSeedMessages so markdown-rendered links are preserved.
+ * @param {Element} el
+ * @param {{ userHandle?: string }} [opts]
+ */
+export function applyInlineRenderingToTextNodes(el, { userHandle } = {}) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  const nodes = []
+  let n
+  while ((n = walker.nextNode())) {
+    // Skip text nodes already inside an <a> — they are already linked.
+    if (!n.parentElement?.closest('a')) nodes.push(n)
+  }
+  for (const textNode of nodes) {
+    const raw = textNode.textContent
+    if (!raw.trim()) continue
+    const rendered = renderText(raw, { userHandle })
+    if (rendered === escHtml(raw)) continue  // nothing changed
+    const span = document.createElement('span')
+    span.innerHTML = rendered
+    textNode.replaceWith(...span.childNodes)
+  }
 }
 
 export function formatBytes(bytes) {

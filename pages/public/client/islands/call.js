@@ -19,7 +19,7 @@ import { signal, effect, Context } from '@devchitchat/rdbljs'
 import { WsClient } from '../ws.js'
 import { patchSettings } from '../settings-sync.js'
 import { navigateTo } from '../router.js'
-import { escHtml, utcDateKey, formatDateLabel, makeDateSeparator, renderText, renderAttachment, makeMessageEl } from '../shared/messages.js'
+import { escHtml, utcDateKey, formatDateLabel, makeDateSeparator, applyInlineRenderingToTextNodes, renderAttachment, makeMessageEl } from '../shared/messages.js'
 import { RtcPeerManager } from '../rtc-peer-manager.js'
 
 export default function CallIsland(root) {
@@ -146,11 +146,11 @@ export default function CallIsland(root) {
         handle.title = 'Send a direct message'
       }
 
-      // Highlight @mentions in server-rendered message text
+      // Apply inline rendering (URLs, @mentions) to server-rendered message text.
+      // Walk text nodes instead of replacing innerHTML so that <a> tags already
+      // rendered server-side (e.g. from markdown link syntax) are preserved.
       const textEl = article.querySelector('.message-text')
-      if (textEl && textEl.textContent) {
-        textEl.innerHTML = renderText(textEl.textContent, { userHandle })
-      }
+      if (textEl) applyInlineRenderingToTextNodes(textEl, { userHandle })
 
       // Inject attachment HTML for seed messages that have attachments_json
       const raw = article.dataset.attachments
