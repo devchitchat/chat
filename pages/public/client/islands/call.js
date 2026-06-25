@@ -174,7 +174,11 @@ export default function CallIsland(root) {
     }
   }
   hydrateSeedMessages()
-  requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight })
+  // Scroll to the bottom instantly on first load — requestAnimationFrame gives
+  // the browser one layout cycle to settle flex heights before we measure
+  // scrollHeight. behavior:'instant' bypasses scroll-behavior:smooth so there
+  // is no visible animation from top to bottom on mount.
+  requestAnimationFrame(() => messages.scrollTo({ top: messages.scrollHeight, behavior: 'instant' }))
 
   // ── Load-more sentinel + pagination ───────────────────────────────────────
 
