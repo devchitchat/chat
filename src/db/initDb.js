@@ -1,4 +1,5 @@
-export const initDb = (db) => {
+// Pure DDL — safe to call before migrations. No writes.
+export const createSchema = (db) => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       user_id TEXT PRIMARY KEY,
@@ -160,10 +161,6 @@ export const initDb = (db) => {
       ON calls (channel_id) WHERE ended_at IS NULL;
   `)
 
-  // Close any calls left open by a previous crash or unclean shutdown.
-  // Live call state is in-memory; on restart there are no active peers.
-  db.exec(`UPDATE calls SET ended_at = unixepoch() WHERE ended_at IS NULL`)
-
   // Add sort_order to existing databases that pre-date this column
   try { db.exec(`ALTER TABLE channels ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE hubs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
@@ -215,4 +212,12 @@ export const initDb = (db) => {
       );
     `)
   }
+}
+
+export const initDb = (db) => {
+  createSchema(db)
+
+  // Close any calls left open by a previous crash or unclean shutdown.
+  // Live call state is in-memory; on restart there are no active peers.
+  db.exec(`UPDATE calls SET ended_at = unixepoch() WHERE ended_at IS NULL`)
 }

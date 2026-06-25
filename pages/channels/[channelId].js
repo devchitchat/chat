@@ -1,4 +1,15 @@
 import { sessionFromRequest, channelService, hubService, messageService, auth, logger } from '../../src/context.js'
+import { renderMarkdown } from '@devchitchat/index97/markdown'
+
+/// TODO: Come up with a better strategy to allow for styled messages. Maybe you build a custom markdown parser
+// that drops everything else but the styled text?
+function sanitizeForFrontEnd(html) {
+  let output = html.toString()
+  output = output.replaceAll('<script>', '')
+  output = output.replaceAll('</script>', '')
+
+  return output
+}
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
@@ -34,6 +45,8 @@ export async function GET(req) {
     userId: user.user_id,
     limit: 50,
   })
+  seedMessages.forEach(message => message.text = sanitizeForFrontEnd(renderMarkdown(message.text).html))
+  console.log(seedMessages)
   const seedSeq = seedMessages.length ? seedMessages[seedMessages.length - 1].seq : 0
   const seedFirstSeq = seedMessages.length ? seedMessages[0].seq : 0
   const seedHasMore = seedFirstSeq > 1

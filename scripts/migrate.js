@@ -19,6 +19,7 @@ import { readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/db/openDb.js'
+import { createSchema } from '../src/db/initDb.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH ?? 'data/chat.db'
@@ -31,6 +32,11 @@ const isStatus = args.has('--status')
 // ── Open database ────────────────────────────────────────────────────────────
 
 const db = openDatabase(DB_PATH)
+
+// Ensure base schema exists before running migrations so that ALTER TABLE /
+// CREATE INDEX statements in migration files always have a table to work with.
+// createSchema is pure DDL — no writes, fully idempotent.
+createSchema(db)
 
 // ── Ensure _migrations table ─────────────────────────────────────────────────
 

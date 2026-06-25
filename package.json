@@ -1,6 +1,6 @@
 {
   "name": "@devchitchat/chat",
-  "version": "3.0.28",
+  "version": "3.0.35",
   "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
@@ -10,13 +10,14 @@
     "generate-vapid": "bun scripts/generate-vapid.js",
     "create-secrets": "kubectl create secret generic chat-web-vapid --from-env-file=.env --namespace=${KUBE_NAMESPACE:-default} --dry-run=client -o yaml | kubectl apply -f -",
     "docker-build": "./docker-build-k3d.sh",
-    "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl apply -f charts/web/templates/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
+    "local-deploy": "kubectl config use-context ${KUBE_CONTEXT:-k3s-local} && kubectl apply -f charts/web/templates/deployment.yaml -n ${KUBE_NAMESPACE:-default}",
     "backup": "bun scripts/backup.js",
     "backup-uploads": "bun scripts/backup-uploads.js",
-    "deploy-backup": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && helm upgrade --install chat-web charts/web -f charts/web/values.local.yaml -n ${KUBE_NAMESPACE:-default}",
-    "backup-now": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl create job --from=cronjob/chat-backup chat-backup-$(date +%s) -n ${KUBE_NAMESPACE:-default}",
-    "backup-pull": "kubectl config use-context ${KUBE_CONTEXT:-k3d-local} && kubectl cp $(kubectl get pod -l app=chat-web -o jsonpath='{.items[0].metadata.name}' -n ${KUBE_NAMESPACE:-default}):/var/lib/chat/backups ../backups -n ${KUBE_NAMESPACE:-default}",
+    "deploy-backup": "kubectl config use-context ${KUBE_CONTEXT:-k3s-local} && helm upgrade --install chat-web charts/web -f charts/web/values.local.yaml -n ${KUBE_NAMESPACE:-default}",
+    "backup-now": "kubectl config use-context ${KUBE_CONTEXT:-k3s-local} && kubectl create job --from=cronjob/chat-backup chat-backup-$(date +%s) -n ${KUBE_NAMESPACE:-default}",
+    "backup-pull": "kubectl config use-context ${KUBE_CONTEXT:-k3s-local} && kubectl cp $(kubectl get pod -l app=chat-web -o jsonpath='{.items[0].metadata.name}' -n ${KUBE_NAMESPACE:-default}):/var/lib/chat/backups ../backups -n ${KUBE_NAMESPACE:-default}",
     "restore": "bun scripts/restore.js",
+    "restore-uploads": "bun scripts/restore-uploads.js",
     "push": "bun docker-build && bun local-deploy"
   },
   "type": "module",

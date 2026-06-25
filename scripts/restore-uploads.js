@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Restore a SQLite backup to the Kubernetes cluster.
+ * Restore an uploads backup to the Kubernetes cluster.
  *
- * Copies a local backup file into the chat-web-sqlite PVC via a temporary
- * helper pod, then replaces the live database. The deployment is scaled to
- * zero before the restore and back to one afterwards.
+ * Copies a local uploads directory into the chat-web-sqlite PVC via a
+ * temporary helper pod. The deployment is NOT scaled down — uploads are
+ * static files and the copy is safe against a live server.
  *
  * Usage:
- *   bun scripts/restore.js <path-to-backup.db>
- *   bun restore ../backups/chat-2026-05-27_03-00-00.db
+ *   bun scripts/restore-uploads.js <path-to-uploads-dir>
+ *   bun restore-uploads ../uploads-backup
  *
  * Env:
  *   KUBE_CONTEXT   — kubectl context to use   (default: k3d-local)
@@ -16,32 +16,30 @@
  */
 
 import { existsSync } from 'node:fs'
-import { resolve, basename } from 'node:path'
+import { resolve } from 'node:path'
 
 // ── Args / env ────────────────────────────────────────────────────────────────
 
-const backupArg = process.argv[2]
+const uploadsArg = process.argv[2]
 
-if (!backupArg) {
-  console.error('Usage: bun scripts/restore.js <path-to-backup.db>')
+if (!uploadsArg) {
+  console.error('Usage: bun scripts/restore-uploads.js <path-to-uploads-dir>')
   process.exit(1)
 }
 
-const backupPath = resolve(backupArg)
+const uploadsPath = resolve(uploadsArg)
 
-if (!existsSync(backupPath)) {
-  console.error(`Backup file not found: ${backupPath}`)
+if (!existsSync(uploadsPath)) {
+  console.error(`Uploads directory not found: ${uploadsPath}`)
   process.exit(1)
 }
 
 const CONTEXT   = process.env.KUBE_CONTEXT   ?? 'k3d-local'
 const NAMESPACE = process.env.KUBE_NAMESPACE ?? 'default'
-const DEPLOY    = 'chat-web'
 const PVC       = 'chat-web-sqlite'
-const DB_PATH   = '/var/lib/chat/chat.db'
 const MOUNT     = '/var/lib/chat'
-const HELPER    = `restore-helper-${Date.now()}`
-const TMP_PATH  = `${MOUNT}/${basename(backupPath)}.restore-tmp`
+const UPLOADS   = `${MOUNT}/uploads`
+const HELPER    = `uploads-restore-${Date.now()}`
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,23 +100,14 @@ process.on('SIGTERM', async () => { await cleanup(); process.exit(143) })
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-console.log(`\nRestore: ${backupPath}`)
+console.log(`\nRestore uploads: ${uploadsPath}`)
 console.log(`Context: ${CONTEXT}  Namespace: ${NAMESPACE}\n`)
 
 try {
   // 1. Switch context
   await run('switch context', ['config', 'use-context', CONTEXT])
 
-  // 2. Scale down
-  await run(`scale ${DEPLOY} to 0`, [
-    '-n', NAMESPACE, 'scale', 'deployment', DEPLOY, '--replicas=0'
-  ])
-  await run('wait for termination', [
-    '-n', NAMESPACE, 'rollout', 'status', `deployment/${DEPLOY}`,
-    '--timeout=60s'
-  ])
-
-  // 3. Start helper pod
+  // 2. Start helper pod
   const overrides = JSON.stringify({
     spec: {
       volumes: [{ name: 'data', persistentVolumeClaim: { claimName: PVC } }],
@@ -139,57 +128,18 @@ try {
   ])
   await waitForPod(HELPER)
 
-  // 4. Upload backup to pod
-  await run(`upload ${basename(backupPath)}`, [
-    '-n', NAMESPACE, 'cp', backupPath, `${HELPER}:${TMP_PATH}`,
+  // 3. Copy uploads into PVC
+  await run('copy uploads', [
+    '-n', NAMESPACE, 'cp', uploadsPath, `${HELPER}:${UPLOADS}`,
   ])
 
-  // 5. Move into place
-  await run('replace database', [
-    '-n', NAMESPACE, 'exec', HELPER,
-    '--', 'cp', TMP_PATH, DB_PATH,
-  ])
-
-  // 6. Fix permissions so the app can write to the restored file
-  await run('fix permissions', [
-    '-n', NAMESPACE, 'exec', HELPER,
-    '--', 'chmod', '666', DB_PATH,
-  ])
-
-  // 7. Remove stale WAL/SHM files so SQLite opens cleanly
-  await run('remove stale WAL/SHM', [
-    '-n', NAMESPACE, 'exec', HELPER,
-    '--', 'sh', '-c', `rm -f ${DB_PATH}-wal ${DB_PATH}-shm`,
-  ])
-
-  // 8. Remove temp file
-  await run('remove temp file', [
-    '-n', NAMESPACE, 'exec', HELPER,
-    '--', 'rm', TMP_PATH,
-  ])
-
-  // 9. Tear down helper
+  // 4. Tear down helper
   await cleanup()
   helperStarted = false
 
-  // 10. Scale back up
-  await run(`scale ${DEPLOY} to 1`, [
-    '-n', NAMESPACE, 'scale', 'deployment', DEPLOY, '--replicas=1'
-  ])
-  await run('wait for rollout', [
-    '-n', NAMESPACE, 'rollout', 'status', `deployment/${DEPLOY}`,
-    '--timeout=120s'
-  ])
-
-  console.log('\nRestore complete.')
+  console.log('\nUploads restore complete.')
 } catch (err) {
   console.error(`\nRestore failed: ${err.message}`)
   await cleanup()
-
-  // Attempt to bring the deployment back up so the service isn't left down
-  console.log('\nAttempting to restore deployment replicas ...')
-  await runSilent(['-n', NAMESPACE, 'scale', 'deployment', DEPLOY, '--replicas=1'])
-    .catch(() => {})
-
   process.exit(1)
 }
