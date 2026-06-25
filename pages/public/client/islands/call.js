@@ -174,6 +174,7 @@ export default function CallIsland(root) {
     }
   }
   hydrateSeedMessages()
+  requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight })
 
   // ── Load-more sentinel + pagination ───────────────────────────────────────
 
