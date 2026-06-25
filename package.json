@@ -1,6 +1,6 @@
 {
   "name": "@devchitchat/chat",
-  "version": "3.0.35",
+  "version": "3.0.37",
   "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
