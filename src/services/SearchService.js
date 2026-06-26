@@ -8,6 +8,10 @@ export class SearchService {
     this.searchRepo.indexMessage({ msg_id, channel_id, seq, user_id, ts, text })
   }
 
+  removeMessage({ msgId }) {
+    this.searchRepo.removeMessage({ msgId })
+  }
+
   searchMessages({ channelId, query, limit = 50 }) {
     if (this.useFts) {
       return this.searchRepo.searchFts({ channelId, query, limit })

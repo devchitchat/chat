@@ -9,7 +9,14 @@ export class InMemorySearchRepository {
   }
 
   indexMessage({ msg_id, channel_id, seq, user_id, ts, text }) {
+    const existing = this._index.findIndex(r => r.msg_id === msg_id)
+    if (existing >= 0) this._index.splice(existing, 1)
     this._index.push({ msg_id, channel_id, seq, user_id, ts, text })
+  }
+
+  removeMessage({ msgId }) {
+    const i = this._index.findIndex(r => r.msg_id === msgId)
+    if (i >= 0) this._index.splice(i, 1)
   }
 
   searchFts({ channelId, query, limit }) {

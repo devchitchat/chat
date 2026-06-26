@@ -14,3 +14,8 @@ export function validateEditText(text) {
 export function assertMessageEditable(deletedAt) {
   if (deletedAt != null) throw new ServiceError('BAD_REQUEST', 'Cannot edit a deleted message')
 }
+
+export function validateDeletePermission(requestingUserId, authorUserId) {
+  if (requestingUserId !== authorUserId)
+    throw new ServiceError('FORBIDDEN', 'Only the author can delete this message')
+}

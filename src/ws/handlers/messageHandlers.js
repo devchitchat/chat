@@ -57,6 +57,16 @@ export function handleMsgList(ws, msg, ctx) {
   sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: { ...result, channel_id, direction: 'after' } })
 }
 
+export function handleMsgDelete(ws, msg, ctx) {
+  const { messageService, publishChannel } = ctx
+  const { msg_id, channel_id } = msg.body ?? {}
+  const result = messageService.deleteMessage({ msgId: msg_id, channelId: channel_id, userId: ws.data.userId })
+  publishChannel(channel_id, {
+    t: 'msg.deleted', ok: true,
+    body: { msg_id: result.msgId, channel_id: result.channelId, seq: result.seq },
+  })
+}
+
 export function handleSearchQuery(ws, msg, ctx) {
   const { auth, channelService, searchService, sendWs } = ctx
   const { channel_id, q, limit } = msg.body || {}

@@ -133,7 +133,14 @@ try {
     '-n', NAMESPACE, 'cp', uploadsPath, `${HELPER}:${UPLOADS}`,
   ])
 
-  // 4. Tear down helper
+  // 4. Fix ownership — kubectl cp preserves source permissions (often root:root).
+  //    appuser (999:999) needs to own the uploads tree to write new files.
+  await run('fix ownership', [
+    '-n', NAMESPACE, 'exec', HELPER, '--',
+    'chown', '-R', '999:999', UPLOADS,
+  ])
+
+  // 5. Tear down helper
   await cleanup()
   helperStarted = false
 

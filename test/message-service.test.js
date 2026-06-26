@@ -93,6 +93,49 @@ test('editMessage re-indexes text in search', () => {
   expect(hits.length).toBe(1)
 })
 
+// ── deleteMessage ─────────────────────────────────────────────────────────────
+
+test('deleteMessage removes the message from search', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'findme' })
+  service.deleteMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1' })
+  const hits = searchService.searchMessages({ channelId: 'c1', query: 'findme' })
+  expect(hits.length).toBe(0)
+})
+
+test('deleteMessage throws FORBIDDEN when userId is not the author', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'mine' })
+  expect(() => service.deleteMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u2' }))
+    .toThrow(ServiceError)
+})
+
+test('deleteMessage throws NOT_FOUND for unknown msgId', () => {
+  expect(() => service.deleteMessage({ msgId: 'm_fake', channelId: 'c1', userId: 'u1' }))
+    .toThrow(ServiceError)
+})
+
+test('deleteMessage throws BAD_REQUEST when already deleted', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'bye' })
+  service.deleteMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1' })
+  expect(() => service.deleteMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1' }))
+    .toThrow(ServiceError)
+})
+
+test('deleted messages are excluded from listMessages', () => {
+  const a = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'keep' })
+  const b = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'delete me' })
+  service.deleteMessage({ msgId: b.msg_id, channelId: 'c1', userId: 'u1' })
+  const { messages } = service.listMessages({ channelId: 'c1', userId: 'u1', afterSeq: 0 })
+  expect(messages.length).toBe(1)
+  expect(messages[0].msg_id).toBe(a.msg_id)
+})
+
+test('editMessage throws BAD_REQUEST on a deleted message', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'original' })
+  service.deleteMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1' })
+  expect(() => service.editMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1', newText: 'too late' }))
+    .toThrow(ServiceError)
+})
+
 // ── listMessages ──────────────────────────────────────────────────────────────
 
 test('listMessages returns messages in seq order after afterSeq', () => {

@@ -18,6 +18,10 @@ export class SqliteSearchRepository {
     ).run(text, channel_id, msg_id, seq, user_id, ts)
   }
 
+  removeMessage({ msgId }) {
+    this.db.prepare(`DELETE FROM fts_messages WHERE msg_id = ?`).run(msgId)
+  }
+
   searchFts({ channelId, query, limit }) {
     return this.db.prepare(
       `SELECT m.channel_id, m.msg_id, m.seq, m.user_id, m.ts,

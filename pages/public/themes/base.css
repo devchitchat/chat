@@ -1581,6 +1581,8 @@ article.message { position: relative; }
   cursor: pointer;
 }
 .msg-context-menu-item:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.msg-context-menu-item--danger { color: var(--color-danger, #e74c3c); }
+.msg-context-menu-item--danger:hover { background: color-mix(in srgb, var(--color-danger, #e74c3c) 12%, transparent); }
 
 /* Bottom sheet (mobile long-press) */
 .action-sheet {

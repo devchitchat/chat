@@ -371,6 +371,11 @@ export default function CallIsland(root) {
     afterSeq = body.seq
   })
 
+  ws.on('msg.deleted', ({ msg_id }) => {
+    const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+    if (article) article.remove()
+  })
+
   ws.on('msg.edited', ({ msg_id, text, edited_at, rendered_text }) => {
     const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
     if (!article) return
@@ -705,6 +710,16 @@ export default function CallIsland(root) {
     editBtn.textContent = 'Edit'
     editBtn.addEventListener('click', () => { closeContextMenu(); startInlineEdit(article) })
     menu.appendChild(editBtn)
+
+    const deleteBtn = document.createElement('button')
+    deleteBtn.className = 'msg-context-menu-item msg-context-menu-item--danger'
+    deleteBtn.type = 'button'
+    deleteBtn.textContent = 'Delete'
+    deleteBtn.addEventListener('click', () => {
+      closeContextMenu()
+      ws.send({ t: 'msg.delete', body: { msg_id: article.dataset.msgId, channel_id: channelId } })
+    })
+    menu.appendChild(deleteBtn)
 
     document.body.appendChild(menu)
     activeContextMenu = menu

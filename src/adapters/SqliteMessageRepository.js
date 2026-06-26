@@ -33,7 +33,7 @@ export class SqliteMessageRepository {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ? AND m.seq > ? ORDER BY m.seq ASC LIMIT ?`
+       WHERE m.channel_id = ? AND m.seq > ? AND m.deleted_at IS NULL ORDER BY m.seq ASC LIMIT ?`
     ).all(channelId, afterSeq, limit)
     return rows.map(r => ({
       ...r,
@@ -46,7 +46,7 @@ export class SqliteMessageRepository {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ?
+       WHERE m.channel_id = ? AND m.deleted_at IS NULL
        ORDER BY m.seq DESC LIMIT ?`
     ).all(channelId, limit)
     return rows.reverse().map(r => ({
@@ -68,11 +68,17 @@ export class SqliteMessageRepository {
     ).run(text, editedAt, msgId)
   }
 
+  deleteMessage({ msgId, deletedAt }) {
+    this.db.prepare(
+      `UPDATE messages SET deleted_at = ? WHERE msg_id = ?`
+    ).run(deletedAt, msgId)
+  }
+
   listMessagesBefore({ channelId, beforeSeq, limit }) {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ? AND m.seq < ?
+       WHERE m.channel_id = ? AND m.seq < ? AND m.deleted_at IS NULL
        ORDER BY m.seq DESC LIMIT ?`
     ).all(channelId, beforeSeq, limit)
     return rows.reverse().map(r => ({

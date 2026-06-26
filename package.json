@@ -18,7 +18,8 @@
     "backup-pull": "kubectl config use-context ${KUBE_CONTEXT:-k3s-local} && kubectl cp $(kubectl get pod -l app=chat-web -o jsonpath='{.items[0].metadata.name}' -n ${KUBE_NAMESPACE:-default}):/var/lib/chat/backups ../backups -n ${KUBE_NAMESPACE:-default}",
     "restore": "bun scripts/restore.js",
     "restore-uploads": "bun scripts/restore-uploads.js",
-    "push": "bun docker-build && bun local-deploy"
+    "push": "bun docker-build && bun local-deploy",
+    "purge-cf-cache": "bun scripts/purge-cf-cache.js"
   },
   "type": "module",
   "dependencies": {

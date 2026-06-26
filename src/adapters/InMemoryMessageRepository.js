@@ -20,9 +20,14 @@ export class InMemoryMessageRepository {
     if (msg) { msg.text = text; msg.edited_at = editedAt }
   }
 
+  deleteMessage({ msgId, deletedAt }) {
+    const msg = this._messages.find(m => m.msg_id === msgId)
+    if (msg) msg.deleted_at = deletedAt
+  }
+
   listMessages({ channelId, afterSeq, limit }) {
     return this._messages
-      .filter(m => m.channel_id === channelId && m.seq > afterSeq)
+      .filter(m => m.channel_id === channelId && m.seq > afterSeq && m.deleted_at == null)
       .sort((a, b) => a.seq - b.seq)
       .slice(0, limit)
       .map(m => ({ msg_id: m.msg_id, seq: m.seq, user_id: m.user_id, user_handle: m.user_handle, ts: m.ts, text: m.text, edited_at: m.edited_at ?? null }))

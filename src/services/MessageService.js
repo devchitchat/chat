@@ -1,6 +1,6 @@
 import { newId } from '../util/ids.js'
 import { ServiceError } from '../util/errors.js'
-import { validateEditPermission, validateEditText, assertMessageEditable } from '../core/messages.js'
+import { validateEditPermission, validateEditText, assertMessageEditable, validateDeletePermission } from '../core/messages.js'
 
 export class MessageService {
   constructor({ messageRepo, nowFn = () => Date.now(), channelService, searchService, uploadService = null }) {
@@ -73,6 +73,20 @@ export class MessageService {
     this.searchService.indexMessage({ msg_id: msgId, channel_id: channelId, seq: msg.seq, user_id: msg.user_id, ts: msg.ts, text: trimmed })
 
     return { msgId, channelId, text: trimmed, editedAt }
+  }
+
+  deleteMessage({ msgId, channelId, userId }) {
+    const msg = this.messageRepo.getById(msgId)
+    if (!msg) throw new ServiceError('NOT_FOUND', 'Message not found')
+    if (msg.channel_id !== channelId) throw new ServiceError('BAD_REQUEST', 'Message does not belong to this channel')
+    if (msg.deleted_at != null) throw new ServiceError('BAD_REQUEST', 'Message already deleted')
+
+    validateDeletePermission(userId, msg.user_id)
+
+    this.messageRepo.deleteMessage({ msgId, deletedAt: this.nowFn() })
+    this.searchService.removeMessage({ msgId })
+
+    return { msgId, channelId, seq: msg.seq }
   }
 
   listMessages({ channelId, userId, afterSeq = 0, limit = 50 }) {
