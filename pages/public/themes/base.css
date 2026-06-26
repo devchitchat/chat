@@ -529,7 +529,8 @@ details summary {
 .message-handle.dm-trigger { cursor: pointer; }
 .message-handle.dm-trigger:hover { text-decoration: underline; }
 .message-time { font-size: 11px; color: var(--text-muted); grid-column: 2; grid-row: 1; align-self: end; }
-.message-text { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; }
+.message-text { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+.message-text a { word-break: break-all; }
 
 .composer {
   margin-top: auto;
