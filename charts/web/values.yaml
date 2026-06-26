@@ -1,11 +1,10 @@
-# Node-side paths for backups.
-# These are paths on the k3d node, bind-mounted from the host via --volume at cluster creation.
+# Host paths for backups, accessible from within the Lima VM.
+# Lima mounts your home directory at the same path inside the VM, so these are
+# regular host paths — no special volume flags needed at cluster creation.
 # Set the actual paths in values.local.yaml (gitignored). Leave empty to disable.
 #
-# k3d cluster create local --volume /Users/yourname/k3ds/backups:/k3d-backups@all
-#
-# Then set these to the node-side paths:
-#   dbBackupNodePath: /k3d-backups/chat-web/db-backups
-#   uploadsBackupNodePath: /k3d-backups/chat-web/uploads-backups
+# Example:
+#   dbBackupNodePath: /Users/yourname/backups/chat-web/db-backups
+#   uploadsBackupNodePath: /Users/yourname/backups/chat-web/uploads-backups
 dbBackupNodePath: ""
 uploadsBackupNodePath: ""

@@ -180,7 +180,7 @@ Mirrors the uploads directory to a backup location. Not versioned — overwrites
 cp -r data/backups/uploads data/uploads
 ```
 
-#### Kubernetes (k3d / k3s)
+#### Kubernetes (k3s)
 
 **Database:**
 
@@ -230,44 +230,63 @@ bun backup-pull
 
 ---
 
-# Docker / Kubernetes (k3d)
+# Docker / Kubernetes (k3s)
 
-The included scripts build a Docker image and load it into a local [k3d](https://k3d.io) cluster.
+The included scripts build a Docker image and load it into a local [k3s](https://k3s.io) cluster.
 
 ## Cluster setup
 
-The k3d cluster must be created with the backup directory bind-mounted into the node so that the `chat-backup` CronJob can write files directly to your local disk. **This is a one-time step — if you recreate the cluster, repeat it.**
+The cluster runs k3s inside a [Lima](https://lima-vm.io) VM. Lima auto-starts on boot via launchd, so the cluster survives power outages without requiring a user login.
+
+**One-time setup:**
 
 ```bash
-k3d cluster create local \
-  --volume /Users/joeyguerra/src/devchitchat/backups:/backups@all
+brew install lima
+limactl start --name=k3s template://k3s
 ```
 
-> The `backupHostPath` value in `charts/web/values.local.yaml` must match the left-hand side of the `--volume` flag. The CronJob mounts it at `/backups` inside the pod and sets `BACKUP_DIR=/backups`, so `VACUUM INTO` writes directly to your local disk.
-
-If the cluster already exists without the volume mount, recreate it:
+Merge the kubeconfig so `kubectl` can reach the cluster:
 
 ```bash
-k3d cluster delete local
-k3d cluster create local \
-  --volume /Users/joeyguerra/src/devchitchat/backups:/backups@all
+limactl kubeconfig k3s >> ~/.kube/config
+# or set KUBECONFIG directly:
+export KUBECONFIG="$HOME/.kube/config:$(limactl list k3s --format '{{.Dir}}/copied-from-guest/kubeconfig.yaml')"
 ```
 
-Then redeploy: `bun run push`
+The context is named `k3s-local` by default in this project's scripts. Rename it to match if yours differs:
 
-## Build and import into k3d
+```bash
+kubectl config rename-context default k3s-local
+```
+
+**Backup paths:**
+
+Lima mounts your home directory into the VM at the same path, so backup paths in `charts/web/values.local.yaml` are regular host paths — no special volume flags needed at cluster creation. Set them in `values.local.yaml` (gitignored):
+
+```yaml
+dbBackupNodePath: /Users/yourname/backups/chat-web/db-backups
+uploadsBackupNodePath: /Users/yourname/backups/chat-web/uploads-backups
+```
+
+## Build and import into k3s
 
 ```bash
 bun run docker-build
 # or directly:
-./docker-build-k3d.sh
+./docker-build-k3s.sh
 ```
 
 This will:
 1. Bump the patch version in `package.json`
 2. Update the image tag in `charts/web/deployment.yaml`
 3. Build the Docker image (`local/chat-web:<version>`)
-4. Import the image into the k3d cluster named `local`
+4. Import the image into the Lima k3s instance via `limactl shell`
+
+`LIMA_INSTANCE` controls which Lima VM the image is imported into — it maps to the `<name>` in `limactl shell <name>`. If you started your VM with `limactl start --name=k3s`, you never need to set it. Only set it if you named your VM something other than `k3s`:
+
+```bash
+LIMA_INSTANCE=my-instance bun run docker-build
+```
 
 ## Deploy to local cluster
 

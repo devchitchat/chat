@@ -1,7 +1,7 @@
 .github
 charts
 tests
-docker-build-k3d.sh
+docker-build-k3s.sh
 Dockerfile
 .dockerignore
 data
