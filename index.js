@@ -42,11 +42,13 @@ initContext({
 const port = Number(process.env.PORT ?? 3000)
 const dev = process.env.NODE_ENV !== 'production'
 async function getCertsIfAvailable() {
-  let cert = Bun.file('./certs/dev-cert.pem')
+  const certPath = process.env.TLS_CERT ?? './certs/dev-cert.pem'
+  const keyPath = process.env.TLS_KEY ?? './certs/dev-key.pem'
+  let cert = Bun.file(certPath)
   if (await cert.exists()){
     return {
       cert: cert,
-      key: Bun.file('./certs/dev-key.pem')
+      key: Bun.file(keyPath)
     }
   }
   return null

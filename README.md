@@ -42,31 +42,56 @@ bun install
 
 ## HTTPS requirement
 
-Browsers block access to the camera, microphone, and screen share on non-secure origins. Because this app uses WebRTC for video, audio, and screen share, **it must be served over HTTPS** — even on your local network.
+Text chat works over plain HTTP. However, browsers block camera, microphone, and screen-share access on non-secure origins, so **HTTPS is required for video and audio calls**.
 
 ### Create a self-signed certificate
+
+First, find your machine's hostname and LAN IP:
+
+```bash
+# macOS
+hostname          # e.g. joey-mac-mini.local
+ipconfig getifaddr en0   # e.g. 192.168.1.10
+
+# Linux
+hostname -f
+hostname -I | awk '{print $1}'
+```
+
+Then generate the certificate, substituting your actual hostname and IP:
 
 ```bash
 mkdir -p certs
 openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 \
   -keyout certs/dev-key.pem \
   -out certs/dev-cert.pem \
-  -subj "/CN=<your-machine>.local" \
-  -addext "subjectAltName = IP:<your-machine-ip>"
+  -subj "/CN=joey-mac-mini.local" \
+  -addext "subjectAltName = IP:192.168.1.10"
 ```
 
-Replace `<your-machine>.local` with your machine's hostname (e.g. `joey-mini.local`) and `<your-machine-ip>` with its LAN IP (e.g. `192.168.1.10`).
+The server looks for `certs/dev-cert.pem` and `certs/dev-key.pem` by default. You can override the paths with `TLS_CERT` and `TLS_KEY` environment variables (see below).
 
-Point the server at the certs via environment variables (see below). The browser will warn about the self-signed cert on first visit — proceed past it and the warning won't reappear.
+On first visit the browser will warn about the self-signed cert — proceed past it and the warning won't reappear.
 
 ### Trust the cert (optional but recommended)
 
-On macOS, add the cert to your keychain so the browser stops warning:
+Trusting the cert silences the browser warning permanently.
+
+**macOS:**
 
 ```bash
 sudo security add-trusted-cert -d -r trustRoot \
   -k /Library/Keychains/System.keychain certs/dev-cert.pem
 ```
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo cp certs/dev-cert.pem /usr/local/share/ca-certificates/devchitchat.crt
+sudo update-ca-certificates
+```
+
+**Windows:** Double-click `certs/dev-cert.pem`, choose "Install Certificate", place it in the "Trusted Root Certification Authorities" store.
 
 ## Start the server
 
@@ -110,22 +135,37 @@ bun test
 
 ### Backup
 
+**Database:**
+
 ```bash
-bun scripts/backup.js
+bun backup
 ```
 
-Creates a clean binary copy of the database in `data/backups/chat-<timestamp>.db` using SQLite's `VACUUM INTO`. Safe to run against a live server.
-
-Override defaults with environment variables:
+Creates a clean binary copy of the database at `data/backups/chat-<timestamp>.db` using SQLite's `VACUUM INTO`. Safe to run against a live server.
 
 | Variable | Default | Description |
 |---|---|---|
 | `DB_PATH` | `data/chat.db` | Path to the source database |
 | `BACKUP_DIR` | `data/backups` | Directory where backups are written |
 
+**Uploads:**
+
+```bash
+bun backup-uploads
+```
+
+Mirrors the uploads directory to a backup location. Not versioned — overwrites the destination with the current state.
+
+| Variable | Default | Description |
+|---|---|---|
+| `UPLOAD_DIR` | `data/uploads` | Source uploads directory |
+| `UPLOADS_BACKUP_DIR` | `data/backups/uploads` | Backup destination |
+
 ### Restore
 
 #### Local (bare Bun process)
+
+**Database:**
 
 1. Stop the server.
 2. Copy the backup over the live database:
@@ -134,32 +174,59 @@ Override defaults with environment variables:
    ```
 3. Restart the server.
 
-#### Kubernetes (k3d / k3s)
-
-The `chat-backup` CronJob writes backups directly to `/Users/joeyguerra/src/devchitchat/backups` on the local disk (via the k3d `--volume` bind mount). To restore one:
+**Uploads:**
 
 ```bash
-bun restore /Users/joeyguerra/src/devchitchat/backups/chat-<timestamp>.db
+cp -r data/backups/uploads data/uploads
 ```
 
-The script (`scripts/restore.js`) handles the full SOP automatically:
+#### Kubernetes (k3d / k3s)
+
+**Database:**
+
+```bash
+bun restore path/to/chat-<timestamp>.db
+```
+
+`scripts/restore.js` handles the full sequence automatically:
 
 1. Switches to the correct kubectl context
-2. Scales `chat-web` down to 0 replicas
+2. Scales `chat-web` down to 0 and waits for termination
 3. Starts a temporary `busybox` helper pod mounting the `chat-web-sqlite` PVC
-4. Uploads the local backup file to the pod
+4. Uploads the backup file to the pod
 5. Moves it into place as `/var/lib/chat/chat.db`
-6. Deletes the helper pod
-7. Scales `chat-web` back to 1 and waits for rollout
+6. Fixes file permissions so the app can write to the restored database
+7. Removes stale WAL/SHM files so SQLite opens cleanly
+8. Removes the temporary upload file
+9. Deletes the helper pod
+10. Scales `chat-web` back to 1 and waits for rollout
 
-If any step fails the helper pod is cleaned up and the deployment is scaled back to 1 before exiting.
+If any step fails, the helper pod is cleaned up and the deployment is scaled back to 1 before exiting.
 
-Override the target cluster with environment variables:
+**Uploads:**
+
+```bash
+bun restore-uploads path/to/uploads-backup
+```
+
+Copies the uploads directory into the PVC via a temporary helper pod. The deployment is not scaled down — uploads are static files and the copy is safe against a live server.
+
+**Cluster env vars (both restore scripts):**
 
 | Variable | Default | Description |
 |---|---|---|
 | `KUBE_CONTEXT` | `k3d-local` | kubectl context |
 | `KUBE_NAMESPACE` | `default` | Kubernetes namespace |
+
+#### Useful k8s backup operations
+
+```bash
+# Trigger the backup CronJob immediately (instead of waiting for the schedule)
+bun backup-now
+
+# Pull backups from the running pod to your local ../backups directory
+bun backup-pull
+```
 
 ---
 
