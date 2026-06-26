@@ -134,9 +134,9 @@
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
     <div class="load-more-sentinel" id="load-more-sentinel" aria-hidden="true" hidden></div>
     {{#each seedMessages}}
-    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-attachments="{{attachments_json}}">
+    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-user-id="{{user_id}}" data-raw-text="{{raw_text}}" data-edited-at="{{edited_at}}" data-attachments="{{attachments_json}}">
       <span class="message-handle" data-user-id="{{user_id}}">{{user_display_name}}</span>
-      <time class="message-time" datetime="{{ts}}">{{ts_fmt}}</time>
+      <time class="message-time" datetime="{{ts}}">{{ts_fmt}}{{#if edited_at}}<span class="message-edited">(edited)</span>{{/if}}</time>
       <p class="message-text">{{{text}}}</p>
     </article>
     {{/each}}

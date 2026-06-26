@@ -1,6 +1,7 @@
 /**
  * Message, search, and presence WS handlers.
  */
+import { renderMarkdown } from '@devchitchat/index97/markdown'
 
 export function handleMsgSend(ws, msg, ctx) {
   const { messageService, deliveryService, sendWs, publishChannel, dispatchMentions } = ctx
@@ -24,6 +25,17 @@ export function handleMsgSend(ws, msg, ctx) {
 
   deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
   dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq, priority: result.priority })
+}
+
+export function handleMsgEdit(ws, msg, ctx) {
+  const { messageService, publishChannel } = ctx
+  const { msg_id, channel_id, text } = msg.body ?? {}
+  const result = messageService.editMessage({ msgId: msg_id, channelId: channel_id, userId: ws.data.userId, newText: text })
+  const renderedText = renderMarkdown(result.text).html
+  publishChannel(channel_id, {
+    t: 'msg.edited', ok: true,
+    body: { msg_id: result.msgId, channel_id: result.channelId, text: result.text, edited_at: result.editedAt, rendered_text: renderedText },
+  })
 }
 
 export function handleMsgList(ws, msg, ctx) {

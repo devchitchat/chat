@@ -514,6 +514,7 @@ details summary {
 
 .messages {
   overflow-y: auto;
+  touch-action: pan-y;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -813,6 +814,12 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
     flex-shrink: 0;
   }
   .btn-back-mobile:hover { color: var(--text-primary); }
+
+  /* Actions button: no hover on touch — always visible for own messages */
+  .btn-msg-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* ── Tile panel ───────────────────────────────────────────────────────────── */
@@ -1494,3 +1501,108 @@ form.inline { display: inline; }
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Message editing ──────────────────────────────────────────────────────── */
+
+.message-edited {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.message-edit-input {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: inherit;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input, var(--bg-sidebar));
+  color: var(--text-primary);
+  resize: vertical;
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+}
+
+.message-edit-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  grid-column: 1 / -1;
+}
+
+/* … actions button on message hover */
+.btn-msg-actions {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+article.message:hover .btn-msg-actions { opacity: 1; pointer-events: auto; }
+article.message { position: relative; }
+
+/* Context menu */
+.msg-context-menu {
+  position: absolute;
+  z-index: 300;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 120px;
+  padding: 4px 0;
+}
+.msg-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.msg-context-menu-item:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* Bottom sheet (mobile long-press) */
+.action-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+  z-index: 400;
+  transform: translateY(100%);
+  transition: transform 220ms ease-out;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.action-sheet.open { transform: translateY(0); }
+.action-sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 10px auto 6px;
+}
+.action-sheet-body { padding: 8px 0 16px; }
+.action-sheet-item {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 15px;
+  cursor: pointer;
+}
+.action-sheet-item:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }

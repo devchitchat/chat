@@ -45,8 +45,6 @@ export async function GET(req) {
     userId: user.user_id,
     limit: 50,
   })
-  seedMessages.forEach(message => message.text = sanitizeForFrontEnd(renderMarkdown(message.text).html))
-  console.log(seedMessages)
   const seedSeq = seedMessages.length ? seedMessages[seedMessages.length - 1].seq : 0
   const seedFirstSeq = seedMessages.length ? seedMessages[0].seq : 0
   const seedHasMore = seedFirstSeq > 1
@@ -83,8 +81,11 @@ export async function GET(req) {
     seedHasMore,
     seedMessages: seedMessages.map(m => ({
       ...m,
+      raw_text: m.text,
+      text: sanitizeForFrontEnd(renderMarkdown(m.text).html),
       ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       attachments_json: m.attachments?.length ? JSON.stringify(m.attachments) : '',
+      edited_at: m.edited_at ?? '',
     })),
     seedSeq,
     hubs: hubsWithChannels,

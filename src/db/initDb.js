@@ -104,6 +104,7 @@ export const createSchema = (db) => {
       deleted_at INTEGER,
       priority TEXT NOT NULL DEFAULT 'normal',
       attachments_json TEXT,
+      edited_at INTEGER,
       FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
       FOREIGN KEY(user_id) REFERENCES users(user_id)
     );
@@ -171,6 +172,7 @@ export const createSchema = (db) => {
   // Add priority + attachments_json to existing messages tables
   try { db.exec(`ALTER TABLE messages ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`) } catch { /* already exists */ }
 
   // Bot tokens — added after initial schema
   db.exec(`

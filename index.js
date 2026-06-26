@@ -59,7 +59,8 @@ const server = await createServer({
   permissionsPolicy: 'camera=(self), microphone=(self), display-capture=(self)',
   // CSP: allow WebSocket connections to self
   csp: "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:",
-
+  // So the SSE doesn't timeout.
+  idleTimeout: 0,
   // WebSocket upgrade route — client connects to /ws
   // Authenticate via the session cookie at upgrade time so ws.data.userId is
   // set before the first message arrives. The session cookie is HttpOnly, so

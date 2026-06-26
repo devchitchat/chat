@@ -9,7 +9,7 @@
  */
 
 const SWIPE_PX = 50   // minimum horizontal distance to commit a swipe
-const LOCK_PX  = 10   // travel before we decide horizontal vs vertical
+const LOCK_PX  = 20   // travel before we decide horizontal vs vertical
 
 function attachSwipe(el, { onLeft, onRight }) {
   let startX, startY, dir
@@ -25,9 +25,11 @@ function attachSwipe(el, { onLeft, onRight }) {
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
     dir = null
-    // Case 1: a Range selection already exists — user is likely dragging a handle.
-    suppressSwipe = window.getSelection()?.type === 'Range'
-    // Case 2: selection might be created during this touch (long-press → drag).
+    // Case 1: touch started inside the scrollable message list — let it scroll
+    // vertically without any risk of the panel being dragged horizontally.
+    // Case 2: a Range selection already exists — user is likely dragging a handle.
+    suppressSwipe = !!e.target.closest('.messages') || window.getSelection()?.type === 'Range'
+    // Case 3: selection might be created during this touch (long-press → drag).
     if (!suppressSwipe) {
       document.addEventListener('selectionchange', onSelectionChange)
     }

@@ -139,11 +139,18 @@ export default function CallIsland(root) {
       if (article.dataset.hydrated) continue
       article.dataset.hydrated = '1'
 
-      // Add dm-trigger to non-self sender handles
+      // Add dm-trigger to non-self sender handles; add … actions button to own messages
       const handle = article.querySelector('.message-handle[data-user-id]')
       if (handle && handle.dataset.userId !== userId) {
         handle.classList.add('dm-trigger')
         handle.title = 'Send a direct message'
+      } else if (article.dataset.userId === userId && !article.querySelector('.btn-msg-actions')) {
+        const btn = document.createElement('button')
+        btn.className = 'btn-msg-actions btn-icon'
+        btn.type = 'button'
+        btn.title = 'Message actions'
+        btn.textContent = '…'
+        article.appendChild(btn)
       }
 
       // Apply inline rendering (URLs, @mentions) to server-rendered message text.
@@ -362,6 +369,25 @@ export default function CallIsland(root) {
     if (body.channel_id !== channelId) return
     appendMessage(body)
     afterSeq = body.seq
+  })
+
+  ws.on('msg.edited', ({ msg_id, text, edited_at, rendered_text }) => {
+    const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+    if (!article) return
+    const textEl = article.querySelector('.message-text')
+    if (textEl) textEl.innerHTML = sanitizeHtml(rendered_text)
+    article.dataset.rawText = text
+    article.dataset.editedAt = edited_at
+    const timeEl = article.querySelector('.message-time')
+    if (timeEl) {
+      let editedSpan = timeEl.querySelector('.message-edited')
+      if (!editedSpan) {
+        editedSpan = document.createElement('span')
+        editedSpan.className = 'message-edited'
+        editedSpan.textContent = '(edited)'
+        timeEl.appendChild(editedSpan)
+      }
+    }
   })
 
   ws.on('channel.updated', (body) => {
@@ -602,6 +628,10 @@ export default function CallIsland(root) {
 
   // renderAttachment, formatBytes imported from shared/messages.js
 
+  function sanitizeHtml(html) {
+    return String(html ?? '').replaceAll('<script>', '').replaceAll('</script>', '')
+  }
+
   // Delegated click: message sender name → open DM
   messages.addEventListener('click', e => {
     const handle = e.target.closest('.dm-trigger')
@@ -610,6 +640,102 @@ export default function CallIsland(root) {
     if (!targetUserId || targetUserId === userId) return
     ws.send({ t: 'dm.open', body: { target_user_id: targetUserId } })
   })
+
+  // ── Inline edit ────────────────────────────────────────────────────────────
+
+  function startInlineEdit(article) {
+    if (article.querySelector('.message-edit-input')) return // already editing
+    const textEl = article.querySelector('.message-text')
+    if (!textEl) return
+    const rawText = article.dataset.rawText ?? ''
+
+    const textarea = document.createElement('textarea')
+    textarea.className = 'message-edit-input'
+    textarea.value = rawText
+    textEl.replaceWith(textarea)
+    textarea.focus()
+    textarea.setSelectionRange(rawText.length, rawText.length)
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'message-edit-toolbar'
+    toolbar.innerHTML = '<button class="btn-edit-save" type="button">Save</button><button class="btn-edit-cancel" type="button">Cancel</button>'
+    textarea.after(toolbar)
+
+    function cancel() {
+      textarea.replaceWith(textEl)
+      toolbar.remove()
+    }
+
+    function save() {
+      const newText = textarea.value.trim()
+      if (!newText) { cancel(); return }
+      if (newText === rawText) { cancel(); return }
+      // Optimistic: show new text immediately (unrendered), server will push rendered version via msg.edited
+      textEl.textContent = newText
+      cancel()
+      ws.send({ t: 'msg.edit', body: { msg_id: article.dataset.msgId, channel_id: channelId, text: newText } })
+    }
+
+    toolbar.querySelector('.btn-edit-save').addEventListener('click', save)
+    toolbar.querySelector('.btn-edit-cancel').addEventListener('click', cancel)
+    textarea.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() }
+      if (e.key === 'Escape') cancel()
+    })
+  }
+
+  // ── Context menu (desktop hover → … button) ────────────────────────────────
+
+  let activeContextMenu = null
+
+  function closeContextMenu() {
+    if (activeContextMenu) { activeContextMenu.remove(); activeContextMenu = null }
+  }
+
+  function showContextMenu(article, anchorEl) {
+    closeContextMenu()
+    const isAuthor = article.dataset.userId === userId
+    if (!isAuthor) return
+
+    const menu = document.createElement('div')
+    menu.className = 'msg-context-menu'
+    const editBtn = document.createElement('button')
+    editBtn.className = 'msg-context-menu-item'
+    editBtn.type = 'button'
+    editBtn.textContent = 'Edit'
+    editBtn.addEventListener('click', () => { closeContextMenu(); startInlineEdit(article) })
+    menu.appendChild(editBtn)
+
+    document.body.appendChild(menu)
+    activeContextMenu = menu
+
+    const rect = anchorEl.getBoundingClientRect()
+    const menuRect = menu.getBoundingClientRect()
+    let top = rect.bottom + window.scrollY + 4
+    let left = rect.right + window.scrollX - menuRect.width
+    if (left < 8) left = 8
+    if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - 8 - menuRect.width
+    menu.style.top = `${top}px`
+    menu.style.left = `${left}px`
+  }
+
+  document.addEventListener('click', e => {
+    if (activeContextMenu && !activeContextMenu.contains(e.target)) closeContextMenu()
+  }, { capture: true })
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeContextMenu()
+  })
+
+  // Delegated click: … button → open context menu
+  messages.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-msg-actions')
+    if (!btn) return
+    e.stopPropagation()
+    const article = btn.closest('article.message')
+    if (article) showContextMenu(article, btn)
+  })
+
 
   ws.on('dm.opened', ({ channel_id, notify_only }) => {
     if (notify_only) return  // target user — sidebar handles the notification

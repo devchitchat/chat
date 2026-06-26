@@ -53,6 +53,48 @@ test('sendMessage throws BAD_REQUEST for empty text', () => {
     .toThrow(ServiceError)
 })
 
+// ── editMessage ───────────────────────────────────────────────────────────────
+
+test('editMessage updates text and sets edited_at', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'original' })
+  const result = service.editMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1', newText: 'updated' })
+  expect(result.text).toBe('updated')
+  expect(result.editedAt).toBeDefined()
+  expect(typeof result.editedAt).toBe('number')
+})
+
+test('editMessage throws FORBIDDEN when userId is not the author', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'original' })
+  expect(() => service.editMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u2', newText: 'hacked' }))
+    .toThrow(ServiceError)
+})
+
+test('editMessage throws BAD_REQUEST for blank text', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'original' })
+  expect(() => service.editMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1', newText: '   ' }))
+    .toThrow(ServiceError)
+})
+
+test('editMessage throws NOT_FOUND for unknown msgId', () => {
+  expect(() => service.editMessage({ msgId: 'm_fake', channelId: 'c1', userId: 'u1', newText: 'hi' }))
+    .toThrow(ServiceError)
+})
+
+test('editMessage throws BAD_REQUEST when message belongs to a different channel', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'original' })
+  expect(() => service.editMessage({ msgId: sent.msg_id, channelId: 'c2', userId: 'u1', newText: 'hi' }))
+    .toThrow(ServiceError)
+})
+
+test('editMessage re-indexes text in search', () => {
+  const sent = service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'before edit' })
+  service.editMessage({ msgId: sent.msg_id, channelId: 'c1', userId: 'u1', newText: 'after edit uniquetoken' })
+  const hits = searchService.searchMessages({ channelId: 'c1', query: 'uniquetoken' })
+  expect(hits.length).toBe(1)
+})
+
+// ── listMessages ──────────────────────────────────────────────────────────────
+
 test('listMessages returns messages in seq order after afterSeq', () => {
   service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'one' })
   service.sendMessage({ channelId: 'c1', userId: 'u1', text: 'two' })

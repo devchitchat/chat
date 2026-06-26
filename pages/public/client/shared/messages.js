@@ -122,19 +122,25 @@ export function renderAttachment(a) {
  * @param {{ msg_id, seq, user_id, user_display_name, ts, text, attachments }} msg
  * @param {{ userId?: string, userHandle?: string }} [ctx]  — caller's identity, used for self-styling and @mention highlighting
  */
-export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, attachments }, { userId, userHandle } = {}) {
+export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, edited_at, attachments }, { userId, userHandle } = {}) {
   const article = document.createElement('article')
   article.className = 'message'
   article.dataset.seq = seq
   article.dataset.msgId = msg_id
+  article.dataset.userId = user_id
+  article.dataset.rawText = text ?? ''
+  article.dataset.editedAt = edited_at ?? ''
   const time = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const isSelf = userId != null && user_id === userId
   const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
+  const editedHtml = edited_at ? '<span class="message-edited">(edited)</span>' : ''
+  const actionsHtml = isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''
   article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
-      <time class="message-time" datetime="${ts}">${time}</time>
+      <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
       ${text ? `<p class="message-text">${renderText(text, { userHandle })}</p>` : ''}
       ${attachmentHtml}
+      ${actionsHtml}
     `
   return article
 }

@@ -1,5 +1,7 @@
 import { runTransaction } from '../db/transaction.js'
 
+const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json`
+
 export class SqliteMessageRepository {
   constructor({ db }) {
     this.db = db
@@ -29,7 +31,7 @@ export class SqliteMessageRepository {
 
   listMessages({ channelId, afterSeq, limit }) {
     const rows = this.db.prepare(
-      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.attachments_json
+      `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
        WHERE m.channel_id = ? AND m.seq > ? ORDER BY m.seq ASC LIMIT ?`
     ).all(channelId, afterSeq, limit)
@@ -42,7 +44,7 @@ export class SqliteMessageRepository {
 
   listLatestMessages({ channelId, limit }) {
     const rows = this.db.prepare(
-      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.attachments_json
+      `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
        WHERE m.channel_id = ?
        ORDER BY m.seq DESC LIMIT ?`
@@ -54,9 +56,21 @@ export class SqliteMessageRepository {
     }))
   }
 
+  getById(msgId) {
+    return this.db.prepare(
+      `SELECT msg_id, channel_id, seq, user_id, ts, text, deleted_at FROM messages WHERE msg_id = ?`
+    ).get(msgId) ?? null
+  }
+
+  updateMessage({ msgId, text, editedAt }) {
+    this.db.prepare(
+      `UPDATE messages SET text = ?, edited_at = ? WHERE msg_id = ?`
+    ).run(text, editedAt, msgId)
+  }
+
   listMessagesBefore({ channelId, beforeSeq, limit }) {
     const rows = this.db.prepare(
-      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.attachments_json
+      `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
        WHERE m.channel_id = ? AND m.seq < ?
        ORDER BY m.seq DESC LIMIT ?`
