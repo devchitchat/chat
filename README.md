@@ -215,7 +215,7 @@ Copies the uploads directory into the PVC via a temporary helper pod. The deploy
 
 | Variable | Default | Description |
 |---|---|---|
-| `KUBE_CONTEXT` | `k3d-local` | kubectl context |
+| `KUBE_CONTEXT` | `k3s-local` | kubectl context |
 | `KUBE_NAMESPACE` | `default` | Kubernetes namespace |
 
 #### Useful k8s backup operations
@@ -275,7 +275,7 @@ This will:
 bun run local-deploy
 ```
 
-Applies `charts/web/deployment.yaml` to the `default` namespace of the `k3d-local` context.
+Applies `charts/web/deployment.yaml` to the `default` namespace of the `k3s-local` context.
 
 ## Build + deploy in one step
 

@@ -11,7 +11,7 @@
  *   bun restore ../backups/chat-2026-05-27_03-00-00.db
  *
  * Env:
- *   KUBE_CONTEXT   — kubectl context to use   (default: k3d-local)
+ *   KUBE_CONTEXT   — kubectl context to use   (default: k3s-local)
  *   KUBE_NAMESPACE — namespace                (default: default)
  */
 
@@ -34,7 +34,7 @@ if (!existsSync(backupPath)) {
   process.exit(1)
 }
 
-const CONTEXT   = process.env.KUBE_CONTEXT   ?? 'k3d-local'
+const CONTEXT   = process.env.KUBE_CONTEXT   ?? 'k3s-local'
 const NAMESPACE = process.env.KUBE_NAMESPACE ?? 'default'
 const DEPLOY    = 'chat-web'
 const PVC       = 'chat-web-sqlite'
