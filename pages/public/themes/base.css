@@ -1530,9 +1530,17 @@ form.inline { display: inline; }
 
 .message-edit-toolbar {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
   grid-column: 1 / -1;
+}
+.message-edit-toolbar .btn-primary {
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.message-edit-toolbar .btn-ghost {
+  font-size: 14px;
 }
 
 /* … actions button on message hover */

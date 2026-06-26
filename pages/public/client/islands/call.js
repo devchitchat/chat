@@ -658,7 +658,7 @@ export default function CallIsland(root) {
 
     const toolbar = document.createElement('div')
     toolbar.className = 'message-edit-toolbar'
-    toolbar.innerHTML = '<button class="btn-edit-save" type="button">Save</button><button class="btn-edit-cancel" type="button">Cancel</button>'
+    toolbar.innerHTML = '<button class="btn-edit-save btn-primary" type="button">Save</button><button class="btn-edit-cancel btn-ghost" type="button">Cancel</button>'
     textarea.after(toolbar)
 
     function cancel() {
