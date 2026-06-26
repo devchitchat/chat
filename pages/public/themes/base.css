@@ -476,6 +476,7 @@ details summary {
   min-width: 0;
   height: 100vh;
   z-index: 2;
+  touch-action: pan-y; /* allow browser to scroll vertically without waiting for JS */
 }
 
 /* ── Call bar ────────────────────────────────────────────────────────────── */
@@ -514,6 +515,7 @@ details summary {
 
 .messages {
   overflow-y: auto;
+  overflow-x: clip;
   touch-action: pan-y;
   padding: 16px 20px;
   display: flex;

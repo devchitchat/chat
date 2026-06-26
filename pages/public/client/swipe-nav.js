@@ -25,10 +25,10 @@ function attachSwipe(el, { onLeft, onRight }) {
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
     dir = null
-    // Case 1: touch started inside the scrollable message list — let it scroll
-    // vertically without any risk of the panel being dragged horizontally.
-    // Case 2: a Range selection already exists — user is likely dragging a handle.
-    suppressSwipe = !!e.target.closest('.messages') || window.getSelection()?.type === 'Range'
+    // Case 1: a Range selection already exists — user is likely dragging a handle.
+    // (Vertical scroll within .messages is guarded by touch-action: pan-y on the element
+    // and direction locking via LOCK_PX, so we no longer suppress swipes from there.)
+    suppressSwipe = window.getSelection()?.type === 'Range'
     // Case 3: selection might be created during this touch (long-press → drag).
     if (!suppressSwipe) {
       document.addEventListener('selectionchange', onSelectionChange)
