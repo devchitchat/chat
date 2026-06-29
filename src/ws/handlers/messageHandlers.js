@@ -18,8 +18,8 @@ export function handleMsgSend(ws, msg, ctx) {
     body: {
       msg_id: result.msg_id, channel_id, seq: result.seq,
       user_id: ws.data.userId, user_display_name: ws.data.displayName,
-      ts: result.ts, text, priority: result.priority,
-      attachments: result.attachments ?? []
+      ts: result.ts, text, rendered_text: renderMarkdown(text).html,
+      priority: result.priority, attachments: result.attachments ?? []
     }
   })
 

@@ -613,7 +613,7 @@ export default function CallIsland(root) {
     }
   }
 
-  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, attachments }) {
+  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, attachments }) {
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
 
     // Date separator if day changed
@@ -626,7 +626,7 @@ export default function CallIsland(root) {
       }
     }
 
-    const article = makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, attachments }, { userId, userHandle })
+    const article = makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, attachments }, { userId, userHandle })
     messages.appendChild(article)
     messages.scrollTop = messages.scrollHeight
   }
