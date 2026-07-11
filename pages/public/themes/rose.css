@@ -17,4 +17,6 @@
 
   --color-success: #5ab87a;
   --color-danger:  #e05050;
+  --code-background: rgba(255,255,255,.1);
+
 }

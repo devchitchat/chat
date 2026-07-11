@@ -524,7 +524,15 @@ details summary {
   scroll-behavior: smooth;
 }
 
-.message { padding: 4px 0; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; }
+.message {
+  padding: 4px 0;
+}
+.message pre {
+  padding: 1rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: .8rem;
+  background: var(--code-background);
+}
 .message-handle { font-weight: 600; color: var(--accent); grid-column: 1; grid-row: 1; }
 .message-handle.dm-trigger { cursor: pointer; }
 .message-handle.dm-trigger:hover { text-decoration: underline; }
@@ -554,6 +562,7 @@ details summary {
   font-family: var(--font-sans);
   resize: none;
   line-height: 1.5;
+  height: calc(1.5em + 20px); /* lock to 1 row; iOS Safari expands textarea when placeholder wraps */
   max-height: 160px;
   overflow-y: auto;
 }
