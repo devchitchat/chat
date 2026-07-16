@@ -1030,8 +1030,9 @@ export default function CallIsland(root) {
       tile = document.createElement('div')
       tile.className = 'stream-tile'
       tile.dataset.peer = tileId
-      tile.innerHTML = `<video autoplay playsinline controls ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span><div class="tile-capture-wrap"><button class="tile-capture" title="Capture photo">📸</button><div class="tile-capture-menu" hidden><button class="tile-capture-opt" data-delay="0">0s</button><button class="tile-capture-opt" data-delay="1">1s</button><button class="tile-capture-opt" data-delay="3">3s</button><button class="tile-capture-opt" data-delay="5">5s</button></div></div><div class="tile-countdown" hidden></div>`
-      tile.addEventListener('click', () => _pinTile(tileId))
+      tile.innerHTML = `<video autoplay playsinline controls ${muted ? 'muted' : ''}></video><span class="tile-label">${escHtml(label)}</span><div class="tile-capture-wrap"><button class="tile-pin" title="Move to top">⬆</button><button class="tile-capture" title="Capture photo">📸</button><div class="tile-capture-menu" hidden><button class="tile-capture-opt" data-delay="0">0s</button><button class="tile-capture-opt" data-delay="1">1s</button><button class="tile-capture-opt" data-delay="3">3s</button><button class="tile-capture-opt" data-delay="5">5s</button></div></div><div class="tile-countdown" hidden></div>`
+      tile.querySelector('video').addEventListener('click', e => e.stopPropagation())
+      tile.querySelector('.tile-pin').addEventListener('click', e => { e.stopPropagation(); _pinTile(tileId) })
       const menu = tile.querySelector('.tile-capture-menu')
       tile.querySelector('.tile-capture').addEventListener('click', e => {
         e.stopPropagation()

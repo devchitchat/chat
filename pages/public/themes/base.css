@@ -875,7 +875,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
     height: 100%;
   }
   .tile-panel {
-    width: 280px;
+    width: 360px;
     flex-shrink: 0;
     height: 100vh;
     overflow-y: auto;
@@ -956,27 +956,28 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--bg-sidebar);
-  cursor: pointer;
   flex: 1 1 100%;
-  aspect-ratio: 16 / 9;
 }
-.stream-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stream-tile video { width: 100%; height: auto; display: block; }
 .stream-tile .tile-label {
-  position: absolute; bottom: 4px; left: 6px;
+  position: absolute; top: 4px; left: 6px;
   font-size: 11px; font-weight: 600; color: white;
   text-shadow: 0 1px 3px rgba(0,0,0,0.6); pointer-events: none;
 }
 .tile-capture-wrap {
   position: absolute; top: 4px; right: 4px; z-index: 2;
+  display: flex; gap: 4px; align-items: center;
   opacity: 0; transition: opacity 0.15s;
 }
 .stream-tile:hover .tile-capture-wrap { opacity: 1; }
-.tile-capture {
+.stream-tile.pinned-tile .tile-capture-wrap { opacity: 1; }
+.tile-pin, .tile-capture {
   background: rgba(0,0,0,0.5); border: none;
   border-radius: var(--radius-sm); color: white;
   font-size: 13px; padding: 2px 6px;
   cursor: pointer; display: block;
 }
+.stream-tile.pinned-tile .tile-pin { color: #ffd700; }
 .tile-capture-menu {
   position: absolute; right: 0; top: calc(100% + 3px);
   background: rgba(0,0,0,0.75); border-radius: var(--radius-sm);
@@ -999,22 +1000,14 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 }
 .tile-countdown[hidden] { display: none; }
 
-/* 2+ tiles in sidebar mode: side-by-side if panel is wide enough */
-@media (min-width: 1025px) {
-  .tile-grid:has(.stream-tile:nth-child(2)) .stream-tile {
-    flex: 1 1 calc(50% - 3px);
-  }
-}
-
 /* 5+ tiles: avatar strip */
 .tile-grid.avatars-only .stream-tile video { display: none; }
 .tile-grid.avatars-only .stream-tile {
-  flex: 0 0 36px; height: 36px; border-radius: 50%; overflow: hidden; aspect-ratio: unset;
+  flex: 0 0 36px; height: 36px; border-radius: 50%; overflow: hidden;
 }
 
-/* Pinned tile */
-.tile-grid.pinned .stream-tile.pinned-tile { flex: 1 1 100%; order: -1; }
-.tile-grid.pinned .stream-tile:not(.pinned-tile) { flex: 1 1 calc(50% - 3px); }
+/* Pinned tile: move to top, single column always */
+.tile-grid.pinned .stream-tile.pinned-tile { order: -1; }
 
 /* ── Call: status row (shown when a call is active, user hasn't joined) ──── */
 .call-status {
