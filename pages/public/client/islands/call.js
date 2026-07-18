@@ -15,7 +15,7 @@
  *   - ICE candidate queue (pendingIceByPeer) until remote description is set
  *   - New joiner is offerer toward all existing peers; existing peers are answerers
  */
-import { signal, effect, Context } from '@devchitchat/rdbljs'
+import { signal, effect, computed, Context } from '@devchitchat/rdbljs'
 import { WsClient } from '../ws.js'
 import { patchSettings } from '../settings-sync.js'
 import { navigateTo } from '../router.js'
@@ -551,6 +551,8 @@ export default function CallIsland(root) {
   // ── Urgent send ───────────────────────────────────────────────────────────
   const urgentMode = signal(false)
   const composerFooter = root.querySelector('.composer')
+
+  const urgentClass = computed(() => ({ 'is-urgent': urgentMode() }))
 
   function toggleUrgentMode() {
     urgentMode.set(!urgentMode())
@@ -1442,5 +1444,5 @@ export default function CallIsland(root) {
 
   // ── Exports (rdbljs bindings) ──────────────────────────────────────────────
 
-  return { draft, channelName, channelTopic, urgentMode, sendMessage, handleComposerKey, toggleUrgentMode }
+  return { draft, channelName, channelTopic, urgentMode, urgentClass, sendMessage, handleComposerKey, toggleUrgentMode }
 }
