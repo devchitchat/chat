@@ -25,8 +25,11 @@ import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChan
 import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
+import { handleReactionAdd, handleReactionRemove } from './handlers/reactionHandlers.js'
 import { WebPushService } from '../services/WebPushService.js'
 import { SqlitePushRepository } from '../adapters/SqlitePushRepository.js'
+import { SqliteReactionRepository } from '../adapters/SqliteReactionRepository.js'
+import { ReactionService } from '../services/ReactionService.js'
 
 /**
  * ChatServer — Bun native WebSocket implementation.
@@ -54,20 +57,22 @@ export class ChatServer {
     this.logger = logger
 
     // ── Repositories ───────────────────────────────────────────────────────────
-    const authRepo     = new SqliteAuthRepository({ db })
-    const hubRepo      = new SqliteHubRepository({ db })
-    const channelRepo  = new SqliteChannelRepository({ db })
-    const searchRepo   = new SqliteSearchRepository({ db })
-    const messageRepo  = new SqliteMessageRepository({ db })
-    const deliveryRepo = new SqliteDeliveryRepository({ db })
-    const pushRepo     = new SqlitePushRepository({ db })
+    const authRepo      = new SqliteAuthRepository({ db })
+    const hubRepo       = new SqliteHubRepository({ db })
+    const channelRepo   = new SqliteChannelRepository({ db })
+    const searchRepo    = new SqliteSearchRepository({ db })
+    const messageRepo   = new SqliteMessageRepository({ db })
+    const deliveryRepo  = new SqliteDeliveryRepository({ db })
+    const pushRepo      = new SqlitePushRepository({ db })
+    const reactionRepo  = new SqliteReactionRepository({ db })
 
     // ── Services ───────────────────────────────────────────────────────────────
     this.auth             = new AuthService({ authRepo, sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) })
     this.hubService       = new HubService({ hubRepo })
     this.channelService   = new ChannelService({ channelRepo, hubService: this.hubService })
     this.searchService    = new SearchService({ searchRepo })
-    this.messageService   = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService })
+    this.reactionService  = new ReactionService({ reactionRepo, channelService: this.channelService })
+    this.messageService   = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService, reactionService: this.reactionService })
     this.deliveryService  = new DeliveryService({ deliveryRepo })
     this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
     this.presenceService  = new PresenceService()
@@ -233,6 +238,9 @@ export class ChatServer {
       // Web Push
       case 'push.subscribe':             return handlePushSubscribe(ws, msg, ctx)
       case 'push.unsubscribe':           return handlePushUnsubscribe(ws, msg, ctx)
+      // Reactions
+      case 'reaction.add':               return handleReactionAdd(ws, msg, ctx)
+      case 'reaction.remove':            return handleReactionRemove(ws, msg, ctx)
       default:
         this.#sendWs(ws, { t: 'error', ok: false, reply_to: msg.id, body: { code: 'BAD_REQUEST', message: 'Unknown message type' } })
     }
@@ -256,6 +264,7 @@ export class ChatServer {
       botService:          this.botService,
       pushService:         this.pushService,
       pushRepo:            this.pushRepo,
+      reactionService:     this.reactionService,
       // Connection state (mutable references)
       connections:         this.connections,
       peerConnections:     this.peerConnections,

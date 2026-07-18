@@ -1,6 +1,7 @@
 import { createServer } from '@devchitchat/index97'
 import { openDatabase } from './src/db/openDb.js'
 import { initDb } from './src/db/initDb.js'
+import { runMigrations } from './src/db/runMigrations.js'
 import { createLogger } from './src/util/logger.js'
 import { ChatServer } from './src/ws/ChatServer.js'
 import { init as initContext, sessionFromRequest } from './src/context.js'
@@ -13,6 +14,7 @@ import { SqliteUploadRepository } from './src/adapters/SqliteUploadRepository.js
 const logger = createLogger()
 const db = openDatabase(process.env.DB_PATH ?? './data/chat.db')
 initDb(db)
+await runMigrations(db, { logger })
 
 const chat = new ChatServer({ db, logger })
 const userSettingsService = new UserSettingsService({ userSettingsRepo: new SqliteUserSettingsRepository({ db }) })
@@ -36,6 +38,7 @@ initContext({
   botService: chat.botService,
   userSettingsService,
   uploadService,
+  reactionService: chat.reactionService,
   logger,
 })
 

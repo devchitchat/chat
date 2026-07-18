@@ -21,6 +21,9 @@ import { patchSettings } from '../settings-sync.js'
 import { navigateTo } from '../router.js'
 import { escHtml, utcDateKey, formatDateLabel, makeDateSeparator, applyInlineRenderingToTextNodes, renderAttachment, makeMessageEl } from '../shared/messages.js'
 import { RtcPeerManager } from '../rtc-peer-manager.js'
+import { CATEGORIES, EMOJI_NAMES } from '../emoji-data.js'
+import { showActionSheet, dismiss as dismissActionSheet, getItemsContainer } from '../action-sheet.js'
+import { addLongPress } from '../long-press.js'
 
 export default function CallIsland(root) {
   // ── Data from HTML ─────────────────────────────────────────────────────────
@@ -128,6 +131,21 @@ export default function CallIsland(root) {
     return availableDevices
   }
 
+  // ── Reaction bar ───────────────────────────────────────────────────────────
+
+  function renderReactionBar(article, reactions, msgId) {
+    const bar = article.querySelector('.reaction-bar')
+    if (!bar) return
+    bar.innerHTML = reactions.map(r => `
+      <button class="reaction-pill${r.reacted ? ' reacted' : ''}"
+              data-emoji="${escHtml(r.emoji)}" data-msg-id="${escHtml(msgId)}"
+              type="button" title="${r.count} reaction${r.count !== 1 ? 's' : ''}">
+        ${r.emoji} <span class="reaction-count">${r.count}</span>
+      </button>`).join('') +
+      `<button class="reaction-add" data-msg-id="${escHtml(msgId)}" type="button"
+               title="Add reaction" aria-label="Add reaction">+</button>`
+  }
+
   // ── Hydrate seed message attachments ──────────────────────────────────────
   // Seed messages are SSR'd without attachment HTML. Process data-attachments now.
   // Called on initial mount and again after each SPA navigation morph.
@@ -167,6 +185,17 @@ export default function CallIsland(root) {
         if (Array.isArray(attachments) && attachments.length > 0) {
           attachments.forEach(a => article.insertAdjacentHTML('beforeend', renderAttachment(a)))
         }
+      }
+
+      // Hydrate reaction bar for seed messages
+      const rawReactions = article.dataset.reactions
+      const msgId = article.dataset.msgId
+      if (msgId) {
+        let reactions = []
+        if (rawReactions) {
+          try { reactions = JSON.parse(rawReactions) } catch { reactions = [] }
+        }
+        renderReactionBar(article, reactions, msgId)
       }
 
       // Date separator before this article if date changed
@@ -395,6 +424,11 @@ export default function CallIsland(root) {
     }
   })
 
+  ws.on('reaction.event', ({ msg_id, reactions }) => {
+    const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+    if (article) renderReactionBar(article, reactions ?? [], msg_id)
+  })
+
   ws.on('channel.updated', (body) => {
     if (body.channel?.channel_id !== channelId) return
     channelName.set(body.channel.name)
@@ -615,7 +649,7 @@ export default function CallIsland(root) {
     }
   }
 
-  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, attachments }) {
+  function appendMessage({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, attachments, reactions }) {
     if (messages.querySelector(`[data-msg-id="${msg_id}"]`)) return
 
     // Date separator if day changed
@@ -629,7 +663,16 @@ export default function CallIsland(root) {
     }
 
     const article = makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, attachments }, { userId, userHandle })
+
+    // Ensure reaction bar exists in dynamically created messages
+    if (!article.querySelector('.reaction-bar')) {
+      const bar = document.createElement('div')
+      bar.className = 'reaction-bar'
+      article.appendChild(bar)
+    }
+
     messages.appendChild(article)
+    renderReactionBar(article, reactions ?? [], msg_id)
     messages.scrollTop = messages.scrollHeight
   }
 
@@ -646,6 +689,285 @@ export default function CallIsland(root) {
     const targetUserId = handle.dataset.userId
     if (!targetUserId || targetUserId === userId) return
     ws.send({ t: 'dm.open', body: { target_user_id: targetUserId } })
+  })
+
+  // ── Emoji picker ──────────────────────────────────────────────────────────
+
+  const RECENT_KEY = 'devchitchat_recent_emoji'
+  const RECENT_MAX = 24
+
+  function loadRecentEmoji() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') } catch { return [] }
+  }
+
+  function saveRecentEmoji(emoji) {
+    let recents = loadRecentEmoji().filter(e => e !== emoji)
+    recents.unshift(emoji)
+    if (recents.length > RECENT_MAX) recents = recents.slice(0, RECENT_MAX)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recents))
+  }
+
+  let emojiPickerEl = null
+  let emojiPickerCurrentCat = 'smileys'
+  let emojiPickerTarget = null  // msg_id the picker is for
+
+  function buildEmojiPicker() {
+    emojiPickerEl = document.createElement('div')
+    emojiPickerEl.className = 'emoji-picker'
+
+    const searchInput = document.createElement('input')
+    searchInput.type = 'search'
+    searchInput.className = 'emoji-picker-search'
+    searchInput.placeholder = 'Search emoji…'
+    searchInput.setAttribute('aria-label', 'Search emoji')
+    emojiPickerEl.appendChild(searchInput)
+
+    const tabs = document.createElement('div')
+    tabs.className = 'emoji-picker-tabs'
+    for (const cat of CATEGORIES) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'emoji-picker-tab' + (cat.id === emojiPickerCurrentCat ? ' active' : '')
+      btn.dataset.catId = cat.id
+      btn.textContent = cat.label
+      btn.title = cat.id
+      tabs.appendChild(btn)
+    }
+    emojiPickerEl.appendChild(tabs)
+
+    const grid = document.createElement('div')
+    grid.className = 'emoji-picker-grid'
+    emojiPickerEl.appendChild(grid)
+
+    tabs.addEventListener('click', e => {
+      const btn = e.target.closest('.emoji-picker-tab')
+      if (!btn) return
+      emojiPickerCurrentCat = btn.dataset.catId
+      tabs.querySelectorAll('.emoji-picker-tab').forEach(b => b.classList.toggle('active', b.dataset.catId === emojiPickerCurrentCat))
+      searchInput.value = ''
+      renderEmojiGrid(null)
+    })
+
+    searchInput.addEventListener('input', () => {
+      renderEmojiGrid(searchInput.value.trim().toLowerCase())
+    })
+
+    grid.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-emoji]')
+      if (!btn) return
+      const emoji = btn.dataset.emoji
+      saveRecentEmoji(emoji)
+      emojiPickerEl.dispatchEvent(new CustomEvent('emoji:pick', { bubbles: true, detail: { emoji } }))
+    })
+
+    renderEmojiGrid(null)
+    return emojiPickerEl
+  }
+
+  function renderEmojiGrid(query) {
+    if (!emojiPickerEl) return
+    const grid = emojiPickerEl.querySelector('.emoji-picker-grid')
+    if (!grid) return
+
+    let emojiList
+    if (query) {
+      // Search across all categories
+      const allEmoji = CATEGORIES.flatMap(c => c.emoji)
+      const unique = [...new Set(allEmoji)]
+      emojiList = unique.filter(e => {
+        const name = EMOJI_NAMES[e] ?? ''
+        return name.includes(query) || e.includes(query)
+      })
+    } else {
+      if (emojiPickerCurrentCat === 'recent') {
+        emojiList = loadRecentEmoji()
+      } else {
+        const cat = CATEGORIES.find(c => c.id === emojiPickerCurrentCat)
+        emojiList = cat ? cat.emoji : []
+      }
+    }
+
+    grid.innerHTML = emojiList.map(e =>
+      `<button type="button" data-emoji="${escHtml(e)}" title="${escHtml(EMOJI_NAMES[e] ?? e)}">${e}</button>`
+    ).join('')
+  }
+
+  function getOrBuildEmojiPicker() {
+    if (!emojiPickerEl) buildEmojiPicker()
+    return emojiPickerEl
+  }
+
+  function openEmojiPickerAt(anchorEl, msgId) {
+    emojiPickerTarget = msgId
+    const picker = getOrBuildEmojiPicker()
+
+    // Refresh recent tab if active
+    if (emojiPickerCurrentCat === 'recent') renderEmojiGrid(null)
+
+    // Attach handler once (use named function to avoid duplicates)
+    picker.onEmojiPickHandler = (e) => {
+      const { emoji } = e.detail
+      closeEmojiPicker()
+      closeReactionContextMenu()
+      ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    }
+    picker.removeEventListener('emoji:pick', picker._boundEmojiPick)
+    picker._boundEmojiPick = picker.onEmojiPickHandler
+    picker.addEventListener('emoji:pick', picker._boundEmojiPick)
+
+    document.body.appendChild(picker)
+    picker.style.position = 'fixed'
+    picker.style.zIndex = '400'
+
+    // Position below the anchor, viewport-aware
+    const rect = anchorEl.getBoundingClientRect()
+    picker.style.top = `${rect.bottom + 4}px`
+    picker.style.left = `${rect.left}px`
+
+    // Force layout so getBoundingClientRect is accurate
+    requestAnimationFrame(() => {
+      const pickerRect = picker.getBoundingClientRect()
+      let left = rect.left
+      if (left + pickerRect.width > window.innerWidth - 8) {
+        left = window.innerWidth - 8 - pickerRect.width
+      }
+      if (left < 8) left = 8
+      picker.style.left = `${left}px`
+
+      // Flip above if not enough room below
+      if (rect.bottom + 4 + pickerRect.height > window.innerHeight - 8) {
+        picker.style.top = `${rect.top - 4 - pickerRect.height}px`
+      }
+    })
+  }
+
+  function closeEmojiPicker() {
+    if (emojiPickerEl && emojiPickerEl.parentNode) emojiPickerEl.parentNode.removeChild(emojiPickerEl)
+    emojiPickerTarget = null
+  }
+
+  // ── Reaction context menu (desktop right-click) ────────────────────────────
+
+  let activeReactionContextMenu = null
+
+  function closeReactionContextMenu() {
+    if (activeReactionContextMenu) { activeReactionContextMenu.remove(); activeReactionContextMenu = null }
+  }
+
+  function showReactionContextMenu(article, x, y) {
+    closeReactionContextMenu()
+    const msgId = article.dataset.msgId
+    if (!msgId) return
+
+    const menu = document.createElement('div')
+    menu.className = 'msg-context-menu msg-context-menu--reaction'
+
+    const reactBtn = document.createElement('button')
+    reactBtn.className = 'msg-context-menu-item'
+    reactBtn.type = 'button'
+    reactBtn.textContent = 'React'
+    reactBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      openEmojiPickerAt(reactBtn, msgId)
+    })
+    menu.appendChild(reactBtn)
+
+    document.body.appendChild(menu)
+    activeReactionContextMenu = menu
+
+    // Position near cursor, viewport-aware
+    const menuRect = menu.getBoundingClientRect()
+    let left = x + window.scrollX
+    let top = y + window.scrollY
+    if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - 8 - menuRect.width
+    if (left < 8) left = 8
+    menu.style.top = `${top}px`
+    menu.style.left = `${left}px`
+  }
+
+  // Right-click on a message article
+  messages.addEventListener('contextmenu', e => {
+    const article = e.target.closest('article.message')
+    if (!article) return
+    e.preventDefault()
+    showReactionContextMenu(article, e.clientX, e.clientY)
+  })
+
+  document.addEventListener('click', e => {
+    if (activeReactionContextMenu && !activeReactionContextMenu.contains(e.target)) closeReactionContextMenu()
+    // Close emoji picker on click-outside
+    if (emojiPickerEl && emojiPickerEl.parentNode && !emojiPickerEl.contains(e.target)) {
+      const isReactionAddBtn = e.target.closest('.reaction-add')
+      if (!isReactionAddBtn) closeEmojiPicker()
+    }
+  }, { capture: true })
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeReactionContextMenu()
+      closeEmojiPicker()
+    }
+  })
+
+  // Delegated click on .reaction-pill — toggle reaction
+  messages.addEventListener('click', e => {
+    const pill = e.target.closest('.reaction-pill')
+    if (!pill) return
+    e.stopPropagation()
+    const emoji = pill.dataset.emoji
+    const msgId = pill.dataset.msgId
+    if (!emoji || !msgId) return
+    if (pill.classList.contains('reacted')) {
+      ws.send({ t: 'reaction.remove', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    } else {
+      ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    }
+  })
+
+  // Delegated click on .reaction-add — open emoji picker
+  messages.addEventListener('click', e => {
+    const btn = e.target.closest('.reaction-add')
+    if (!btn) return
+    e.stopPropagation()
+    const msgId = btn.dataset.msgId
+    if (!msgId) return
+    // Toggle: close if already open for this message
+    if (emojiPickerEl && emojiPickerEl.parentNode && emojiPickerTarget === msgId) {
+      closeEmojiPicker()
+      return
+    }
+    openEmojiPickerAt(btn, msgId)
+  })
+
+  // ── Mobile long-press → action sheet with emoji picker ────────────────────
+
+  addLongPress(messages, (e) => {
+    const article = e.target.closest?.('article.message')
+    if (!article) return
+    const msgId = article.dataset.msgId
+    if (!msgId) return
+
+    const itemsContainer = getItemsContainer()
+    itemsContainer.innerHTML = ''
+
+    const pickerWrapper = document.createElement('div')
+    pickerWrapper.className = 'action-sheet-emoji-picker-wrap'
+
+    const picker = getOrBuildEmojiPicker()
+    pickerWrapper.appendChild(picker)
+    itemsContainer.appendChild(pickerWrapper)
+
+    picker.removeEventListener('emoji:pick', picker._boundEmojiPick)
+    picker._boundEmojiPick = (ev) => {
+      const { emoji } = ev.detail
+      saveRecentEmoji(emoji)
+      dismissActionSheet()
+      ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    }
+    picker.addEventListener('emoji:pick', picker._boundEmojiPick)
+    emojiPickerTarget = msgId
+
+    showActionSheet({ label: 'React to this message', items: [] })
   })
 
   // ── Inline edit ────────────────────────────────────────────────────────────

@@ -3,12 +3,13 @@ import { ServiceError } from '../util/errors.js'
 import { validateEditPermission, validateEditText, assertMessageEditable, validateDeletePermission } from '../core/messages.js'
 
 export class MessageService {
-  constructor({ messageRepo, nowFn = () => Date.now(), channelService, searchService, uploadService = null }) {
+  constructor({ messageRepo, nowFn = () => Date.now(), channelService, searchService, uploadService = null, reactionService = null }) {
     this.messageRepo = messageRepo
     this.nowFn = nowFn
     this.channelService = channelService
     this.searchService = searchService
     this.uploadService = uploadService
+    this.reactionService = reactionService
   }
 
   setUploadService(uploadService) {
@@ -94,19 +95,28 @@ export class MessageService {
 
     const rows = this.messageRepo.listMessages({ channelId, afterSeq, limit })
     const lastSeq = rows.length ? rows[rows.length - 1].seq : afterSeq
-    return { messages: rows, next_after_seq: lastSeq }
+    const messages = this.reactionService
+      ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
+      : rows
+    return { messages, next_after_seq: lastSeq }
   }
 
   listLatestMessages({ channelId, userId, limit = 50 }) {
     if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
     const rows = this.messageRepo.listLatestMessages({ channelId, limit })
-    return { messages: rows }
+    const messages = this.reactionService
+      ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
+      : rows
+    return { messages }
   }
 
   listMessagesBefore({ channelId, userId, beforeSeq, limit = 50 }) {
     if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
     const rows = this.messageRepo.listMessagesBefore({ channelId, beforeSeq, limit })
     const hasMore = rows.length === limit
-    return { messages: rows, has_more: hasMore }
+    const messages = this.reactionService
+      ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
+      : rows
+    return { messages, has_more: hasMore }
   }
 }

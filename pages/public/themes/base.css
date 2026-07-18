@@ -540,6 +540,158 @@ details summary {
 .message-text { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
 .message-text a { word-break: break-all; }
 
+/* ── Reaction bar ────────────────────────────────────────────────────────── */
+.reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: border-color var(--transition), background var(--transition);
+  line-height: 1.4;
+}
+.reaction-pill:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.reaction-pill.reacted {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.reaction-count { font-size: 12px; }
+.reaction-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: border-color var(--transition), color var(--transition);
+  line-height: 1.4;
+}
+.reaction-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Message context menu (right-click) ─────────────────────────────────── */
+.msg-context-menu {
+  position: absolute;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
+  z-index: 300;
+  min-width: 140px;
+  overflow: hidden;
+}
+.msg-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0 14px;
+  height: 32px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.msg-context-menu-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.msg-context-menu-item--danger { color: var(--color-danger); }
+.msg-context-menu-item--danger:hover { background: color-mix(in srgb, var(--color-danger) 10%, transparent); }
+
+/* ── Emoji picker ────────────────────────────────────────────────────────── */
+.emoji-picker {
+  max-width: 320px;
+  width: 320px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.emoji-picker-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+.emoji-picker-tabs {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+}
+.emoji-picker-tabs::-webkit-scrollbar { display: none; }
+.emoji-picker-tab {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.5;
+  border-bottom: 2px solid transparent;
+  transition: opacity var(--transition), border-color var(--transition);
+}
+.emoji-picker-tab:hover { opacity: 0.8; }
+.emoji-picker-tab.active { opacity: 1; border-bottom-color: var(--accent); }
+.emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px;
+  overflow-y: auto;
+  max-height: 240px;
+}
+.emoji-picker-grid button {
+  font-size: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background var(--transition);
+}
+.emoji-picker-grid button:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* Action sheet emoji picker wrapper */
+.action-sheet-emoji-picker-wrap .emoji-picker {
+  max-width: 100%;
+  width: 100%;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+
 .composer {
   margin-top: auto;
   display: flex;

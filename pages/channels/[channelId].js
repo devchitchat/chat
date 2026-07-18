@@ -1,4 +1,4 @@
-import { sessionFromRequest, channelService, hubService, messageService, auth, logger } from '../../src/context.js'
+import { sessionFromRequest, channelService, hubService, messageService, reactionService, auth, logger } from '../../src/context.js'
 import { renderMarkdown } from '@devchitchat/index97/markdown'
 
 /// TODO: Come up with a better strategy to allow for styled messages. Maybe you build a custom markdown parser
@@ -40,11 +40,14 @@ export async function GET(req) {
   }
 
   // SSR: last 50 messages baked into the page for instant render
-  const { messages: seedMessages } = messageService.listLatestMessages({
+  const { messages: rawSeedMessages } = messageService.listLatestMessages({
     channelId,
     userId: user.user_id,
     limit: 50,
   })
+  const seedMessages = reactionService
+    ? reactionService.enrichWithReactions({ messages: rawSeedMessages, requestingUserId: user.user_id })
+    : rawSeedMessages
   const seedSeq = seedMessages.length ? seedMessages[seedMessages.length - 1].seq : 0
   const seedFirstSeq = seedMessages.length ? seedMessages[0].seq : 0
   const seedHasMore = seedFirstSeq > 1
@@ -85,6 +88,7 @@ export async function GET(req) {
       text: sanitizeForFrontEnd(renderMarkdown(m.text).html),
       ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       attachments_json: m.attachments?.length ? JSON.stringify(m.attachments) : '',
+      reactions_json: m.reactions?.length ? JSON.stringify(m.reactions) : '',
       edited_at: m.edited_at ?? '',
     })),
     seedSeq,
