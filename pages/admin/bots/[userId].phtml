@@ -53,23 +53,24 @@
           <td>{{created_at_fmt}}</td>
           <td>{{expires_at_fmt}}</td>
           <td>{{last_used_at_fmt}}</td>
-          <td>{{#if revoked}}<span class="tag tag--warn">Revoked</span>{{else}}{{#if expired}}<span class="tag tag--warn">Expired</span>{{/if}}{{/if}}</td>
+          <td>{{#if revoked}}<span class="tag tag--warn">Revoked</span>{{/if}}{{#if expired}}<span class="tag tag--warn">Expired</span>{{/if}}</td>
           <td>
-            {{#if revoked}}{{else}}
+            {{#unless revoked}}
             <form method="POST" class="inline">
               <input type="hidden" name="action" value="revoke_token">
               <input type="hidden" name="token_id" value="{{token_id}}">
               <button type="submit" class="btn-ghost btn-danger">Revoke</button>
             </form>
-            {{/if}}
+            {{/unless}}
           </td>
         </tr>
       {{/each}}
       </tbody>
     </table>
-    {{else}}
-    <p class="admin-empty">No tokens yet.</p>
     {{/if}}
+    {{#unless tokens}}
+    <p class="admin-empty">No tokens yet.</p>
+    {{/unless}}
   </section>
 
   <section class="admin-section">
