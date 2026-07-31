@@ -30,11 +30,74 @@ The system should just create a default hub and channel. That way, on bootstrap,
 
 # Getting Started
 
-## Prerequisites
+## Install as a package
+
+```bash
+bun add @devchitchat/chat
+```
+
+Then start it from your own server file:
+
+```js
+// server.mjs
+import { start } from '@devchitchat/chat'
+
+const server = await start({
+  port: 3000,
+  basePath: '/chat',       // mount at example.com/chat — omit for root
+  dbPath: './data/chat.db',
+})
+
+console.log(`chat listening on port ${server.port}`)
+```
+
+All config options and their defaults:
+
+| Option | Env var fallback | Default |
+|---|---|---|
+| `port` | `PORT` | `3000` |
+| `dbPath` | `DB_PATH` | `./data/chat.db` |
+| `basePath` | `BASE_PATH` | `""` (root) |
+| `dev` | `NODE_ENV !== 'production'` | `true` |
+| `tlsCert` | `TLS_CERT` | `./certs/dev-cert.pem` |
+| `tlsKey` | `TLS_KEY` | `./certs/dev-key.pem` |
+
+Every option falls back to its environment variable, so you can configure via env instead of passing a config object:
+
+```bash
+BASE_PATH=/chat PORT=3000 DB_PATH=./data/chat.db bun server.mjs
+```
+
+`start()` returns the [Bun server instance](https://bun.sh/docs/api/http#bun-serve) — you can inspect `server.port`, stop it with `server.stop()`, etc.
+
+Migrations run automatically on every call to `start()` — no separate migration step needed.
+
+---
+
+## Run standalone
+
+To run the chat app directly without writing a wrapper:
+
+```bash
+bunx devchitchat
+```
+
+Or install globally:
+
+```bash
+bun install -g @devchitchat/chat
+devchitchat
+```
+
+---
+
+## Run from source
+
+### Prerequisites
 
 - [Bun](https://bun.sh) v1.0 or later
 
-## Install
+### Install
 
 ```bash
 bun install
@@ -121,6 +184,7 @@ Copy that URL and open it in a browser to create the first account, which become
 |---|---|---|
 | `PORT` | `3000` | Port the server listens on |
 | `DB_PATH` | `data/chat.db` | Path to the SQLite database file |
+| `BASE_PATH` | `""` | URL subpath to mount the app at (e.g. `/chat`) |
 | `NODE_ENV` | `development` | Set to `production` in production |
 | `TLS_CERT` | `certs/dev-cert.pem` | Path to the TLS certificate |
 | `TLS_KEY` | `certs/dev-key.pem` | Path to the TLS private key |

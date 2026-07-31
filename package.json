@@ -33,7 +33,7 @@
     "styles.css"
   ],
   "dependencies": {
-    "@devchitchat/index97": "^2.1.2",
+    "@devchitchat/index97": "^3.0.0",
     "@devchitchat/rdbljs": "^2.0.1"
   },
   "main": "index.js",
