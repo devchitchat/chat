@@ -79,7 +79,7 @@ export function initSwipeNav() {
   const sidebar     = document.querySelector('.sidebar')
   if (!mainContent || !sidebar) return
 
-  import('/client/settings-sync.js').then(({ patchSettings }) => {
+  import('./settings-sync.js').then(({ patchSettings }) => {
     const showSidebar = () => {
       document.body.classList.add('sidebar-open')
       patchSettings({ mobile_chat_open: false })

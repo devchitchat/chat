@@ -1,8 +1,8 @@
 <div class="admin-page">
   <nav class="admin-nav">
-    <a href="/admin/invites" class="admin-nav-link active">Invites</a>
-    <a href="/admin/users" class="admin-nav-link">Users</a>
-    <a href="/admin/bots" class="admin-nav-link">Bots</a>
+    <a href="{{base}}/admin/invites" class="admin-nav-link active">Invites</a>
+    <a href="{{base}}/admin/users" class="admin-nav-link">Users</a>
+    <a href="{{base}}/admin/bots" class="admin-nav-link">Bots</a>
   </nav>
 
   <h1>Invite tokens</h1>
@@ -18,7 +18,7 @@
 
   <section class="admin-section">
     <h2>Create invite</h2>
-    <form method="POST" action="/admin/invites" class="admin-form">
+    <form method="POST" action="{{base}}/admin/invites" class="admin-form">
       <input type="hidden" name="action" value="create">
       <div class="form-row">
         <label for="ttl_hours">Expires in (hours)</label>
@@ -71,7 +71,7 @@
             {{#if exhausted}}<span class="tag tag--warn">Exhausted</span>{{/if}}
           </td>
           <td>
-            <form method="POST" action="/admin/invites" class="inline">
+            <form method="POST" action="{{base}}/admin/invites" class="inline">
               <input type="hidden" name="action" value="revoke">
               <input type="hidden" name="invite_id" value="{{invite_id}}">
               <button type="submit" class="btn-ghost btn-danger">Revoke</button>

@@ -6,13 +6,14 @@
  */
 const THEMES = ['dark', 'light', 'ocean', 'forest', 'rose']
 const STORAGE_KEY = 'devchitchat_theme'
+const BASE_PATH = window.__BASE_PATH__ ?? ''
 const stylesheet = document.getElementById('theme-stylesheet')
 const picker = document.getElementById('theme-picker')
 
 function applyTheme(name) {
   const theme = THEMES.includes(name) ? name : 'dark'
   document.documentElement.dataset.theme = theme
-  if (stylesheet) stylesheet.href = `/themes/${theme}.css`
+  if (stylesheet) stylesheet.href = `${BASE_PATH}/themes/${theme}.css`
   if (picker) picker.value = theme
   localStorage.setItem(STORAGE_KEY, theme)
 }

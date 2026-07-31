@@ -61,7 +61,7 @@ export default function CallIsland(root) {
   const miniBarLeave  = document.getElementById('mini-bar-leave')
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
-  const ws = new WsClient('/ws')
+  const ws = new WsClient(`${window.__BASE_PATH__}/ws`)
 
   // ── Chat signals ───────────────────────────────────────────────────────────
   const draft       = signal('')
@@ -537,7 +537,7 @@ export default function CallIsland(root) {
 
     let res
     try {
-      res = await fetch('/api/uploads', { method: 'POST', body: formData })
+      res = await fetch(`${window.__BASE_PATH__}/api/uploads`, { method: 'POST', body: formData })
     } catch {
       showComposerError(`Upload failed: network error`)
       return null
@@ -1078,7 +1078,7 @@ export default function CallIsland(root) {
 
   ws.on('dm.opened', ({ channel_id, notify_only }) => {
     if (notify_only) return  // target user — sidebar handles the notification
-    window.location.href = `/channels/${channel_id}`
+    window.location.href = `${window.__BASE_PATH__}/channels/${channel_id}`
   })
 
   // ── Call: rtc.call_state — drives "N in call" row + sidebar badge ──────────
@@ -1672,7 +1672,7 @@ export default function CallIsland(root) {
   miniBarMic?.addEventListener('click', toggleMic)
 
   miniBarReturn?.addEventListener('click', () => {
-    if (callChannelId) navigateTo(`/channels/${callChannelId}`, false)
+    if (callChannelId) navigateTo(`${window.__BASE_PATH__}/channels/${callChannelId}`, false)
   })
 
   miniBarLeave?.addEventListener('click', () => {

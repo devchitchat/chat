@@ -1,5 +1,6 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
 import { botService } from '../../../src/context.js'
+import { p } from '../../../src/config.js'
 
 export function GET(req) {
   const session = requireAdminSession(req)
@@ -34,7 +35,7 @@ export async function POST(req) {
   })
 
   return Response.redirect(
-    new URL(`/admin/bots/${result.userId}?created_token=${encodeURIComponent(result.token)}`, req.url),
+    new URL(p(`/admin/bots/${result.userId}?created_token=${encodeURIComponent(result.token)}`), req.url),
     303
   )
 }

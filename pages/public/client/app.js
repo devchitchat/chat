@@ -1,19 +1,21 @@
 /**
  * app.js — boots rdbljs islands and page-level setup.
  *
- * Loaded as <script type="module" src="/client/app.js"> from _layout.html.
+ * Loaded as <script type="module" src="{{base}}/client/app.js"> from _layout.html.
  * init(window) from rdbljs discovers all [island] elements, imports each
  * module, calls the default export factory with (root, window), and wires
  * up bind(root, scope) so all directives (model=, onclick=, each=, etc.) work.
  */
 import { init } from '@devchitchat/rdbljs'
-import { getSettings, syncFromServer, patchSettings } from '/client/settings-sync.js'
-import { initSwipeNav } from '/client/swipe-nav.js'
-import { initRouter } from '/client/router.js'
+import { getSettings, syncFromServer, patchSettings } from './settings-sync.js'
+import { initSwipeNav } from './swipe-nav.js'
+import { initRouter } from './router.js'
+
+const BASE_PATH = window.__BASE_PATH__ ?? ''
 
 // On a channel page the intent is always to view the channel — persist the
 // current channel and ensure mobile shows the chat panel, not the hub panel.
-if (location.pathname.startsWith('/channels/')) {
+if (location.pathname.startsWith(`${BASE_PATH}/channels/`)) {
   const channelId = location.pathname.split('/').pop()
   if (channelId) patchSettings({ last_channel_id: channelId, mobile_chat_open: true })
 }

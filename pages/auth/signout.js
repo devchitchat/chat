@@ -1,4 +1,5 @@
 import { auth, sessionFromRequest, sessionCookie } from '../../src/context.js'
+import { p } from '../../src/config.js'
 
 export async function POST(req) {
   const session = sessionFromRequest(req)
@@ -6,7 +7,7 @@ export async function POST(req) {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: '/login',
+      Location: p('/login'),
       'Set-Cookie': sessionCookie(null, { clear: true }),
     }
   })

@@ -5,7 +5,7 @@
 
   <!-- Sign in -->
   <section id="panel-signin" role="tabpanel">
-    <form method="POST" action="/login" class="auth-form" novalidate>
+    <form method="POST" action="{{base}}/login" class="auth-form" novalidate>
       <input type="hidden" name="_action" value="signin">
       <div class="field">
         <label for="signin-handle">Handle</label>
@@ -22,8 +22,8 @@
   </section>
   <footer>
     <div class="auth-tabs" role="tablist">
-      <a role="tab" aria-controls="panel-signin" aria-selected="true" href="/login" title="Sign in">Sign in</a>
-      <a role="tab" aria-controls="panel-signup" aria-selected="false" href="/registration" title="Sign up">Sign up</a>
+      <a role="tab" aria-controls="panel-signin" aria-selected="true" href="{{base}}/login" title="Sign in">Sign in</a>
+      <a role="tab" aria-controls="panel-signup" aria-selected="false" href="{{base}}/registration" title="Sign up">Sign up</a>
     </div>
   </footer>
 </section>

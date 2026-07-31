@@ -1,5 +1,5 @@
 <!-- Sidebar island: hub/channel nav + online presence -->
-<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}" data-vapid-key="{{vapidPublicKey}}">
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="{{base}}/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}" data-vapid-key="{{vapidPublicKey}}">
   <section each="hubs" key="hub_id" class="hub-group">
     {{#each hubs}}
     <details class="hub-header" data-key="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" draggable="true" open>
@@ -24,7 +24,7 @@
       {{#each channels}}
         <li data-key="{{channel_id}}" class="channel-item {{className}}" cls="className" draggable="true">
           <a attr="href:url" text="name" class="channel-link"
-             href="/channels/{{channel_id}}"
+             href="{{base}}/channels/{{channel_id}}"
              data-channel-id="{{channel_id}}"
              data-channel-name="{{name}}"
              data-channel-topic="{{topic}}"
@@ -61,10 +61,10 @@
         <option value="rose">Rose</option>
       </select>
       {{#if isAdmin}}
-      <a href="/admin/invites" class="btn-ghost btn-sm">Admin</a>
+      <a href="{{base}}/admin/invites" class="btn-ghost btn-sm">Admin</a>
       {{/if}}
       {{#if user}}
-      <form method="POST" action="/auth/signout">
+      <form method="POST" action="{{base}}/auth/signout">
         <button type="submit" class="btn-ghost btn-sm">Sign out</button>
       </form>
       {{/if}}
@@ -83,7 +83,7 @@
 <div class="main-content">
 
 <!-- Chat + call island: messages, composer, and WebRTC -->
-<section class="chat-panel" island="/client/islands/call.js"
+<section class="chat-panel" island="{{base}}/client/islands/call.js"
   data-id="{{channel.channel_id}}"
   data-name="{{channel.name}}"
   data-topic="{{channel.topic}}"

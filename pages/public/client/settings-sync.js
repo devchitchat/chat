@@ -8,6 +8,7 @@
  */
 
 const STORAGE_KEY = 'devchitchat_settings'
+const BASE_PATH = window.__BASE_PATH__ ?? ''
 
 function readLocal() {
   try {
@@ -38,7 +39,7 @@ export function patchSettings(patch) {
 // Push local state to server (fire-and-forget)
 async function syncToServer(settings, updated_at) {
   try {
-    await fetch('/api/user/settings', {
+    await fetch(`${BASE_PATH}/api/user/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings, updated_at }),
@@ -52,7 +53,7 @@ async function syncToServer(settings, updated_at) {
 // Returns remote settings if the server had newer data, null otherwise.
 export async function syncFromServer() {
   try {
-    const res = await fetch('/api/user/settings')
+    const res = await fetch(`${BASE_PATH}/api/user/settings`)
     if (!res.ok) return null
 
     const remote = await res.json() // { settings, updated_at }

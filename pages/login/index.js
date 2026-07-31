@@ -1,8 +1,9 @@
 import { auth, sessionFromRequest, sessionCookie } from '../../src/context.js'
+import { p } from '../../src/config.js'
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
-  if (session) return Response.redirect(new URL('/', req.url), 302)
+  if (session) return Response.redirect(new URL(p('/'), req.url), 302)
 
   const url = new URL(req.url)
   const inviteToken = url.searchParams.get('invite') ?? ''
@@ -22,7 +23,7 @@ export async function POST(req) {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: '/',
+          Location: p('/'),
           'Set-Cookie': sessionCookie(result.sessionToken),
         }
       })
@@ -37,7 +38,7 @@ export async function POST(req) {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: '/',
+          Location: p('/'),
           'Set-Cookie': sessionCookie(result.sessionToken),
         }
       })

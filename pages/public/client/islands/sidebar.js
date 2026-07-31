@@ -708,7 +708,7 @@ function attachFileDropHandlers(sidebarEl, { ws }) {
       formData.append('file', file)
       formData.append('channel_id', targetChannelId)
       try {
-        const res = await fetch('/api/uploads', { method: 'POST', body: formData })
+        const res = await fetch(`${window.__BASE_PATH__}/api/uploads`, { method: 'POST', body: formData })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           showToast(`Upload failed: ${body.error ?? res.statusText}`)
@@ -822,7 +822,7 @@ function attachManagementHandlers(sidebarEl, { ws, hubs }) {
 
 function navigateAfterDeletion(remainingHubs) {
   const first = remainingHubs.flatMap(h => h.channels ?? []).find(Boolean)
-  window.location.href = first ? `/channels/${first.channel_id}` : '/'
+  window.location.href = first ? `${window.__BASE_PATH__}/channels/${first.channel_id}` : `${window.__BASE_PATH__}/`
 }
 
 // ── Island ────────────────────────────────────────────────────────────────────
@@ -844,7 +844,7 @@ export default function SidebarIsland(root) {
   // channelId → true if this channel has an unread urgent (@mention + now priority)
   const urgentChannels = signal(new Set())
   const dmUnread = signal(new Set())
-  const ws = new WsClient('/ws')
+  const ws = new WsClient(`${window.__BASE_PATH__}/ws`)
 
   ws.on('hub.created', ({ hub }) => {
     hubs.set([...hubs(), { ...hub, channels: [] }])
@@ -915,7 +915,7 @@ export default function SidebarIsland(root) {
       const next = new Set(dmUnread()); next.add(channel_id); dmUnread.set(next)
     } else {
       // Initiating user — navigate to the DM channel
-      window.location.href = `/channels/${channel_id}`
+      window.location.href = `${window.__BASE_PATH__}/channels/${channel_id}`
     }
   })
 
@@ -982,7 +982,7 @@ export default function SidebarIsland(root) {
       if (h.hub_id !== channel.hub_id) return h
       const channels = [...(h.channels ?? []), {
         ...channel,
-        url: `/channels/${channel.channel_id}`,
+        url: `${window.__BASE_PATH__}/channels/${channel.channel_id}`,
         label: `# ${channel.name}`,
         className: 'channel-item'
       }]
@@ -1008,7 +1008,7 @@ export default function SidebarIsland(root) {
     hubs.set(hubs().map(h => {
       if (h.hub_id !== hub_id) return h
       const channelMap = new Map((h.channels ?? []).map(c => [c.channel_id, c]))
-      const reordered = channels.map(c => ({ ...channelMap.get(c.channel_id), ...c, url: `/channels/${c.channel_id}` }))
+      const reordered = channels.map(c => ({ ...channelMap.get(c.channel_id), ...c, url: `${window.__BASE_PATH__}/channels/${c.channel_id}` }))
       return { ...h, channels: reordered }
     }))
   })
@@ -1083,7 +1083,7 @@ export default function SidebarIsland(root) {
       const selected = d.channel_id === currentChannelId ? ' dm-selected' : ''
       const mentionAttr = unread.has(d.channel_id) ? ' data-mention=""' : ''
       return `<li class="dm-item${selected}"${mentionAttr} data-channel-id="${escHtml(d.channel_id)}">
-        <a class="dm-link channel-link" href="/channels/${escHtml(d.channel_id)}" data-channel-id="${escHtml(d.channel_id)}">
+        <a class="dm-link channel-link" href="${window.__BASE_PATH__}/channels/${escHtml(d.channel_id)}" data-channel-id="${escHtml(d.channel_id)}">
           <span class="dm-name">${name}</span>
         </a>
       </li>`
@@ -1138,7 +1138,7 @@ export default function SidebarIsland(root) {
     // this browser context — Safari Private windows register a SW fine but
     // silently refuse push subscriptions, so we skip the button there.
     let swReg = null
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    navigator.serviceWorker.register(`${window.__BASE_PATH__}/sw.js`, { scope: `${window.__BASE_PATH__}/` })
       .then(async reg => {
         swReg = reg
         // Confirm push is functional by checking the subscription API

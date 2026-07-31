@@ -5,7 +5,7 @@
 
   <!-- Sign up with invite -->
   <section id="panel-signup" role="tabpanel">
-    <form method="POST" action="/registration" class="auth-form" novalidate>
+    <form method="POST" action="{{base}}/registration" class="auth-form" novalidate>
       <input type="hidden" name="_action" value="signup">
       <div class="field">
         <label for="signup-token">Invite code</label>
@@ -31,8 +31,8 @@
   </section>
   <footer>
     <div class="auth-tabs" role="tablist">
-      <a role="tab" aria-controls="panel-signin" aria-selected="false" href="/login" title="Sign in">Sign in</a>
-      <a role="tab" aria-controls="panel-signup" aria-selected="true" href="/registration" title="Sign up">Sign up</a>
+      <a role="tab" aria-controls="panel-signin" aria-selected="false" href="{{base}}/login" title="Sign in">Sign in</a>
+      <a role="tab" aria-controls="panel-signup" aria-selected="true" href="{{base}}/registration" title="Sign up">Sign up</a>
     </div>
   </footer>
 </section>

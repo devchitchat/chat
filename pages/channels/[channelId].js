@@ -1,5 +1,6 @@
 import { sessionFromRequest, channelService, hubService, messageService, reactionService, auth, logger } from '../../src/context.js'
 import { renderMarkdown } from '@devchitchat/index97/markdown'
+import { p, BASE_PATH } from '../../src/config.js'
 
 /// TODO: Come up with a better strategy to allow for styled messages. Maybe you build a custom markdown parser
 // that drops everything else but the styled text?
@@ -13,7 +14,7 @@ function sanitizeForFrontEnd(html) {
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
-  if (!session) return Response.redirect(new URL('/login', req.url), 302)
+  if (!session) return Response.redirect(new URL(p('/login'), req.url), 302)
 
   const url = new URL(req.url)
   const channelId = url.pathname.split('/').pop()
@@ -62,7 +63,7 @@ export async function GET(req) {
       .map(c => ({
         ...c,
         className: channelId === c.channel_id ? 'channel-item active' : 'channel-item',
-        url: `/channels/${c.channel_id}`,
+        url: p(`/channels/${c.channel_id}`),
         label: `# ${c.name}`
       }))
   }))
@@ -80,6 +81,7 @@ export async function GET(req) {
     channel,
     currentChannelId: channelId,
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    base: BASE_PATH,
     seedFirstSeq,
     seedHasMore,
     seedMessages: seedMessages.map(m => ({

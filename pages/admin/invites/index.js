@@ -1,5 +1,6 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
 import { auth } from '../../../src/context.js'
+import { p } from '../../../src/config.js'
 
 export function GET(req) {
   const session = requireAdminSession(req)
@@ -16,7 +17,7 @@ export function GET(req) {
     user: session.user,
     pageTitle: 'Admin — Invites',
     createdToken,
-    createdLink: createdToken ? `${origin}/registration?invite=${encodeURIComponent(createdToken)}` : null,
+    createdLink: createdToken ? `${origin}${p('/registration')}?invite=${encodeURIComponent(createdToken)}` : null,
     invites: invites.map(inv => ({
       ...inv,
       expired: inv.expires_at <= now,
@@ -56,7 +57,7 @@ export async function POST(req) {
       roles,
     })
     return Response.redirect(
-      new URL(`/admin/invites?created=${encodeURIComponent(invite.inviteToken)}`, req.url),
+      new URL(p(`/admin/invites?created=${encodeURIComponent(invite.inviteToken)}`), req.url),
       303
     )
   }
@@ -64,7 +65,7 @@ export async function POST(req) {
   if (action === 'revoke') {
     const inviteId = form.get('invite_id')
     auth.revokeInvite({ inviteId, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL('/admin/invites', req.url), 303)
+    return Response.redirect(new URL(p('/admin/invites'), req.url), 303)
   }
 
   return new Response('Bad request', { status: 400 })

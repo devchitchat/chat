@@ -1,8 +1,8 @@
 <div class="admin-page">
   <nav class="admin-nav">
-    <a href="/admin/invites" class="admin-nav-link">Invites</a>
-    <a href="/admin/users" class="admin-nav-link active">Users</a>
-    <a href="/admin/bots" class="admin-nav-link">Bots</a>
+    <a href="{{base}}/admin/invites" class="admin-nav-link">Invites</a>
+    <a href="{{base}}/admin/users" class="admin-nav-link active">Users</a>
+    <a href="{{base}}/admin/bots" class="admin-nav-link">Bots</a>
   </nav>
 
   <h1>Users</h1>
@@ -28,7 +28,7 @@
             {{#if isBot}}<span class="tag tag--bot">bot</span>{{/if}}
           </td>
           <td>{{created_at_fmt}}</td>
-          <td><a href="/admin/users/{{user_id}}" class="btn-ghost">Edit</a></td>
+          <td><a href="{{base}}/admin/users/{{user_id}}" class="btn-ghost">Edit</a></td>
         </tr>
       {{/each}}
       </tbody>

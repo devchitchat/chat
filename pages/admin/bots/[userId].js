@@ -1,6 +1,7 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
 import { botService, channelService } from '../../../src/context.js'
 import { randomToken } from '../../../src/util/crypto.js'
+import { p } from '../../../src/config.js'
 
 // In-memory flash store: flashId → plaintext token. Consumed once on GET.
 // Lost on restart, which is fine — the token was already shown or is gone.
@@ -66,7 +67,7 @@ export async function POST(req) {
     const flashId = randomToken(8)
     tokenFlashes.set(flashId, result.token)
     return Response.redirect(
-      new URL(`/admin/bots/${botUserId}?flash_id=${encodeURIComponent(flashId)}`, req.url),
+      new URL(p(`/admin/bots/${botUserId}?flash_id=${encodeURIComponent(flashId)}`), req.url),
       303
     )
   }
@@ -74,13 +75,13 @@ export async function POST(req) {
   if (action === 'revoke_token') {
     const tokenId = form.get('token_id')
     botService.revokeToken({ tokenId, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(`/admin/bots/${botUserId}?flash=token_revoked`, req.url), 303)
+    return Response.redirect(new URL(p(`/admin/bots/${botUserId}?flash=token_revoked`), req.url), 303)
   }
 
   if (action === 'set_channels') {
     const channelIds = form.getAll('channel_ids')
     botService.setBotChannels({ userId: botUserId, channelIds, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(`/admin/bots/${botUserId}?flash=channels_updated`, req.url), 303)
+    return Response.redirect(new URL(p(`/admin/bots/${botUserId}?flash=channels_updated`), req.url), 303)
   }
 
   return new Response('Bad request', { status: 400 })

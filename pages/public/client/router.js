@@ -6,7 +6,9 @@
  * so the existing call.js island can re-initialise its chat state without
  * tearing down WebRTC connections.
  */
-import { patchSettings } from '/client/settings-sync.js'
+import { patchSettings } from './settings-sync.js'
+
+const BASE_PATH = window.__BASE_PATH__ ?? ''
 
 let inFlight = false
 
@@ -18,7 +20,7 @@ export function initRouter() {
 function isChannelUrl(href) {
   try {
     const url = new URL(href, location.href)
-    return url.origin === location.origin && /^\/channels\//.test(url.pathname)
+    return url.origin === location.origin && url.pathname.startsWith(`${BASE_PATH}/channels/`)
   } catch { return false }
 }
 
