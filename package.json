@@ -22,9 +22,23 @@
     "purge-cf-cache": "bun scripts/purge-cf-cache.js"
   },
   "type": "module",
+  "bin": {
+    "devchitchat": "index.js"
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "pages/",
+    "migrate/",
+    "styles.css"
+  ],
   "dependencies": {
     "@devchitchat/index97": "^2.1.2",
-    "@devchitchat/rdbljs": "^2.0.0"
+    "@devchitchat/rdbljs": "^2.0.1"
   },
-  "module": "index.js"
+  "main": "index.js",
+  "module": "index.js",
+  "exports": {
+    ".": "./index.js"
+  }
 }

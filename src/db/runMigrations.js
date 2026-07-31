@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MIGRATE_DIR = join(__dirname, '../../scripts/migrate')
+const MIGRATE_DIR = join(__dirname, '../../migrate')
 
 /**
  * Apply all pending migrations to the given database.
