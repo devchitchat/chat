@@ -1,10 +1,10 @@
 {
   "name": "@devchitchat/chat",
-  "version": "3.0.60",
+  "version": "0.0.0",
   "description": "A small chat app. p2p video and screenshare.",
   "scripts": {
     "dev": "bun --watch index.js",
-    "start": "bun migrate && bun index.js",
+    "start": "bun index.js",
     "migrate": "bun scripts/migrate.js",
     "test": "bun test",
     "generate-vapid": "bun scripts/generate-vapid.js",
@@ -40,5 +40,12 @@
   "module": "index.js",
   "exports": {
     ".": "./index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devchitchat/chat.git"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
