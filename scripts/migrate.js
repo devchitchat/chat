@@ -24,7 +24,7 @@ import { runMigrations } from '../src/db/runMigrations.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH ?? 'data/chat.db'
-const MIGRATE_DIR = join(__dirname, 'migrate')
+const MIGRATE_DIR = join(__dirname, '../migrate')
 
 const args = new Set(process.argv.slice(2))
 const isDry = args.has('--dry')
