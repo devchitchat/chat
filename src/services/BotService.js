@@ -11,10 +11,11 @@ import { randomToken, hashToken } from '../util/crypto.js'
 import { ServiceError } from '../util/errors.js'
 
 export class BotService {
-  constructor({ authService, authRepo, channelRepo, nowFn = () => Date.now() }) {
+  constructor({ authService, authRepo, channelRepo, hubService, nowFn = () => Date.now() }) {
     this.authService = authService
     this.authRepo = authRepo
     this.channelRepo = channelRepo
+    this.hubService = hubService
     this.nowFn = nowFn
   }
 
@@ -115,6 +116,9 @@ export class BotService {
 
     for (const channelId of toJoin) {
       this.channelRepo.upsertMembership({ channelId, userId, role: 'member', now })
+      // Also join the hub so canAccessHub passes when the bot connects via WS
+      const channel = this.channelRepo.findById({ channelId })
+      if (channel?.hub_id) this.hubService.joinHub(channel.hub_id, userId)
     }
     for (const channelId of toLeave) {
       this.channelRepo.setMemberLeft({ channelId, userId, now })

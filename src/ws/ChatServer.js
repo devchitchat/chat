@@ -77,7 +77,7 @@ export class ChatServer {
     this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
     this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
-    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
+    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo, hubService: this.hubService })
     this.pushService      = new WebPushService({
       vapidPublicKey:  process.env.VAPID_PUBLIC_KEY  ?? null,
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
