@@ -75,15 +75,88 @@
 
   <section class="admin-section">
     <h2>Channel access</h2>
-    <form method="POST" class="admin-form">
+    <form method="POST" class="admin-form" id="channel-access-form">
       <input type="hidden" name="action" value="set_channels">
-      {{#each allChannels}}
-      <label class="checkbox-label">
-        <input type="checkbox" name="channel_ids" value="{{channel_id}}" {{#if checked}}checked{{/if}}>
-        # {{name}}
-      </label>
+
+      {{#each hubGroups}}
+      <details class="hub-group" {{#if hubChecked}}open{{/if}}{{#if hubIndeterminate}}open{{/if}}>
+        <summary class="hub-group__summary">
+          <input type="checkbox"
+            class="hub-checkbox"
+            data-hub="{{hub_id}}"
+            {{#if hubChecked}}checked{{/if}}
+            {{#if hubIndeterminate}}data-indeterminate="true"{{/if}}>
+          <span class="hub-group__name">{{name}}</span>
+          <span class="hub-group__badge">{{visibility}}</span>
+        </summary>
+        <div class="hub-group__channels">
+          {{#each channels}}
+          <label class="checkbox-label checkbox-label--indented">
+            <input type="checkbox"
+              class="channel-checkbox"
+              name="channel_ids"
+              value="{{channel_id}}"
+              data-hub="{{hub_id}}"
+              {{#if checked}}checked{{/if}}>
+            # {{name}}
+          </label>
+          {{/each}}
+        </div>
+      </details>
       {{/each}}
+
+      {{#if noHubChannels}}
+      <details class="hub-group" open>
+        <summary class="hub-group__summary">
+          <span class="hub-group__name">No hub</span>
+        </summary>
+        <div class="hub-group__channels">
+          {{#each noHubChannels}}
+          <label class="checkbox-label checkbox-label--indented">
+            <input type="checkbox"
+              class="channel-checkbox"
+              name="channel_ids"
+              value="{{channel_id}}"
+              {{#if checked}}checked{{/if}}>
+            # {{name}}
+          </label>
+          {{/each}}
+        </div>
+      </details>
+      {{/if}}
+
       <button type="submit" class="btn">Save channel access</button>
     </form>
   </section>
+
+  <script>
+    // Set indeterminate state (can't be done in HTML, only via JS property)
+    document.querySelectorAll('.hub-checkbox[data-indeterminate="true"]').forEach(cb => {
+      cb.indeterminate = true
+    })
+
+    // Hub checkbox toggles all its channel checkboxes
+    document.querySelectorAll('.hub-checkbox').forEach(hubCb => {
+      hubCb.addEventListener('change', () => {
+        const hubId = hubCb.dataset.hub
+        document.querySelectorAll(`.channel-checkbox[data-hub="${hubId}"]`).forEach(ch => {
+          ch.checked = hubCb.checked
+        })
+        hubCb.indeterminate = false
+      })
+    })
+
+    // Channel checkbox updates its hub checkbox state
+    document.querySelectorAll('.channel-checkbox[data-hub]').forEach(chanCb => {
+      chanCb.addEventListener('change', () => {
+        const hubId = chanCb.dataset.hub
+        const hubCb = document.querySelector(`.hub-checkbox[data-hub="${hubId}"]`)
+        if (!hubCb) return
+        const siblings = [...document.querySelectorAll(`.channel-checkbox[data-hub="${hubId}"]`)]
+        const checkedCount = siblings.filter(c => c.checked).length
+        hubCb.checked = checkedCount === siblings.length
+        hubCb.indeterminate = checkedCount > 0 && checkedCount < siblings.length
+      })
+    })
+  </script>
 </div>

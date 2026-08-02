@@ -1,5 +1,5 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
-import { botService, channelService } from '../../../src/context.js'
+import { botService, channelService, hubService } from '../../../src/context.js'
 import { randomToken } from '../../../src/util/crypto.js'
 import { p } from '../../../src/config.js'
 
@@ -25,9 +25,33 @@ export function GET(req) {
   if (flashId) tokenFlashes.delete(flashId)
   const flash = url.searchParams.get('flash') ?? null
 
-  // All channels for channel assignment checkboxes
   const allChannels = channelService.listChannels(session.user.user_id, session.user.roles)
+  const allHubs     = hubService.listHubs(session.user.user_id, session.user.roles)
   const botChannelIds = new Set(bot.channels.map(c => c.channel_id))
+
+  // Group channels by hub, preserving hub order; collect channels with no hub separately
+  const hubMap = new Map(allHubs.map(h => [h.hub_id, { ...h, channels: [] }]))
+  const noHubChannels = []
+  for (const ch of allChannels) {
+    const entry = { ...ch, checked: botChannelIds.has(ch.channel_id) }
+    if (ch.hub_id && hubMap.has(ch.hub_id)) {
+      hubMap.get(ch.hub_id).channels.push(entry)
+    } else {
+      noHubChannels.push(entry)
+    }
+  }
+
+  // Compute hub-level checked/indeterminate state for UI rendering
+  const hubGroups = [...hubMap.values()]
+    .filter(h => h.channels.length > 0)
+    .map(h => {
+      const checkedCount = h.channels.filter(c => c.checked).length
+      return {
+        ...h,
+        hubChecked:       checkedCount === h.channels.length,
+        hubIndeterminate: checkedCount > 0 && checkedCount < h.channels.length,
+      }
+    })
 
   return {
     user: session.user,
@@ -37,16 +61,14 @@ export function GET(req) {
     flash,
     tokens: bot.tokens.map(t => ({
       ...t,
-      created_at_fmt: new Date(t.created_at).toLocaleString(),
-      expires_at_fmt: t.expires_at ? new Date(t.expires_at).toLocaleString() : 'Never',
+      created_at_fmt:   new Date(t.created_at).toLocaleString(),
+      expires_at_fmt:   t.expires_at ? new Date(t.expires_at).toLocaleString() : 'Never',
       last_used_at_fmt: t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'Never',
-      revoked: !!t.revoked_at,
-      expired: !t.revoked_at && t.expires_at != null && t.expires_at <= Date.now(),
+      revoked:  !!t.revoked_at,
+      expired:  !t.revoked_at && t.expires_at != null && t.expires_at <= Date.now(),
     })),
-    allChannels: allChannels.map(c => ({
-      ...c,
-      checked: botChannelIds.has(c.channel_id),
-    })),
+    hubGroups,
+    noHubChannels,
   }
 }
 
