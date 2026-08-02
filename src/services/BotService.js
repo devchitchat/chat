@@ -116,12 +116,21 @@ export class BotService {
 
     for (const channelId of toJoin) {
       this.channelRepo.upsertMembership({ channelId, userId, role: 'member', now })
-      // Also join the hub so canAccessHub passes when the bot connects via WS
-      const channel = this.channelRepo.findById({ channelId })
-      if (channel?.hub_id) this.hubService.joinHub(channel.hub_id, userId)
     }
     for (const channelId of toLeave) {
       this.channelRepo.setMemberLeft({ channelId, userId, now })
+    }
+
+    // Ensure hub membership for every channel in the final set.
+    // Done after the membership loop so it covers both new and pre-existing
+    // channel memberships (upsert is idempotent so re-running is safe).
+    const hubIds = new Set()
+    for (const channelId of next) {
+      const channel = this.channelRepo.findById({ channelId })
+      if (channel?.hub_id) hubIds.add(channel.hub_id)
+    }
+    for (const hubId of hubIds) {
+      this.hubService.joinHub(hubId, userId)
     }
   }
 
