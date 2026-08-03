@@ -135,7 +135,7 @@ export class BotService {
   }
 
   _getBotChannels(userId) {
-    return this.channelRepo.listAccessible({ userId })
+    return this.channelRepo.listMemberships({ userId })
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────

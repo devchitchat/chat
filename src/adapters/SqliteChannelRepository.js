@@ -49,6 +49,18 @@ export class SqliteChannelRepository {
     ).all()
   }
 
+  listMemberships({ userId }) {
+    return this.db.prepare(
+      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name
+       FROM channels c
+       JOIN hubs h ON c.hub_id = h.hub_id
+       JOIN channel_members cm ON cm.channel_id = c.channel_id
+       WHERE c.deleted_at IS NULL AND h.deleted_at IS NULL
+         AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL
+       ORDER BY h.name, c.sort_order ASC, c.created_at ASC`
+    ).all(userId)
+  }
+
   listAccessible({ userId, isGuest = false }) {
     return this.db.prepare(
       `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name

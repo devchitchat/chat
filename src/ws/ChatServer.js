@@ -323,8 +323,12 @@ export class ChatServer {
         })
         .filter(Boolean)
     } else {
+      const memberIds = new Set(
+        this.channelService.listChannelMembers(channelId).map(m => m.user_id)
+      )
       candidates = this.auth.listUsersBasic()
-        .filter(u => u.user_id !== senderId && !u.roles.includes('bot'))
+        .filter(u => u.user_id !== senderId)
+        .filter(u => !u.roles.includes('bot') || memberIds.has(u.user_id))
         .map(u => ({ user_id: u.user_id, handle: u.handle }))
     }
 
@@ -337,7 +341,6 @@ export class ChatServer {
       }))
       if (priority === 'now' && this.pushService.isConfigured()) {
         const sender   = this.auth.getUser(senderId)
-        const channel  = this.channelService.getChannel(channelId)
         this.pushService.sendToUser({
           userId:    user_id,
           title:     `@${sender?.handle ?? 'someone'} mentioned you`,
