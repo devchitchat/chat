@@ -201,6 +201,15 @@ export default function CallIsland(root) {
       // Date separator before this article if date changed
       const ts = parseInt(article.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
       if (ts) {
+        // Re-format time in the browser's local timezone (SSR bakes UTC time)
+        const timeEl = article.querySelector('.message-time')
+        if (timeEl) {
+          const localTime = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          const editedSpan = timeEl.querySelector('.message-edited')
+          timeEl.textContent = localTime
+          if (editedSpan) timeEl.appendChild(editedSpan)
+        }
+
         const dateKey = utcDateKey(ts)
         if (prevDateKey && dateKey !== prevDateKey) {
           article.before(makeDateSeparator(dateKey))
