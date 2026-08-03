@@ -6,5 +6,5 @@ import { p } from '../../src/config.js'
 export async function GET(req) {
   const url = new URL(req.url)
   const token = url.pathname.split('/').pop()
-  return Response.redirect(new URL(p(`/login?invite=${encodeURIComponent(token)}`), req.url), 302)
+  return Response.redirect(p(`/login?invite=${encodeURIComponent(token)}`), 302)
 }

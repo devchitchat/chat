@@ -41,19 +41,19 @@ export async function POST(req) {
   if (action === 'set_display_name') {
     const displayName = form.get('display_name')
     auth.adminUpdateDisplayName({ targetUserId, displayName, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(p(`/admin/users/${targetUserId}?flash=display_name_updated`), req.url), 303)
+    return Response.redirect(p(`/admin/users/${targetUserId}?flash=display_name_updated`), 303)
   }
 
   if (action === 'set_roles') {
     const roles = form.getAll('roles')
     auth.setUserRoles({ targetUserId, roles, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(p(`/admin/users/${targetUserId}?flash=roles_updated`), req.url), 303)
+    return Response.redirect(p(`/admin/users/${targetUserId}?flash=roles_updated`), 303)
   }
 
   if (action === 'set_password') {
     const newPassword = form.get('new_password')
     await auth.adminSetPassword({ targetUserId, newPassword, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(p(`/admin/users/${targetUserId}?flash=password_updated`), req.url), 303)
+    return Response.redirect(p(`/admin/users/${targetUserId}?flash=password_updated`), 303)
   }
 
   return new Response('Bad request', { status: 400 })

@@ -10,6 +10,8 @@
  *   CF_API_TOKEN — Cloudflare API token with Zone.Cache Purge permission
  *
  * The zone ID is resolved automatically from the domain name.
+ * curl -X GET "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/tokens/verify" \
+     -H "Authorization: Bearer $CF_API_TOKEN"
  */
 
 const domain = 'devchitchat.com'

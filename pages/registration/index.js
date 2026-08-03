@@ -3,7 +3,7 @@ import { p } from '../../src/config.js'
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
-  if (session) return Response.redirect(new URL(p('/'), req.url), 302)
+  if (session) return Response.redirect(p('/'), 302)
 
   const url = new URL(req.url)
   const inviteToken = url.searchParams.get('invite') ?? ''

@@ -14,7 +14,7 @@ function sanitizeForFrontEnd(html) {
 
 export async function GET(req) {
   const session = sessionFromRequest(req)
-  if (!session) return Response.redirect(new URL(p('/login'), req.url), 302)
+  if (!session) return Response.redirect(p('/login'), 302)
 
   const url = new URL(req.url)
   const channelId = url.pathname.split('/').pop()

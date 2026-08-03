@@ -56,16 +56,13 @@ export async function POST(req) {
       note,
       roles,
     })
-    return Response.redirect(
-      new URL(p(`/admin/invites?created=${encodeURIComponent(invite.inviteToken)}`), req.url),
-      303
-    )
+    return Response.redirect(p(`/admin/invites?created=${encodeURIComponent(invite.inviteToken)}`), 303)
   }
 
   if (action === 'revoke') {
     const inviteId = form.get('invite_id')
     auth.revokeInvite({ inviteId, requestingUserId: session.user.user_id })
-    return Response.redirect(new URL(p('/admin/invites'), req.url), 303)
+    return Response.redirect(p('/admin/invites'), 303)
   }
 
   return new Response('Bad request', { status: 400 })

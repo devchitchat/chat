@@ -34,8 +34,5 @@ export async function POST(req) {
     requestingUserId: session.user.user_id,
   })
 
-  return Response.redirect(
-    new URL(p(`/admin/bots/${result.userId}?created_token=${encodeURIComponent(result.token)}`), req.url),
-    303
-  )
+  return Response.redirect(p(`/admin/bots/${result.userId}?created_token=${encodeURIComponent(result.token)}`), 303)
 }
