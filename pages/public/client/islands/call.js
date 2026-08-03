@@ -1699,7 +1699,15 @@ export default function CallIsland(root) {
   // Re-initialise chat state for the new channel without touching RTC.
   document.addEventListener('chatpanel:navigated', (e) => {
     const { channelId: newId, name, topic, kind, seedSeq: newSeedSeq, seedFirstSeq: newFirstSeq, seedHasMore: newHasMore } = e.detail
-    if (newId === channelId) return   // same channel — nothing to do
+
+    // Morph strips dynamically-added content (reactions, attachments, timestamps, etc.)
+    // but may preserve data-hydrated="1". Always clear and re-hydrate.
+    for (const a of messages.querySelectorAll('article.message[data-hydrated]')) {
+      delete a.dataset.hydrated
+    }
+    hydrateSeedMessages()
+
+    if (newId === channelId) return   // same channel — re-hydrate only, no WS channel change
 
     // Leave old channel subscription on the server
     ws.send({ t: 'channel.leave', body: { channel_id: channelId } })
@@ -1724,9 +1732,6 @@ export default function CallIsland(root) {
     document.title = `#${name} — devchitchat`
     const textarea = root.querySelector('#message-input')
     if (textarea) textarea.placeholder = `Message in ${name}`
-
-    // Hydrate attachments + dm-trigger on the freshly morphed seed articles
-    hydrateSeedMessages()
 
     closePicker()
 
