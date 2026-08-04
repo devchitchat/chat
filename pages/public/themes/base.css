@@ -1803,6 +1803,9 @@ article.message { position: relative; }
   z-index: 10;
 }
 article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto; }
+.quick-picks { display: contents; }
+.quick-picks:not(:empty) + .btn-react { border-left: 1px solid var(--border); margin-left: 1px; padding-left: 6px; }
+.btn-quick-react,
 .btn-react,
 .btn-msg-actions {
   background: none;
@@ -1815,6 +1818,7 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   color: var(--text-secondary);
   transition: background var(--transition), color var(--transition);
 }
+.btn-quick-react:hover,
 .btn-react:hover,
 .btn-msg-actions:hover {
   background: color-mix(in srgb, var(--accent) 15%, transparent);

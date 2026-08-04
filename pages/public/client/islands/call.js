@@ -165,6 +165,9 @@ export default function CallIsland(root) {
       if (!article.querySelector('.message-hover-actions')) {
         const toolbar = document.createElement('div')
         toolbar.className = 'message-hover-actions'
+        const quickPicks = document.createElement('span')
+        quickPicks.className = 'quick-picks'
+        toolbar.appendChild(quickPicks)
         const reactBtn = document.createElement('button')
         reactBtn.className = 'btn-react btn-icon'
         reactBtn.type = 'button'
@@ -181,6 +184,7 @@ export default function CallIsland(root) {
           toolbar.appendChild(actionsBtn)
         }
         article.appendChild(toolbar)
+        renderQuickPicks(toolbar)
       }
 
       // Apply inline rendering (URLs, @mentions) to server-rendered message text.
@@ -695,6 +699,8 @@ export default function CallIsland(root) {
     }
 
     enableTaskCheckboxes(article)
+    const toolbar = article.querySelector('.message-hover-actions')
+    if (toolbar) renderQuickPicks(toolbar)
     messages.appendChild(article)
     renderReactionBar(article, reactions ?? [], msg_id)
     messages.scrollTop = messages.scrollHeight
@@ -736,6 +742,22 @@ export default function CallIsland(root) {
     recents.unshift(emoji)
     if (recents.length > RECENT_MAX) recents = recents.slice(0, RECENT_MAX)
     localStorage.setItem(RECENT_KEY, JSON.stringify(recents))
+    refreshAllQuickPicks()
+  }
+
+  function renderQuickPicks(toolbar) {
+    const slot = toolbar.querySelector('.quick-picks')
+    if (!slot) return
+    const recents = loadRecentEmoji().slice(0, 4)
+    slot.innerHTML = recents.map(emoji =>
+      `<button class="btn-quick-react btn-icon" data-emoji="${escHtml(emoji)}" type="button" title="${escHtml(emoji)}">${emoji}</button>`
+    ).join('')
+  }
+
+  function refreshAllQuickPicks() {
+    for (const toolbar of messages.querySelectorAll('.message-hover-actions')) {
+      renderQuickPicks(toolbar)
+    }
   }
 
   let emojiPickerEl = null
@@ -911,6 +933,18 @@ export default function CallIsland(root) {
     cb.checked = !cb.checked  // optimistic toggle
     article.dataset.rawText = newText
     ws.send({ t: 'msg.edit', body: { msg_id: article.dataset.msgId, channel_id: channelId, text: newText } })
+  })
+
+  // Delegated click on .btn-quick-react — send reaction without opening picker
+  messages.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-quick-react')
+    if (!btn) return
+    e.stopPropagation()
+    const emoji = btn.dataset.emoji
+    const msgId = btn.closest('article.message')?.dataset.msgId
+    if (!emoji || !msgId) return
+    saveRecentEmoji(emoji)
+    ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
   })
 
   // Delegated click on .reaction-pill — toggle reaction

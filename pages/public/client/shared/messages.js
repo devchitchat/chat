@@ -134,7 +134,7 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   const isSelf = userId != null && user_id === userId
   const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
   const editedHtml = edited_at ? '<span class="message-edited">(edited)</span>' : ''
-  const actionsHtml = `<div class="message-hover-actions"><button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
+  const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span><button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
   const textHtml = rendered_text ?? (text ? renderText(text, { userHandle }) : '')
   article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
