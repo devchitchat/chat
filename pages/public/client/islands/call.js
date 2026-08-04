@@ -839,7 +839,6 @@ export default function CallIsland(root) {
     picker.onEmojiPickHandler = (e) => {
       const { emoji } = e.detail
       closeEmojiPicker()
-      closeReactionContextMenu()
       ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
     }
     picker.removeEventListener('emoji:pick', picker._boundEmojiPick)
@@ -887,7 +886,6 @@ export default function CallIsland(root) {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      closeReactionContextMenu()
       closeEmojiPicker()
     }
   })

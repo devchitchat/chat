@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: chat-web
-        image: local/chat-web:8149205
+        image: local/chat-web:924b8d1
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
