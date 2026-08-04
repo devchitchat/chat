@@ -141,9 +141,7 @@ export default function CallIsland(root) {
               data-emoji="${escHtml(r.emoji)}" data-msg-id="${escHtml(msgId)}"
               type="button" title="${r.count} reaction${r.count !== 1 ? 's' : ''}">
         ${r.emoji} <span class="reaction-count">${r.count}</span>
-      </button>`).join('') +
-      `<button class="reaction-add" data-msg-id="${escHtml(msgId)}" type="button"
-               title="Add reaction" aria-label="Add reaction">+</button>`
+      </button>`).join('')
   }
 
   // ── Hydrate seed message attachments ──────────────────────────────────────
@@ -157,18 +155,32 @@ export default function CallIsland(root) {
       if (article.dataset.hydrated) continue
       article.dataset.hydrated = '1'
 
-      // Add dm-trigger to non-self sender handles; add … actions button to own messages
+      // Add dm-trigger to non-self sender handles
       const handle = article.querySelector('.message-handle[data-user-id]')
       if (handle && handle.dataset.userId !== userId) {
         handle.classList.add('dm-trigger')
         handle.title = 'Send a direct message'
-      } else if (article.dataset.userId === userId && !article.querySelector('.btn-msg-actions')) {
-        const btn = document.createElement('button')
-        btn.className = 'btn-msg-actions btn-icon'
-        btn.type = 'button'
-        btn.title = 'Message actions'
-        btn.textContent = '…'
-        article.appendChild(btn)
+      }
+      // Add hover action toolbar (react for all messages; … only for own)
+      if (!article.querySelector('.message-hover-actions')) {
+        const toolbar = document.createElement('div')
+        toolbar.className = 'message-hover-actions'
+        const reactBtn = document.createElement('button')
+        reactBtn.className = 'btn-react btn-icon'
+        reactBtn.type = 'button'
+        reactBtn.title = 'Add reaction'
+        reactBtn.setAttribute('aria-label', 'Add reaction')
+        reactBtn.textContent = '🙂'
+        toolbar.appendChild(reactBtn)
+        if (article.dataset.userId === userId) {
+          const actionsBtn = document.createElement('button')
+          actionsBtn.className = 'btn-msg-actions btn-icon'
+          actionsBtn.type = 'button'
+          actionsBtn.title = 'Message actions'
+          actionsBtn.textContent = '…'
+          toolbar.appendChild(actionsBtn)
+        }
+        article.appendChild(toolbar)
       }
 
       // Apply inline rendering (URLs, @mentions) to server-rendered message text.
@@ -906,7 +918,7 @@ export default function CallIsland(root) {
     if (activeReactionContextMenu && !activeReactionContextMenu.contains(e.target)) closeReactionContextMenu()
     // Close emoji picker on click-outside
     if (emojiPickerEl && emojiPickerEl.parentNode && !emojiPickerEl.contains(e.target)) {
-      const isReactionAddBtn = e.target.closest('.reaction-add')
+      const isReactionAddBtn = e.target.closest('.reaction-add') || e.target.closest('.btn-react')
       if (!isReactionAddBtn) closeEmojiPicker()
     }
   }, { capture: true })
@@ -933,12 +945,14 @@ export default function CallIsland(root) {
     }
   })
 
-  // Delegated click on .reaction-add — open emoji picker
+  // Delegated click on .reaction-add or .btn-react — open emoji picker
   messages.addEventListener('click', e => {
-    const btn = e.target.closest('.reaction-add')
+    const addBtn = e.target.closest('.reaction-add')
+    const reactBtn = e.target.closest('.btn-react')
+    const btn = addBtn ?? reactBtn
     if (!btn) return
     e.stopPropagation()
-    const msgId = btn.dataset.msgId
+    const msgId = addBtn?.dataset.msgId ?? btn.closest('article.message')?.dataset.msgId
     if (!msgId) return
     // Toggle: close if already open for this message
     if (emojiPickerEl && emojiPickerEl.parentNode && emojiPickerTarget === msgId) {

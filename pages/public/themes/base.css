@@ -989,10 +989,11 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   }
   .btn-back-mobile:hover { color: var(--text-primary); }
 
-  /* Actions button: no hover on touch — always visible for own messages */
-  .btn-msg-actions {
+  /* Hover toolbar: no hover on touch — always visible, tucked inside message */
+  .message-hover-actions {
     opacity: 1;
     pointer-events: auto;
+    top: 2px;
   }
 }
 
@@ -1767,19 +1768,43 @@ form.inline { display: inline; }
   font-size: 14px;
 }
 
-/* … actions button on message hover */
-.btn-msg-actions {
+/* Hover action toolbar — floats above the message on hover (Discord-style) */
+article.message { position: relative; }
+.message-hover-actions {
   position: absolute;
-  top: 2px;
+  top: -20px;
   right: 4px;
-  font-size: 16px;
-  line-height: 1;
+  display: flex;
+  gap: 1px;
+  align-items: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
 }
-article.message:hover .btn-msg-actions { opacity: 1; pointer-events: auto; }
-article.message { position: relative; }
+article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto; }
+.btn-react,
+.btn-msg-actions {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-secondary);
+  transition: background var(--transition), color var(--transition);
+}
+.btn-react:hover,
+.btn-msg-actions:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--text-primary);
+}
 
 /* Context menu */
 .msg-context-menu {
