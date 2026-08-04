@@ -139,7 +139,7 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
-      ${textHtml ? `<p class="message-text">${textHtml}</p>` : ''}
+      ${textHtml ? `<div class="message-text">${textHtml}</div>` : ''}
       ${attachmentHtml}
       ${actionsHtml}
     `

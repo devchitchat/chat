@@ -42,6 +42,8 @@ export function handleMsgList(ws, msg, ctx) {
   const { messageService, sendWs } = ctx
   const { channel_id, after_seq, before_seq, limit } = msg.body || {}
 
+  const withRendered = messages => messages.map(m => ({ ...m, rendered_text: renderMarkdown(m.text).html }))
+
   if (before_seq != null) {
     const result = messageService.listMessagesBefore({
       channelId: channel_id,
@@ -49,12 +51,12 @@ export function handleMsgList(ws, msg, ctx) {
       beforeSeq: before_seq,
       limit: limit ?? 50,
     })
-    sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: { ...result, channel_id, direction: 'before' } })
+    sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: { ...result, messages: withRendered(result.messages), channel_id, direction: 'before' } })
     return
   }
 
   const result = messageService.listMessages({ channelId: channel_id, userId: ws.data.userId, afterSeq: after_seq ?? 0, limit: limit ?? 50 })
-  sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: { ...result, channel_id, direction: 'after' } })
+  sendWs(ws, { t: 'msg.list_result', reply_to: msg.id, ok: true, body: { ...result, messages: withRendered(result.messages), channel_id, direction: 'after' } })
 }
 
 export function handleMsgDelete(ws, msg, ctx) {

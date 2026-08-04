@@ -210,6 +210,8 @@ export default function CallIsland(root) {
         renderReactionBar(article, reactions, msgId)
       }
 
+      enableTaskCheckboxes(article)
+
       // Date separator before this article if date changed
       const ts = parseInt(article.querySelector('time')?.getAttribute('datetime') ?? '0', 10)
       if (ts) {
@@ -430,7 +432,7 @@ export default function CallIsland(root) {
     const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
     if (!article) return
     const textEl = article.querySelector('.message-text')
-    if (textEl) textEl.innerHTML = sanitizeHtml(rendered_text)
+    if (textEl) { textEl.innerHTML = sanitizeHtml(rendered_text); enableTaskCheckboxes(article) }
     article.dataset.rawText = text
     article.dataset.editedAt = edited_at
     const timeEl = article.querySelector('.message-time')
@@ -692,6 +694,7 @@ export default function CallIsland(root) {
       article.appendChild(bar)
     }
 
+    enableTaskCheckboxes(article)
     messages.appendChild(article)
     renderReactionBar(article, reactions ?? [], msg_id)
     messages.scrollTop = messages.scrollHeight
@@ -701,6 +704,13 @@ export default function CallIsland(root) {
 
   function sanitizeHtml(html) {
     return String(html ?? '').replaceAll('<script>', '').replaceAll('</script>', '')
+  }
+
+  // Enable task-list checkboxes so they're clickable (renderer marks them disabled)
+  function enableTaskCheckboxes(article) {
+    for (const cb of article.querySelectorAll('.task-list-item-checkbox[disabled]')) {
+      cb.removeAttribute('disabled')
+    }
   }
 
   // Delegated click: message sender name → open DM
@@ -867,55 +877,7 @@ export default function CallIsland(root) {
     emojiPickerTarget = null
   }
 
-  // ── Reaction context menu (desktop right-click) ────────────────────────────
-
-  let activeReactionContextMenu = null
-
-  function closeReactionContextMenu() {
-    if (activeReactionContextMenu) { activeReactionContextMenu.remove(); activeReactionContextMenu = null }
-  }
-
-  function showReactionContextMenu(article, x, y) {
-    closeReactionContextMenu()
-    const msgId = article.dataset.msgId
-    if (!msgId) return
-
-    const menu = document.createElement('div')
-    menu.className = 'msg-context-menu msg-context-menu--reaction'
-
-    const reactBtn = document.createElement('button')
-    reactBtn.className = 'msg-context-menu-item'
-    reactBtn.type = 'button'
-    reactBtn.textContent = 'React'
-    reactBtn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      openEmojiPickerAt(reactBtn, msgId)
-    })
-    menu.appendChild(reactBtn)
-
-    document.body.appendChild(menu)
-    activeReactionContextMenu = menu
-
-    // Position near cursor, viewport-aware
-    const menuRect = menu.getBoundingClientRect()
-    let left = x + window.scrollX
-    let top = y + window.scrollY
-    if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - 8 - menuRect.width
-    if (left < 8) left = 8
-    menu.style.top = `${top}px`
-    menu.style.left = `${left}px`
-  }
-
-  // Right-click on a message article
-  messages.addEventListener('contextmenu', e => {
-    const article = e.target.closest('article.message')
-    if (!article) return
-    e.preventDefault()
-    showReactionContextMenu(article, e.clientX, e.clientY)
-  })
-
   document.addEventListener('click', e => {
-    if (activeReactionContextMenu && !activeReactionContextMenu.contains(e.target)) closeReactionContextMenu()
     // Close emoji picker on click-outside
     if (emojiPickerEl && emojiPickerEl.parentNode && !emojiPickerEl.contains(e.target)) {
       const isReactionAddBtn = e.target.closest('.reaction-add') || e.target.closest('.btn-react')
@@ -928,6 +890,29 @@ export default function CallIsland(root) {
       closeReactionContextMenu()
       closeEmojiPicker()
     }
+  })
+
+  // Delegated click on task-list checkboxes — toggle [ ] ↔ [x] and save via msg.edit
+  messages.addEventListener('click', e => {
+    const cb = e.target.closest('.task-list-item-checkbox')
+    if (!cb) return
+    e.preventDefault()  // we control the toggle ourselves
+    const article = cb.closest('article.message')
+    if (!article) return
+    const rawText = article.dataset.rawText
+    if (!rawText) return
+    const allCbs = Array.from(article.querySelectorAll('.task-list-item-checkbox'))
+    const idx = allCbs.indexOf(cb)
+    if (idx === -1) return
+    let count = 0
+    const newText = rawText.replace(/\[([ xX])\]/g, (match, state) => {
+      if (count++ !== idx) return match
+      return state.trim() === '' ? '[x]' : '[ ]'
+    })
+    if (newText === rawText) return
+    cb.checked = !cb.checked  // optimistic toggle
+    article.dataset.rawText = newText
+    ws.send({ t: 'msg.edit', body: { msg_id: article.dataset.msgId, channel_id: channelId, text: newText } })
   })
 
   // Delegated click on .reaction-pill — toggle reaction
