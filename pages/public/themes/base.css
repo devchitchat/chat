@@ -499,7 +499,10 @@ details summary {
   font-size: 1rem;
   margin-bottom: 7px;
 }
-.chat-topic { color: var(--text-secondary); }
+.chat-topic {
+  color: var(--text-secondary);
+  display: none; /* don't show this for now.*/
+}
 .chat-header-actions { margin-left: auto; display: flex; gap: 6px; }
 
 .search-bar { padding: 8px 20px; background: var(--bg-topbar); border-bottom: 1px solid var(--border); }
@@ -848,8 +851,11 @@ details summary {
 }
 .btn-primary:hover { opacity: 0.85; }
 .btn-ghost {
-  background: none; border: none; padding: 6px 12px; border-radius: var(--radius-sm);
-  color: var(--text-muted); cursor: pointer;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
 }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
 .btn-icon {
