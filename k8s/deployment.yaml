@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chat-web
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chat-web-event-watcher
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: chat-web
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: event-watcher
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-web-sqlite
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-web
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: chat-web
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: chat-web
+    spec:
+      serviceAccountName: chat-web
+      containers:
+      - name: chat-web
+        image: local/chat-web:ec6c4ad-1788025855093
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PORT
+          value: "8080"
+        - name: NODE_ENV
+          value: "production"
+        - name: DB_PATH
+          value: "/var/lib/chat/chat.db"
+        - name: UPLOAD_DIR
+          value: "/var/lib/chat/uploads"
+        - name: VAPID_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chat-web-vapid
+              key: VAPID_PUBLIC_KEY
+        - name: VAPID_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: chat-web-vapid
+              key: VAPID_PRIVATE_KEY
+        - name: VAPID_SUBJECT
+          valueFrom:
+            secretKeyRef:
+              name: chat-web-vapid
+              key: VAPID_SUBJECT
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: chat-data
+          mountPath: /var/lib/chat
+      volumes:
+      - name: chat-data
+        persistentVolumeClaim:
+          claimName: chat-web-sqlite
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-web-service
+spec:
+  selector:
+    app: chat-web
+  ports:
+    - protocol: TCP
+      port: 8080
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: chat-backup
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: local/chat-web:ec6c4ad-1788025855093
+            workingDir: /app
+            command:
+            - sh
+            - -c
+            - |
+              bun backup && bun backup-uploads
+            env:
+            - name: DB_PATH
+              value: /var/lib/chat/chat.db
+            - name: BACKUP_DIR
+              value: "/Users/joeyguerra/k3ds/backups/chat-web/db-backups"
+            - name: UPLOAD_DIR
+              value: /var/lib/chat/uploads
+            - name: UPLOADS_BACKUP_DIR
+              value: "/Users/joeyguerra/k3ds/backups/chat-web/uploads-backups"
+            volumeMounts:
+            - name: chat-data
+              mountPath: /var/lib/chat
+              readOnly: true
+            - name: db-backups
+              mountPath: "/Users/joeyguerra/k3ds/backups/chat-web/db-backups"
+            - name: uploads-backups
+              mountPath: "/Users/joeyguerra/k3ds/backups/chat-web/uploads-backups"
+          restartPolicy: OnFailure
+          volumes:
+          - name: chat-data
+            persistentVolumeClaim:
+              claimName: chat-web-sqlite
+          - name: db-backups
+            hostPath:
+              path: "/Users/joeyguerra/k3ds/backups/chat-web/db-backups"
+              type: DirectoryOrCreate
+          - name: uploads-backups
+            hostPath:
+              path: "/Users/joeyguerra/k3ds/backups/chat-web/uploads-backups"
+              type: DirectoryOrCreate

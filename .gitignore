@@ -134,5 +134,5 @@ data
 data/backups/
 .data
 certs
-charts/**/values.local.yaml
+infra.local.yaml
 .claude
