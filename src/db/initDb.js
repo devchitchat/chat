@@ -105,9 +105,11 @@ export const createSchema = (db) => {
       priority TEXT NOT NULL DEFAULT 'normal',
       attachments_json TEXT,
       edited_at INTEGER,
+      parent_msg_id TEXT REFERENCES messages(msg_id),
       FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
       FOREIGN KEY(user_id) REFERENCES users(user_id)
     );
+    CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_msg_id) WHERE parent_msg_id IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS uploads (
       upload_id        TEXT    PRIMARY KEY,
@@ -173,6 +175,7 @@ export const createSchema = (db) => {
   try { db.exec(`ALTER TABLE messages ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE messages ADD COLUMN parent_msg_id TEXT REFERENCES messages(msg_id)`) } catch { /* already exists */ }
 
   // Bot tokens — added after initial schema
   db.exec(`
