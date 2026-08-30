@@ -553,7 +553,8 @@ export default function CallIsland(root) {
     if (threadRepliesEl) threadRepliesEl.innerHTML = ''
   }
 
-  threadCloseBtn?.addEventListener('click', closeThread)
+  // Wire all close buttons (top header + bottom mobile button)
+  document.querySelectorAll('.thread-panel-close').forEach(btn => btn.addEventListener('click', closeThread))
 
   function sendThreadReply() {
     const text = threadInputEl?.value.trim()

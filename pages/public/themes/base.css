@@ -1457,7 +1457,26 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 
 /* Mobile: full-width overlay */
 @media (max-width: 700px) {
-  .thread-panel { width: 100%; }
+  .thread-panel {
+    width: 100%;
+    /* Push header below notch/Dynamic Island on iPhone PWA */
+    padding-top: env(safe-area-inset-top);
+  }
+  .thread-close-mobile { display: inline-flex; }
+}
+
+.thread-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.thread-close-mobile {
+  display: none; /* desktop: hidden; mobile: shown via media query above */
+  font-size: 13px;
+  opacity: 0.7;
+  margin-right: auto; /* push Reply button to the right */
 }
 
 /* ── Call: status row (shown when a call is active, user hasn't joined) ──── */
