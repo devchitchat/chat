@@ -959,6 +959,7 @@ export default function SidebarIsland(root) {
         }
       }))
     }
+    renderDms()
     if (dmUnread().has(newId)) {
       const next = new Set(dmUnread()); next.delete(newId); dmUnread.set(next)
     }
