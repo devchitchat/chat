@@ -400,12 +400,6 @@ export default function CallIsland(root) {
     root.querySelector('.composer')?.prepend(mentionPickerEl)
   })
 
-  threadInputEl?.addEventListener('input', handleComposerInput)
-  threadInputEl?.addEventListener('focus', () => {
-    activeMentionTextarea = threadInputEl
-    root.querySelector('.thread-composer')?.prepend(mentionPickerEl)
-  })
-
   // ── Chat: connect + join channel ───────────────────────────────────────────
 
   ws.on('open', () => {
@@ -569,6 +563,11 @@ export default function CallIsland(root) {
   }
 
   threadSendBtn?.addEventListener('click', sendThreadReply)
+  threadInputEl?.addEventListener('input', handleComposerInput)
+  threadInputEl?.addEventListener('focus', () => {
+    activeMentionTextarea = threadInputEl
+    root.querySelector('.thread-composer')?.prepend(mentionPickerEl)
+  })
   threadInputEl?.addEventListener('keydown', e => {
     if (!mentionPickerEl.hidden) {
       if (e.key === 'ArrowDown') { e.preventDefault(); mentionSelIdx = Math.min(mentionSelIdx + 1, mentionFiltered.length - 1); renderPicker(); return }

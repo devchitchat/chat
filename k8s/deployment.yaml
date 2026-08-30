@@ -4,20 +4,6 @@ metadata:
   name: chat-web
   namespace: default
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: chat-web-event-watcher
-  namespace: default
-subjects:
-- kind: ServiceAccount
-  name: chat-web
-  namespace: default
-roleRef:
-  kind: ClusterRole
-  name: event-watcher
-  apiGroup: rbac.authorization.k8s.io
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -48,7 +34,7 @@ spec:
       serviceAccountName: chat-web
       containers:
       - name: chat-web
-        image: local/chat-web:a170c42-1788056984861
+        image: local/chat-web:6a0153e-1788062246467
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
@@ -107,7 +93,7 @@ spec:
         spec:
           containers:
           - name: backup
-            image: local/chat-web:a170c42-1788056984861
+            image: local/chat-web:6a0153e-1788062246467
             workingDir: /app
             command:
             - sh
