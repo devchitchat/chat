@@ -16,7 +16,7 @@ export class MessageService {
     this.uploadService = uploadService
   }
 
-  sendMessage({ channelId, userId, text, clientMsgId = null, priority = 'normal', attachments = [] }) {
+  sendMessage({ channelId, userId, text, clientMsgId = null, priority = 'normal', attachments = [], parentMsgId = null }) {
     if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
     if (!text?.trim() && attachments.length === 0) throw new ServiceError('BAD_REQUEST', 'Message text or attachment required')
     if (!['normal', 'async', 'now'].includes(priority)) throw new ServiceError('BAD_REQUEST', 'Invalid priority')
@@ -28,7 +28,8 @@ export class MessageService {
     const attachmentsJson = attachments.length > 0 ? JSON.stringify(attachments) : null
 
     const { seq } = this.messageRepo.insertMessage({
-      msgId, channelId, userId, now, text: trimmed, clientMsgId, priority, attachmentsJson
+      msgId, channelId, userId, now, text: trimmed, clientMsgId, priority, attachmentsJson,
+      parentMsgId: parentMsgId ?? null
     })
 
     if (trimmed) {
@@ -56,7 +57,7 @@ export class MessageService {
       }
     }
 
-    return { msg_id: msgId, seq, ts: now, priority, attachments: enrichedAttachments }
+    return { msg_id: msgId, seq, ts: now, priority, attachments: enrichedAttachments, parent_msg_id: parentMsgId ?? null }
   }
 
   editMessage({ msgId, channelId, userId, newText }) {
@@ -118,5 +119,17 @@ export class MessageService {
       ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
       : rows
     return { messages, has_more: hasMore }
+  }
+
+  listThreadReplies({ parentMsgId, channelId, userId }) {
+    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    const parent = this.messageRepo.getById(parentMsgId)
+    if (!parent) throw new ServiceError('NOT_FOUND', 'Message not found')
+    if (parent.channel_id !== channelId) throw new ServiceError('BAD_REQUEST', 'Message does not belong to this channel')
+    return this.messageRepo.listReplies({ parentMsgId })
+  }
+
+  getReplyCountsForMessages({ msgIds }) {
+    return this.messageRepo.getReplyCountsForMessages({ msgIds })
   }
 }

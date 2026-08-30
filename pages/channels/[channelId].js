@@ -49,6 +49,9 @@ export async function GET(req) {
   const seedMessages = reactionService
     ? reactionService.enrichWithReactions({ messages: rawSeedMessages, requestingUserId: user.user_id })
     : rawSeedMessages
+
+  const seedMsgIds = rawSeedMessages.map(m => m.msg_id)
+  const replyCounts = messageService.getReplyCountsForMessages({ msgIds: seedMsgIds })
   const seedSeq = seedMessages.length ? seedMessages[seedMessages.length - 1].seq : 0
   const seedFirstSeq = seedMessages.length ? seedMessages[0].seq : 0
   const seedHasMore = seedFirstSeq > 1
@@ -84,15 +87,20 @@ export async function GET(req) {
     base: BASE_PATH,
     seedFirstSeq,
     seedHasMore,
-    seedMessages: seedMessages.map(m => ({
-      ...m,
-      raw_text: m.text,
-      text: sanitizeForFrontEnd(renderMarkdown(m.text).html),
-      ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      attachments_json: m.attachments?.length ? JSON.stringify(m.attachments) : '',
-      reactions_json: m.reactions?.length ? JSON.stringify(m.reactions) : '',
-      edited_at: m.edited_at ?? '',
-    })),
+    seedMessages: seedMessages.map(m => {
+      const replyCount = replyCounts[m.msg_id] ?? 0
+      return {
+        ...m,
+        raw_text: m.text,
+        text: sanitizeForFrontEnd(renderMarkdown(m.text).html),
+        ts_fmt: new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        attachments_json: m.attachments?.length ? JSON.stringify(m.attachments) : '',
+        reactions_json: m.reactions?.length ? JSON.stringify(m.reactions) : '',
+        edited_at: m.edited_at ?? '',
+        reply_count: replyCount,
+        reply_count_label: replyCount > 0 ? `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : '',
+      }
+    }),
     seedSeq,
     hubs: hubsWithChannels,
   }

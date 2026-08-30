@@ -1,6 +1,6 @@
 import { runTransaction } from '../db/transaction.js'
 
-const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json`
+const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json, m.parent_msg_id`
 
 export class SqliteMessageRepository {
   constructor({ db }) {
@@ -11,14 +11,14 @@ export class SqliteMessageRepository {
    * Atomically allocates the next seq, inserts the message and an audit event.
    * Returns { seq }.
    */
-  insertMessage({ msgId, channelId, userId, now, text, clientMsgId, priority = 'normal', attachmentsJson = null }) {
+  insertMessage({ msgId, channelId, userId, now, text, clientMsgId, priority = 'normal', attachmentsJson = null, parentMsgId = null }) {
     return runTransaction(this.db, () => {
       const row = this.db.prepare('SELECT MAX(seq) AS max_seq FROM messages WHERE channel_id = ?').get(channelId)
       const seq = (row?.max_seq || 0) + 1
 
       this.db.prepare(
-        `INSERT INTO messages (msg_id, channel_id, seq, user_id, ts, text, client_msg_id, priority, attachments_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(msgId, channelId, seq, userId, now, text, clientMsgId, priority, attachmentsJson)
+        `INSERT INTO messages (msg_id, channel_id, seq, user_id, ts, text, client_msg_id, priority, attachments_json, parent_msg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(msgId, channelId, seq, userId, now, text, clientMsgId, priority, attachmentsJson, parentMsgId ?? null)
 
       this.db.prepare(
         `INSERT INTO events (ts, actor_user_id, scope_kind, scope_id, type, body_json)
@@ -33,7 +33,7 @@ export class SqliteMessageRepository {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ? AND m.seq > ? AND m.deleted_at IS NULL ORDER BY m.seq ASC LIMIT ?`
+       WHERE m.channel_id = ? AND m.seq > ? AND m.deleted_at IS NULL AND m.parent_msg_id IS NULL ORDER BY m.seq ASC LIMIT ?`
     ).all(channelId, afterSeq, limit)
     return rows.map(r => ({
       ...r,
@@ -46,7 +46,7 @@ export class SqliteMessageRepository {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ? AND m.deleted_at IS NULL
+       WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.parent_msg_id IS NULL
        ORDER BY m.seq DESC LIMIT ?`
     ).all(channelId, limit)
     return rows.reverse().map(r => ({
@@ -58,7 +58,7 @@ export class SqliteMessageRepository {
 
   getById(msgId) {
     return this.db.prepare(
-      `SELECT msg_id, channel_id, seq, user_id, ts, text, deleted_at FROM messages WHERE msg_id = ?`
+      `SELECT msg_id, channel_id, seq, user_id, ts, text, deleted_at, parent_msg_id FROM messages WHERE msg_id = ?`
     ).get(msgId) ?? null
   }
 
@@ -78,7 +78,7 @@ export class SqliteMessageRepository {
     const rows = this.db.prepare(
       `SELECT ${MSG_COLS}
        FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
-       WHERE m.channel_id = ? AND m.seq < ? AND m.deleted_at IS NULL
+       WHERE m.channel_id = ? AND m.seq < ? AND m.deleted_at IS NULL AND m.parent_msg_id IS NULL
        ORDER BY m.seq DESC LIMIT ?`
     ).all(channelId, beforeSeq, limit)
     return rows.reverse().map(r => ({
@@ -86,5 +86,31 @@ export class SqliteMessageRepository {
       attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
       attachments_json: undefined,
     }))
+  }
+
+  listReplies({ parentMsgId }) {
+    const rows = this.db.prepare(
+      `SELECT ${MSG_COLS}
+       FROM messages m LEFT JOIN users u ON m.user_id = u.user_id
+       WHERE m.parent_msg_id = ? AND m.deleted_at IS NULL ORDER BY m.seq ASC`
+    ).all(parentMsgId)
+    return rows.map(r => ({
+      ...r,
+      attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
+      attachments_json: undefined,
+    }))
+  }
+
+  getReplyCountsForMessages({ msgIds }) {
+    if (!msgIds.length) return {}
+    const placeholders = msgIds.map(() => '?').join(',')
+    const rows = this.db.prepare(
+      `SELECT parent_msg_id, COUNT(*) AS reply_count FROM messages
+       WHERE parent_msg_id IN (${placeholders}) AND deleted_at IS NULL
+       GROUP BY parent_msg_id`
+    ).all(...msgIds)
+    const result = {}
+    for (const row of rows) result[row.parent_msg_id] = row.reply_count
+    return result
   }
 }

@@ -5,23 +5,32 @@ import { renderMarkdown } from '@devchitchat/index97/markdown'
 
 export function handleMsgSend(ws, msg, ctx) {
   const { messageService, deliveryService, sendWs, publishChannel, dispatchMentions } = ctx
-  const { channel_id, text, client_msg_id, priority, attachments } = msg.body || {}
+  const { channel_id, text, client_msg_id, priority, attachments, parent_msg_id } = msg.body || {}
   const result = messageService.sendMessage({
     channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id, priority,
-    attachments: Array.isArray(attachments) ? attachments : []
+    attachments: Array.isArray(attachments) ? attachments : [],
+    parentMsgId: parent_msg_id ?? null
   })
 
   sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id, priority: result.priority } })
 
-  publishChannel(channel_id, {
-    t: 'msg.event', ok: true,
-    body: {
-      msg_id: result.msg_id, channel_id, seq: result.seq,
-      user_id: ws.data.userId, user_display_name: ws.data.displayName,
-      ts: result.ts, text, rendered_text: renderMarkdown(text).html,
-      priority: result.priority, attachments: result.attachments ?? []
-    }
-  })
+  const eventBody = {
+    msg_id: result.msg_id, channel_id, seq: result.seq,
+    user_id: ws.data.userId, user_display_name: ws.data.displayName,
+    ts: result.ts, text, rendered_text: renderMarkdown(text).html,
+    priority: result.priority, attachments: result.attachments ?? [],
+    parent_msg_id: result.parent_msg_id ?? null
+  }
+
+  publishChannel(channel_id, { t: 'msg.event', ok: true, body: eventBody })
+
+  // If this is a thread reply, also publish thread.reply_event so open thread panels update
+  if (result.parent_msg_id) {
+    publishChannel(channel_id, {
+      t: 'thread.reply_event', ok: true,
+      body: { parent_msg_id: result.parent_msg_id, channel_id, reply: eventBody }
+    })
+  }
 
   deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
   dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq, priority: result.priority })
@@ -67,6 +76,14 @@ export function handleMsgDelete(ws, msg, ctx) {
     t: 'msg.deleted', ok: true,
     body: { msg_id: result.msgId, channel_id: result.channelId, seq: result.seq },
   })
+}
+
+export function handleThreadList(ws, msg, ctx) {
+  const { messageService, sendWs } = ctx
+  const { parent_msg_id, channel_id } = msg.body || {}
+  const replies = messageService.listThreadReplies({ parentMsgId: parent_msg_id, channelId: channel_id, userId: ws.data.userId })
+  const withRendered = replies.map(m => ({ ...m, rendered_text: renderMarkdown(m.text).html }))
+  sendWs(ws, { t: 'thread.list_result', reply_to: msg.id, ok: true, body: { parent_msg_id, channel_id, replies: withRendered } })
 }
 
 export function handleSearchQuery(ws, msg, ctx) {

@@ -168,6 +168,13 @@ export default function CallIsland(root) {
         const quickPicks = document.createElement('span')
         quickPicks.className = 'quick-picks'
         toolbar.appendChild(quickPicks)
+        const replyBtn = document.createElement('button')
+        replyBtn.className = 'btn-reply btn-icon'
+        replyBtn.type = 'button'
+        replyBtn.title = 'Reply in thread'
+        replyBtn.setAttribute('aria-label', 'Reply in thread')
+        replyBtn.innerHTML = '&#x21A9;'
+        toolbar.appendChild(replyBtn)
         const reactBtn = document.createElement('button')
         reactBtn.className = 'btn-react btn-icon'
         reactBtn.type = 'button'
@@ -185,6 +192,22 @@ export default function CallIsland(root) {
         }
         article.appendChild(toolbar)
         renderQuickPicks(toolbar)
+      }
+
+      // Hydrate "view N replies" link for seed messages that have replies
+      if (!article.querySelector('.thread-replies-link')) {
+        const replyCount = parseInt(article.dataset.replyCount ?? '0', 10)
+        if (replyCount > 0) {
+          const msgId = article.dataset.msgId
+          const link = document.createElement('a')
+          link.className = 'thread-replies-link'
+          link.href = '#'
+          link.dataset.msgId = msgId
+          link.textContent = `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`
+          const reactionBar = article.querySelector('.reaction-bar')
+          if (reactionBar) article.insertBefore(link, reactionBar)
+          else article.appendChild(link)
+        }
       }
 
       // Apply inline rendering (URLs, @mentions) to server-rendered message text.
@@ -423,6 +446,7 @@ export default function CallIsland(root) {
 
   ws.on('msg.event', (body) => {
     if (body.channel_id !== channelId) return
+    if (body.parent_msg_id) return  // thread reply — handled via thread.reply_event
     appendMessage(body)
     afterSeq = body.seq
   })
@@ -461,6 +485,138 @@ export default function CallIsland(root) {
     channelName.set(body.channel.name)
     channelTopic.set(body.channel.topic ?? '')
     document.title = `#${body.channel.name} — devchitchat`
+  })
+
+  // ── Thread panel ───────────────────────────────────────────────────────────
+
+  const threadPanelEl  = document.getElementById('thread-panel')
+  const threadBodyEl   = threadPanelEl?.querySelector('.thread-body')
+  const threadAnchorEl = document.getElementById('thread-anchor')
+  const threadRepliesEl = document.getElementById('thread-replies')
+  const threadInputEl  = document.getElementById('thread-input')
+  const threadSendBtn  = document.getElementById('thread-send')
+  const threadCloseBtn = document.getElementById('thread-panel-close')
+
+  let activeThreadParentId = null
+
+  function updateReplyCountLink(article, count) {
+    let link = article.querySelector('.thread-replies-link')
+    if (count > 0) {
+      const label = `View ${count} ${count === 1 ? 'reply' : 'replies'}`
+      if (!link) {
+        link = document.createElement('a')
+        link.className = 'thread-replies-link'
+        link.href = '#'
+        link.dataset.msgId = article.dataset.msgId
+        const reactionBar = article.querySelector('.reaction-bar')
+        if (reactionBar) article.insertBefore(link, reactionBar)
+        else article.appendChild(link)
+      }
+      link.textContent = label
+    }
+  }
+
+  function openThread(parentMsgId) {
+    activeThreadParentId = parentMsgId
+    const parentArticle = messages.querySelector(`[data-msg-id="${parentMsgId}"]`)
+
+    // Render anchor (clone parent message, strip hover actions)
+    if (threadAnchorEl) {
+      threadAnchorEl.innerHTML = ''
+      if (parentArticle) {
+        const clone = parentArticle.cloneNode(true)
+        clone.querySelector('.message-hover-actions')?.remove()
+        clone.querySelector('.thread-replies-link')?.remove()
+        threadAnchorEl.appendChild(clone)
+      }
+    }
+
+    if (threadRepliesEl) threadRepliesEl.innerHTML = '<p class="thread-loading">Loading…</p>'
+    threadPanelEl?.classList.add('active')
+
+    ws.send({ t: 'thread.list', body: { parent_msg_id: parentMsgId, channel_id: channelId } })
+
+    setTimeout(() => threadInputEl?.focus(), 50)
+  }
+
+  function closeThread() {
+    threadPanelEl?.classList.remove('active')
+    activeThreadParentId = null
+    if (threadAnchorEl) threadAnchorEl.innerHTML = ''
+    if (threadRepliesEl) threadRepliesEl.innerHTML = ''
+  }
+
+  threadCloseBtn?.addEventListener('click', closeThread)
+
+  function sendThreadReply() {
+    const text = threadInputEl?.value.trim()
+    if (!text || !activeThreadParentId) return
+    ws.send({ t: 'msg.send', body: { channel_id: channelId, text, parent_msg_id: activeThreadParentId } })
+    if (threadInputEl) threadInputEl.value = ''
+  }
+
+  threadSendBtn?.addEventListener('click', sendThreadReply)
+  threadInputEl?.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendThreadReply() }
+  })
+
+  ws.on('thread.list_result', ({ parent_msg_id, replies }) => {
+    if (parent_msg_id !== activeThreadParentId) return
+    if (!threadRepliesEl) return
+    threadRepliesEl.innerHTML = ''
+    if (!replies.length) {
+      threadRepliesEl.innerHTML = '<p class="thread-empty">No replies yet. Be the first!</p>'
+      return
+    }
+    for (const reply of replies) {
+      const article = makeMessageEl(reply, { userId, userHandle })
+      threadRepliesEl.appendChild(article)
+    }
+    if (threadBodyEl) threadBodyEl.scrollTop = threadBodyEl.scrollHeight
+  })
+
+  ws.on('thread.reply_event', ({ parent_msg_id, channel_id: evtChannelId, reply }) => {
+    if (evtChannelId !== channelId) return
+
+    // Update reply count on parent message in the channel list
+    const parentArticle = messages.querySelector(`[data-msg-id="${parent_msg_id}"]`)
+    if (parentArticle) {
+      const current = parseInt(parentArticle.dataset.replyCount ?? '0', 10)
+      const next = current + 1
+      parentArticle.dataset.replyCount = String(next)
+      updateReplyCountLink(parentArticle, next)
+    }
+
+    // Append reply to thread panel if it's open for this parent
+    if (activeThreadParentId === parent_msg_id && threadRepliesEl) {
+      const emptyEl = threadRepliesEl.querySelector('.thread-empty')
+      if (emptyEl) emptyEl.remove()
+      const article = makeMessageEl(reply, { userId, userHandle })
+      threadRepliesEl.appendChild(article)
+      if (threadBodyEl) threadBodyEl.scrollTop = threadBodyEl.scrollHeight
+    }
+  })
+
+  // Delegated click: reply button → open thread panel
+  messages.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-reply')
+    if (!btn) return
+    e.stopPropagation()
+    const article = btn.closest('article.message')
+    const msgId = article?.dataset.msgId
+    if (!msgId) return
+    openThread(msgId)
+  })
+
+  // Delegated click: "view N replies" link → open thread panel
+  messages.addEventListener('click', e => {
+    const link = e.target.closest('.thread-replies-link')
+    if (!link) return
+    e.preventDefault()
+    e.stopPropagation()
+    const msgId = link.dataset.msgId
+    if (!msgId) return
+    openThread(msgId)
   })
 
   // ── Chat: composer ─────────────────────────────────────────────────────────

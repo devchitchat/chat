@@ -539,7 +539,7 @@ details summary {
 .stream-tile video { width: 160px; height: 90px; object-fit: cover; display: block; }
 
 /* ── Chat panel ──────────────────────────────────────────────────────────── */
-.chat-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chat-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .chat-header { padding: 14px 20px; padding-top: calc(14px + env(safe-area-inset-top)); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
 .chat-title {
   font-size: 1rem;
@@ -820,14 +820,17 @@ details summary {
 .btn-compose-expand:hover { opacity: 1; }
 
 /* ── Compose overlay ─────────────────────────────────────────────────────── */
+/* Absolute so it reliably covers the full chat panel,
+   independent of the surrounding flex layout. */
 .compose-overlay {
-  display: flex;
+  display: none;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
   background: var(--bg-base);
 }
-.compose-overlay[hidden] { display: none; }
+.compose-overlay:not([hidden]) { display: flex; }
 
 .compose-overlay-header {
   display: flex;
@@ -1331,6 +1334,131 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 
 /* Pinned tile: move to top, single column always */
 .tile-grid.pinned .stream-tile.pinned-tile { order: -1; }
+
+/* ── Thread panel ─────────────────────────────────────────────────────────── */
+
+/* .main-content needs position relative so the absolute thread panel anchors to it */
+.main-content { position: relative; }
+
+.thread-panel {
+  display: none;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100%;
+  z-index: 30;
+  overflow: hidden;
+}
+.thread-panel.active { display: flex; }
+
+.thread-panel-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-topbar);
+  flex-shrink: 0;
+}
+.thread-panel-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+.thread-panel-close {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.thread-panel-close:hover { opacity: 1; }
+
+.thread-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-anchor {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover, var(--bg-topbar));
+}
+/* Hide interactive elements in the anchor clone */
+.thread-anchor .message-hover-actions { display: none !important; }
+.thread-anchor .thread-replies-link   { display: none !important; }
+
+.thread-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.thread-replies {
+  flex: 1;
+  padding: 4px 0;
+}
+.thread-replies .message {
+  padding: 4px 12px;
+}
+
+.thread-empty,
+.thread-loading {
+  padding: 24px 16px;
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.thread-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.thread-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  background: var(--bg-input, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  min-height: 56px;
+}
+.thread-textarea:focus { outline: none; border-color: var(--color-accent); }
+.thread-send-btn { align-self: flex-end; }
+
+/* "View N replies" link under messages */
+.thread-replies-link {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--color-link, var(--color-accent));
+  margin: 2px 0 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.thread-replies-link:hover { text-decoration: underline; }
+
+/* Mobile: full-width overlay */
+@media (max-width: 700px) {
+  .thread-panel { width: 100%; }
+}
 
 /* ── Call: status row (shown when a call is active, user hasn't joined) ──── */
 .call-status {

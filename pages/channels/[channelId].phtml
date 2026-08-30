@@ -135,10 +135,11 @@
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
     <div class="load-more-sentinel" id="load-more-sentinel" aria-hidden="true" hidden></div>
     {{#each seedMessages}}
-    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-user-id="{{user_id}}" data-raw-text="{{raw_text}}" data-edited-at="{{edited_at}}" data-attachments="{{attachments_json}}" data-reactions="{{reactions_json}}">
+    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-user-id="{{user_id}}" data-raw-text="{{raw_text}}" data-edited-at="{{edited_at}}" data-attachments="{{attachments_json}}" data-reactions="{{reactions_json}}" data-reply-count="{{reply_count}}">
       <span class="message-handle" data-user-id="{{user_id}}">{{user_display_name}}</span>
       <time class="message-time" datetime="{{ts}}">{{ts_fmt}}{{#if edited_at}}<span class="message-edited">(edited)</span>{{/if}}</time>
       <div class="message-text">{{{text}}}</div>
+      {{#if reply_count_label}}<a class="thread-replies-link" href="#" data-msg-id="{{msg_id}}">{{reply_count_label}}</a>{{/if}}
       <div class="reaction-bar"></div>
     </article>
     {{/each}}
@@ -197,6 +198,23 @@
     <button class="btn-icon tile-panel-collapse" id="tile-panel-collapse" aria-label="Collapse tile panel" type="button">&#8854;</button>
   </div>
   <div class="tile-grid" id="tile-grid"></div>
+</div>
+
+<!-- Thread panel: absolute overlay on the right, shown when a thread is open -->
+<div class="thread-panel" id="thread-panel">
+  <div class="thread-panel-header">
+    <span class="thread-panel-title">Thread</span>
+    <button class="btn-icon thread-panel-close" id="thread-panel-close" aria-label="Close thread" type="button">&#x2715;</button>
+  </div>
+  <div class="thread-body">
+    <div class="thread-anchor" id="thread-anchor"></div>
+    <div class="thread-divider"><span>Replies</span></div>
+    <div class="thread-replies" id="thread-replies" role="log" aria-label="Thread replies"></div>
+  </div>
+  <footer class="thread-composer">
+    <textarea class="thread-textarea" id="thread-input" placeholder="Reply in thread…" rows="2" aria-label="Reply in thread"></textarea>
+    <button class="btn-send thread-send-btn" id="thread-send" type="button">Reply</button>
+  </footer>
 </div>
 
 </div><!-- /.main-content -->
