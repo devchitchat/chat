@@ -1358,7 +1358,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 .thread-panel-header {
   display: flex;
   align-items: center;
-  padding: 10px 14px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-topbar);
   flex-shrink: 0;
