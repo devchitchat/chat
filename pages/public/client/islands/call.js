@@ -557,7 +557,7 @@ export default function CallIsland(root) {
 
   threadSendBtn?.addEventListener('click', sendThreadReply)
   threadInputEl?.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendThreadReply() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendThreadReply() }
   })
 
   ws.on('thread.list_result', ({ parent_msg_id, replies }) => {
