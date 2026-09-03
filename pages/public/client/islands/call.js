@@ -502,7 +502,6 @@ export default function CallIsland(root) {
   const threadRepliesEl = document.getElementById('thread-replies')
   const threadInputEl  = document.getElementById('thread-input')
   const threadSendBtn  = document.getElementById('thread-send')
-  const threadCloseBtn = document.getElementById('thread-panel-close')
 
   let activeThreadParentId = null
 
@@ -553,8 +552,10 @@ export default function CallIsland(root) {
     if (threadRepliesEl) threadRepliesEl.innerHTML = ''
   }
 
-  // Wire all close buttons (top header + bottom mobile button)
-  document.querySelectorAll('.thread-panel-close').forEach(btn => btn.addEventListener('click', closeThread))
+  // Use delegation so both the top ✕ and the mobile footer "Close thread" button work
+  threadPanelEl?.addEventListener('click', e => {
+    if (e.target.closest('.thread-panel-close')) closeThread()
+  })
 
   function sendThreadReply() {
     const text = threadInputEl?.value.trim()
