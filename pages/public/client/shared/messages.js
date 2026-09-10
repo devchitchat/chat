@@ -38,9 +38,9 @@ export function makeDateSeparator(dateKey) {
  */
 // Combined regex (operates on raw text before HTML-escaping):
 //   group 1 (+ inner 2, 3) — markdown link: [text](url)
-//   group 4                — bare https?:// URL (excludes []() so it can't swallow a markdown link)
+//   group 4                — bare https?:// URL (excludes []()* so it can't swallow markdown bold/link syntax)
 //   group 5                — @mention
-const INLINE_RE = /(\[([^\]]*)\]\((https?:\/\/[^)]+)\))|(https?:\/\/[^\s<>"'[\]()]+)|(@[a-zA-Z0-9_.-]+)/g
+const INLINE_RE = /(\[([^\]]*)\]\((https?:\/\/[^)]+)\))|(https?:\/\/[^\s<>"'[\]()*]+)|(@[a-zA-Z0-9_.-]+)/g
 
 export function renderText(text, { userHandle } = {}) {
   let result = ''
@@ -54,7 +54,7 @@ export function renderText(text, { userHandle } = {}) {
       // [link text](https://url)
       result += `<a href="${escHtml(mdUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(mdText)}</a>`
     } else if (bareUrl) {
-      const trimmed = bareUrl.replace(/[.,!?;:)]+$/, '')
+      const trimmed = bareUrl.replace(/[.,!?;:)*]+$/, '')
       const trailing = bareUrl.slice(trimmed.length)
       result += `<a href="${escHtml(trimmed)}" target="_blank" rel="noopener noreferrer">${escHtml(trimmed)}</a>${escHtml(trailing)}`
     } else if (mention) {
