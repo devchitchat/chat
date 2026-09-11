@@ -7,16 +7,26 @@
   --bg-active:  rgba(0,200,200,0.15);
   --bg-input:   #152a3e;
   --bg-call:    #0f2137;
+  --bg-elevated: #1a3448;
 
   --text-primary:   #cde8f0;
-  --text-secondary: #475e65;
-  --text-muted:     #4a7080;
+  --text-secondary: rgba(180,220,230,0.60);
+  --text-muted:     rgba(180,220,230,0.35);
 
-  --border:  #1a3448;
+  --border:  rgba(26,52,72,0.9);
   --accent:  #00c8c8;
 
   --color-success: #2fb57a;
   --color-danger:  #e05a5a;
 
+  --fill-primary:    rgba(0,200,200,0.20);
+  --fill-secondary:  rgba(0,200,200,0.16);
+  --fill-tertiary:   rgba(0,200,200,0.12);
+  --fill-quaternary: rgba(0,200,200,0.08);
+
   --code-background: rgba(255,255,255,.1);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.60), 0 2px 6px rgba(0,0,0,0.40);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.70), 0 4px 14px rgba(0,0,0,0.50);
 }

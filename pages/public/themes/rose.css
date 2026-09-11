@@ -7,16 +7,26 @@
   --bg-active:  rgba(230,100,140,0.16);
   --bg-input:   #2c1a26;
   --bg-call:    #241520;
+  --bg-elevated: #36202e;
 
   --text-primary:   #f0d8e4;
-  --text-secondary: #79596a;
-  --text-muted:     #7a4860;
+  --text-secondary: rgba(230,200,215,0.60);
+  --text-muted:     rgba(230,200,215,0.35);
 
-  --border:  #36202e;
+  --border:  rgba(54,32,46,0.95);
   --accent:  #e8688a;
 
   --color-success: #5ab87a;
   --color-danger:  #e05050;
+
+  --fill-primary:    rgba(230,100,140,0.20);
+  --fill-secondary:  rgba(230,100,140,0.16);
+  --fill-tertiary:   rgba(230,100,140,0.12);
+  --fill-quaternary: rgba(230,100,140,0.08);
+
   --code-background: rgba(255,255,255,.1);
 
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.60), 0 2px 6px rgba(0,0,0,0.40);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.70), 0 4px 14px rgba(0,0,0,0.50);
 }

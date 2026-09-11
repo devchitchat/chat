@@ -1,23 +1,43 @@
-/* light theme */
-:root, [data-theme="light"] {
-  --bg-base:    #f9fafb;
-  --bg-topbar:  #ffffff;
-  --bg-sidebar: #f2f3f5;
-  --bg-hover:   rgba(0,0,0,0.05);
-  --bg-active:  rgba(0,100,220,0.1);
-  --bg-input:   #ffffff;
-  --bg-call:    #f2f3f5;
+/* Apple Human Interface Guidelines — Light Mode
+   Reference: developer.apple.com/design/human-interface-guidelines/color */
+[data-theme="light"] {
+  /* System Backgrounds (Light) */
+  --bg-base:    #F2F2F7;                    /* systemGroupedBackground */
+  --bg-topbar:  #FFFFFF;                    /* systemBackground */
+  --bg-sidebar: #FFFFFF;                    /* systemBackground */
+  --bg-hover:   rgba(60,60,67,0.08);        /* systemFill / quaternary */
+  --bg-active:  rgba(0,122,255,0.12);       /* systemBlue / 12% */
+  --bg-input:   #FFFFFF;                    /* systemBackground */
+  --bg-call:    #F2F2F7;
+  --bg-elevated: #FFFFFF;
 
-  --text-primary:   #060607;
-  --text-secondary: #a2a7bb;
-  --text-muted:     #80848e;
+  /* Labels (Light) */
+  --text-primary:   #000000;               /* label */
+  --text-secondary: rgba(60,60,67,0.60);   /* secondaryLabel */
+  --text-muted:     rgba(60,60,67,0.30);   /* tertiaryLabel */
 
-  --border:  #e3e5e8;
-  --accent:  #0068d6;
+  /* Separator (Light) */
+  --border: rgba(60,60,67,0.29);           /* separator */
 
-  --color-success: #248046;
-  --color-danger:  #da373c;
+  /* System Blue (Light) */
+  --accent: #007AFF;
 
-  --code-background: rgba(0,0,0,.1);
+  /* System Colors (Light) */
+  --color-success: #34C759;   /* systemGreen */
+  --color-danger:  #FF3B30;   /* systemRed */
+  --color-warning: #FF9500;   /* systemOrange */
 
+  /* Fills (Light) */
+  --fill-primary:    rgba(120,120,128,0.20);
+  --fill-secondary:  rgba(120,120,128,0.16);
+  --fill-tertiary:   rgba(118,118,128,0.12);
+  --fill-quaternary: rgba(116,116,128,0.08);
+
+  /* Code */
+  --code-background: rgba(120,120,128,0.18);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.12), 0 4px 14px rgba(0,0,0,0.08);
 }

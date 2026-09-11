@@ -1,22 +1,43 @@
-/* dark theme — default */
+/* Apple Human Interface Guidelines — Dark Mode
+   Reference: developer.apple.com/design/human-interface-guidelines/color */
 :root, [data-theme="dark"] {
-  --bg-base:    #1a1b1e;
-  --bg-topbar:  #141517;
-  --bg-sidebar: #1e1f22;
-  --bg-hover:   rgba(255,255,255,0.06);
-  --bg-active:  rgba(88,166,255,0.12);
-  --bg-input:   #2b2d31;
-  --bg-call:    #1e1f22;
+  /* System Backgrounds (Dark) */
+  --bg-base:    #000000;                     /* systemBackground */
+  --bg-topbar:  #1C1C1E;                     /* secondarySystemBackground */
+  --bg-sidebar: #1C1C1E;                     /* secondarySystemBackground */
+  --bg-hover:   rgba(118,118,128,0.24);     /* systemFill / tertiary */
+  --bg-active:  rgba(10,132,255,0.20);      /* systemBlue / 20% */
+  --bg-input:   #2C2C2E;                     /* tertiarySystemBackground */
+  --bg-call:    #1C1C1E;
+  --bg-elevated: #3A3A3C;                    /* quaternarySystemBackground */
 
-  --text-primary:   #e3e5e8;
-  --text-secondary: #585c60;
-  --text-muted:     #6d6f78;
+  /* Labels (Dark) */
+  --text-primary:   #FFFFFF;                /* label */
+  --text-secondary: rgba(235,235,245,0.60); /* secondaryLabel */
+  --text-muted:     rgba(235,235,245,0.30); /* tertiaryLabel */
 
-  --border:  #2e3035;
-  --accent:  #58a6ff;
+  /* Separator (Dark) */
+  --border: rgba(84,84,88,0.65);            /* separator */
 
-  --color-success: #3ba55c;
-  --color-danger:  #ed4245;
+  /* System Blue (Dark) */
+  --accent: #0A84FF;
 
-  --code-background: rgba(255,255,255,.1);
+  /* System Colors (Dark) */
+  --color-success: #30D158;   /* systemGreen */
+  --color-danger:  #FF453A;   /* systemRed */
+  --color-warning: #FF9F0A;   /* systemOrange */
+
+  /* Fills (Dark) */
+  --fill-primary:    rgba(120,120,128,0.36);
+  --fill-secondary:  rgba(120,120,128,0.32);
+  --fill-tertiary:   rgba(118,118,128,0.24);
+  --fill-quaternary: rgba(116,116,128,0.18);
+
+  /* Code */
+  --code-background: rgba(118,118,128,0.24);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.45);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.75), 0 4px 14px rgba(0,0,0,0.55);
 }
