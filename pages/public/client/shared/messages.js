@@ -33,8 +33,9 @@ export function makeDateSeparator(dateKey) {
 
 /**
  * Escape HTML then wrap @handles in <span class="mention"> (or mention-self for current user).
+ * Only handles that appear in `knownHandles` are styled; unrecognised @words are left as plain text.
  * @param {string} text
- * @param {{ userHandle?: string }} [opts]
+ * @param {{ userHandle?: string, knownHandles?: Set<string> }} [opts]
  */
 // Combined regex (operates on raw text before HTML-escaping):
 //   group 1 (+ inner 2, 3) — markdown link: [text](url)
@@ -42,7 +43,7 @@ export function makeDateSeparator(dateKey) {
 //   group 5                — @mention
 const INLINE_RE = /(\[([^\]]*)\]\((https?:\/\/[^)]+)\))|(https?:\/\/[^\s<>"'[\]()*]+)|(@[a-zA-Z0-9_.-]+)/g
 
-export function renderText(text, { userHandle } = {}) {
+export function renderText(text, { userHandle, knownHandles } = {}) {
   let result = ''
   let lastIndex = 0
   INLINE_RE.lastIndex = 0
@@ -58,9 +59,14 @@ export function renderText(text, { userHandle } = {}) {
       const trailing = bareUrl.slice(trimmed.length)
       result += `<a href="${escHtml(trimmed)}" target="_blank" rel="noopener noreferrer">${escHtml(trimmed)}</a>${escHtml(trailing)}`
     } else if (mention) {
-      const handle = mention.slice(1)
-      const isSelf = userHandle && handle.toLowerCase() === userHandle.toLowerCase()
-      result += `<span class="mention${isSelf ? ' mention-self' : ''}">${escHtml(mention)}</span>`
+      const handle = mention.slice(1).toLowerCase()
+      const known  = !knownHandles || knownHandles.has(handle)
+      if (known) {
+        const isSelf = userHandle && handle === userHandle.toLowerCase()
+        result += `<span class="mention${isSelf ? ' mention-self' : ''}">${escHtml(mention)}</span>`
+      } else {
+        result += escHtml(mention)
+      }
     }
     lastIndex = m.index + full.length
   }
@@ -75,7 +81,7 @@ export function renderText(text, { userHandle } = {}) {
  * @param {Element} el
  * @param {{ userHandle?: string }} [opts]
  */
-export function applyInlineRenderingToTextNodes(el, { userHandle } = {}) {
+export function applyInlineRenderingToTextNodes(el, { userHandle, knownHandles } = {}) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
   const nodes = []
   let n
@@ -86,7 +92,7 @@ export function applyInlineRenderingToTextNodes(el, { userHandle } = {}) {
   for (const textNode of nodes) {
     const raw = textNode.textContent
     if (!raw.trim()) continue
-    const rendered = renderText(raw, { userHandle })
+    const rendered = renderText(raw, { userHandle, knownHandles })
     if (rendered === escHtml(raw)) continue  // nothing changed
     const span = document.createElement('span')
     span.innerHTML = rendered
@@ -123,7 +129,7 @@ export function renderAttachment(a) {
  * @param {{ userId?: string, userHandle?: string, isThreadReply?: boolean }} [ctx]
  *   isThreadReply — omits the "Reply in thread" button (threads can't be nested)
  */
-export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle, isThreadReply = false } = {}) {
+export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle, knownHandles, isThreadReply = false } = {}) {
   const article = document.createElement('article')
   article.className = 'message'
   article.dataset.seq = seq
@@ -137,7 +143,7 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   const editedHtml = edited_at ? '<span class="message-edited">(edited)</span>' : ''
   const replyBtn = isThreadReply ? '' : '<button class="btn-reply btn-icon" type="button" title="Reply in thread" aria-label="Reply in thread">&#x21A9;</button>'
   const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span>${replyBtn}<button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
-  const textHtml = rendered_text ?? (text ? renderText(text, { userHandle }) : '')
+  const textHtml = rendered_text ?? (text ? renderText(text, { userHandle, knownHandles }) : '')
   article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
@@ -146,5 +152,11 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
       <div class="reaction-bar"></div>
       ${actionsHtml}
     `
+  // When the server provides rendered_text, @mention styling is not included.
+  // Apply it now so every code path gets consistent output.
+  if (rendered_text) {
+    const textEl = article.querySelector('.message-text')
+    if (textEl) applyInlineRenderingToTextNodes(textEl, { userHandle, knownHandles })
+  }
   return article
 }
