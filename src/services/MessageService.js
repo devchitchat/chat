@@ -126,7 +126,10 @@ export class MessageService {
     const parent = this.messageRepo.getById(parentMsgId)
     if (!parent) throw new ServiceError('NOT_FOUND', 'Message not found')
     if (parent.channel_id !== channelId) throw new ServiceError('BAD_REQUEST', 'Message does not belong to this channel')
-    return this.messageRepo.listReplies({ parentMsgId })
+    const rows = this.messageRepo.listReplies({ parentMsgId })
+    return this.reactionService
+      ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
+      : rows
   }
 
   getReplyCountsForMessages({ msgIds }) {

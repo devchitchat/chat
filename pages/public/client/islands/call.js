@@ -460,11 +460,13 @@ export default function CallIsland(root) {
 
   ws.on('msg.deleted', ({ msg_id }) => {
     const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+                 ?? threadRepliesEl?.querySelector(`[data-msg-id="${msg_id}"]`)
     if (article) article.remove()
   })
 
   ws.on('msg.edited', ({ msg_id, text, edited_at, rendered_text }) => {
     const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+                 ?? threadRepliesEl?.querySelector(`[data-msg-id="${msg_id}"]`)
     if (!article) return
     const textEl = article.querySelector('.message-text')
     if (textEl) { textEl.innerHTML = sanitizeHtml(rendered_text); enableTaskCheckboxes(article) }
@@ -483,7 +485,9 @@ export default function CallIsland(root) {
   })
 
   ws.on('reaction.event', ({ msg_id, reactions }) => {
+    // Check both the main message list and the open thread panel
     const article = messages.querySelector(`[data-msg-id="${msg_id}"]`)
+                 ?? threadRepliesEl?.querySelector(`[data-msg-id="${msg_id}"]`)
     if (article) renderReactionBar(article, reactions ?? [], msg_id)
   })
 
@@ -589,7 +593,9 @@ export default function CallIsland(root) {
       return
     }
     for (const reply of replies) {
-      const article = makeMessageEl(reply, { userId, userHandle })
+      const article = makeMessageEl(reply, { userId, userHandle, isThreadReply: true })
+      renderQuickPicks(article.querySelector('.message-hover-actions'))
+      if (reply.reactions?.length) renderReactionBar(article, reply.reactions, reply.msg_id)
       threadRepliesEl.appendChild(article)
     }
     if (threadBodyEl) threadBodyEl.scrollTop = threadBodyEl.scrollHeight
@@ -611,7 +617,8 @@ export default function CallIsland(root) {
     if (activeThreadParentId === parent_msg_id && threadRepliesEl) {
       const emptyEl = threadRepliesEl.querySelector('.thread-empty')
       if (emptyEl) emptyEl.remove()
-      const article = makeMessageEl(reply, { userId, userHandle })
+      const article = makeMessageEl(reply, { userId, userHandle, isThreadReply: true })
+      renderQuickPicks(article.querySelector('.message-hover-actions'))
       threadRepliesEl.appendChild(article)
       if (threadBodyEl) threadBodyEl.scrollTop = threadBodyEl.scrollHeight
     }
@@ -1101,6 +1108,11 @@ export default function CallIsland(root) {
     for (const toolbar of messages.querySelectorAll('.message-hover-actions')) {
       renderQuickPicks(toolbar)
     }
+    if (threadRepliesEl) {
+      for (const toolbar of threadRepliesEl.querySelectorAll('.message-hover-actions')) {
+        renderQuickPicks(toolbar)
+      }
+    }
   }
 
   let emojiPickerEl = null
@@ -1251,6 +1263,7 @@ export default function CallIsland(root) {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (activeEditCancel) { activeEditCancel(); return }
       if (composeOpen) { closeComposeMode(); return }
       closeEmojiPicker()
     }
@@ -1323,6 +1336,66 @@ export default function CallIsland(root) {
     openEmojiPickerAt(btn, msgId)
   })
 
+  // ── Thread panel: mirror all message-level interaction handlers ───────────
+  // threadRepliesEl is a sibling outside the island root, so handlers on
+  // `messages` don't reach it — duplicate the relevant delegated clicks here.
+
+  threadRepliesEl?.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-quick-react')
+    if (!btn) return
+    e.stopPropagation()
+    const emoji = btn.dataset.emoji
+    const msgId = btn.closest('article.message')?.dataset.msgId
+    if (!emoji || !msgId) return
+    saveRecentEmoji(emoji)
+    ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
+  })
+
+  threadRepliesEl?.addEventListener('click', e => {
+    const pill = e.target.closest('.reaction-pill')
+    if (!pill) return
+    e.stopPropagation()
+    const emoji = pill.dataset.emoji
+    const msgId = pill.dataset.msgId
+    if (!emoji || !msgId) return
+    if (pill.classList.contains('reacted')) {
+      ws.send({ t: 'reaction.remove', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    } else {
+      ws.send({ t: 'reaction.add', body: { msg_id: msgId, channel_id: channelId, emoji } })
+    }
+  })
+
+  threadRepliesEl?.addEventListener('click', e => {
+    const addBtn = e.target.closest('.reaction-add')
+    const reactBtn = e.target.closest('.btn-react')
+    const btn = addBtn ?? reactBtn
+    if (!btn) return
+    e.stopPropagation()
+    const msgId = addBtn?.dataset.msgId ?? btn.closest('article.message')?.dataset.msgId
+    if (!msgId) return
+    if (emojiPickerEl && emojiPickerEl.parentNode && emojiPickerTarget === msgId) {
+      closeEmojiPicker()
+      return
+    }
+    openEmojiPickerAt(btn, msgId)
+  })
+
+  threadRepliesEl?.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-msg-actions')
+    if (!btn) return
+    e.stopPropagation()
+    const article = btn.closest('article.message')
+    if (article) showContextMenu(article, btn)
+  })
+
+  threadRepliesEl?.addEventListener('click', e => {
+    const handle = e.target.closest('.dm-trigger')
+    if (!handle) return
+    const targetUserId = handle.dataset.userId
+    if (!targetUserId || targetUserId === userId) return
+    ws.send({ t: 'dm.open', body: { target_user_id: targetUserId } })
+  })
+
   // ── Mobile long-press → action sheet with emoji picker ────────────────────
 
   addLongPress(messages, (e) => {
@@ -1355,6 +1428,8 @@ export default function CallIsland(root) {
   })
 
   // ── Inline edit ────────────────────────────────────────────────────────────
+
+  let activeEditCancel = null
 
   function startInlineEdit(article) {
     if (article.querySelector('.message-edit-wrap')) return
@@ -1420,13 +1495,16 @@ export default function CallIsland(root) {
     })
 
     function cancel() {
+      if (!wrap.parentNode) return
       wrap.replaceWith(textEl)
+      activeEditCancel = null
     }
+
+    activeEditCancel = cancel
 
     function save() {
       const newText = textarea.value.trim()
       if (!newText || newText === rawText) { cancel(); return }
-      textEl.textContent = newText
       cancel()
       article.dataset.rawText = newText
       ws.send({ t: 'msg.edit', body: { msg_id: article.dataset.msgId, channel_id: channelId, text: newText } })

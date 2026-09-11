@@ -120,9 +120,10 @@ export function renderAttachment(a) {
 /**
  * Build a <article class="message"> element.
  * @param {{ msg_id, seq, user_id, user_display_name, ts, text, attachments }} msg
- * @param {{ userId?: string, userHandle?: string }} [ctx]  — caller's identity, used for self-styling and @mention highlighting
+ * @param {{ userId?: string, userHandle?: string, isThreadReply?: boolean }} [ctx]
+ *   isThreadReply — omits the "Reply in thread" button (threads can't be nested)
  */
-export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle } = {}) {
+export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle, isThreadReply = false } = {}) {
   const article = document.createElement('article')
   article.className = 'message'
   article.dataset.seq = seq
@@ -134,13 +135,15 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   const isSelf = userId != null && user_id === userId
   const attachmentHtml = (attachments ?? []).map(a => renderAttachment(a)).join('')
   const editedHtml = edited_at ? '<span class="message-edited">(edited)</span>' : ''
-  const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span><button class="btn-reply btn-icon" type="button" title="Reply in thread" aria-label="Reply in thread">&#x21A9;</button><button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
+  const replyBtn = isThreadReply ? '' : '<button class="btn-reply btn-icon" type="button" title="Reply in thread" aria-label="Reply in thread">&#x21A9;</button>'
+  const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span>${replyBtn}<button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
   const textHtml = rendered_text ?? (text ? renderText(text, { userHandle }) : '')
   article.innerHTML = `
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
       ${textHtml ? `<div class="message-text">${textHtml}</div>` : ''}
       ${attachmentHtml}
+      <div class="reaction-bar"></div>
       ${actionsHtml}
     `
   return article
