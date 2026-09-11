@@ -439,6 +439,9 @@ details summary {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-sidebar);
 }
 
 .sidebar-username {
