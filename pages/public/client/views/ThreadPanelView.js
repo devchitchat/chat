@@ -61,7 +61,7 @@ export class ThreadPanelView {
     const composerEl = panelEl.querySelector('.thread-composer')
     if (this.#inputEl && composerEl) {
       this.#mentionPicker = new MentionPicker(
-        this.#inputEl, composerEl, () => model.members,
+        this.#inputEl, composerEl, () => [...model.members, ...model.bots],
       )
     }
 

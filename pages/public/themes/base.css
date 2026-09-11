@@ -1517,6 +1517,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 }
 
 .thread-composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
