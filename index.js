@@ -108,11 +108,6 @@ export async function setup(config = {}) {
     return new Response('WebSocket upgrade required', { status: 426 })
   }
 
-  routes[p('/vendor/rdbl.js')] = () =>
-    new Response(Bun.file(new URL(import.meta.resolve('@devchitchat/rdbljs/src/rdbl.js'))), {
-      headers: { 'Content-Type': 'text/javascript' },
-    })
-
   routes[p('/sw.js')] = () => new Response(
     Bun.file(CHAT_PAGES_DIR + '/public/sw.js'),
     { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': `${basePath}/`, 'Cache-Control': 'no-cache, no-store' } }
@@ -191,10 +186,6 @@ export async function start(config = {}) {
         })) return
         return new Response('WebSocket upgrade required', { status: 426 })
       },
-      [p('/vendor/rdbl.js')]: () =>
-        new Response(Bun.file(new URL(import.meta.resolve('@devchitchat/rdbljs/src/rdbl.js'))), {
-          headers: { 'Content-Type': 'text/javascript' },
-        }),
       [p('/sw.js')]: () => new Response(
         Bun.file(CHAT_PAGES_DIR + '/public/sw.js'),
         { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': `${basePath}/`, 'Cache-Control': 'no-cache, no-store' } }

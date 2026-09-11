@@ -1,29 +1,16 @@
-<!-- Sidebar island: hub/channel nav + online presence -->
-<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" island="{{base}}/client/islands/sidebar.js" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}" data-vapid-key="{{vapidPublicKey}}">
-  <section each="hubs" key="hub_id" class="hub-group">
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Channels" data-currentChannel="{{currentChannelId}}" data-userid="{{user.user_id}}" data-vapid-key="{{vapidPublicKey}}">
+  <section class="hub-group">
     {{#each hubs}}
-    <details class="hub-header" data-key="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" draggable="true" open>
+    <details class="hub-header" data-hub-id="{{hub_id}}" data-visibility="{{visibility}}" data-description="{{description}}" draggable="true" open>
       <summary class="hub-name" data-hub-id="{{hub_id}}">
-        <span text="name">{{name}}</span>
+        <span>{{name}}</span>
         <button class="btn-hub-gear btn-icon" title="Hub settings" aria-label="Hub settings" type="button">&#9881;</button>
         <button class="btn-hub-add btn-icon" title="Create a channel" aria-label="Create a channel" type="button">+</button>
       </summary>
-      <ul each="channels" key="channel_id" class="channel-list">
-        <template>
-          <li class="channel-item" cls="className" draggable="true">
-            <a attr="href:url; title:name" text="name" class="channel-link"
-               data-channel-id=""
-               data-channel-name=""
-               data-channel-topic=""
-               data-channel-kind=""
-               data-channel-visibility=""></a>
-            <span class="call-badge" aria-label="Call active"></span>
-            <button class="btn-channel-gear btn-icon" title="Channel settings" aria-label="Channel settings" type="button">&#9881;</button>
-          </li>
-        </template>
+      <ul class="channel-list">
       {{#each channels}}
-        <li data-key="{{channel_id}}" class="channel-item {{className}}" cls="className" draggable="true">
-          <a attr="href:url; title:name" text="name" class="channel-link"
+        <li class="channel-item {{className}}" draggable="true">
+          <a class="channel-link"
              href="{{base}}/channels/{{channel_id}}"
              title="{{name}}"
              data-channel-id="{{channel_id}}"
@@ -43,7 +30,7 @@
   <section class="dm-section">
     <h3 class="dm-section-title">Direct Messages</h3>
     <ul class="dm-list" id="dm-list">
-      <!-- populated by sidebar.js via dm.list_result -->
+      <!-- populated by SidebarView via dm.list_result -->
     </ul>
   </section>
 
@@ -83,8 +70,7 @@
 <!-- Main content wrapper: slides in from right on mobile -->
 <div class="main-content">
 
-<!-- Chat + call island: messages, composer, and WebRTC -->
-<section class="chat-panel" island="{{base}}/client/islands/call.js"
+<section class="chat-panel"
   data-id="{{channel.channel_id}}"
   data-name="{{channel.name}}"
   data-topic="{{channel.topic}}"
@@ -101,8 +87,8 @@
   <header class="chat-header">
     <button class="btn-back-mobile" aria-label="Back to channels" type="button">&#8592;</button>
     <hgroup>
-      <h2 class="chat-title" text="channelName">{{channel.name}}</h2>
-      <p class="chat-topic" text="channelTopic">{{channel.topic}}</p>
+      <h2 class="chat-title">{{channel.name}}</h2>
+      <p class="chat-topic">{{channel.topic}}</p>
     </hgroup>
     <div class="chat-header-actions">
       <button class="btn-ghost btn-start-call" id="btn-start-call" aria-label="Start call" type="button">
@@ -135,7 +121,7 @@
   <div class="messages" id="messages" aria-live="polite" aria-label="Messages" role="log">
     <div class="load-more-sentinel" id="load-more-sentinel" aria-hidden="true" hidden></div>
     {{#each seedMessages}}
-    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-key="message_id" data-user-id="{{user_id}}" data-raw-text="{{raw_text}}" data-edited-at="{{edited_at}}" data-attachments="{{attachments_json}}" data-reactions="{{reactions_json}}" data-reply-count="{{reply_count}}">
+    <article class="message" data-seq="{{seq}}" data-msg-id="{{msg_id}}" data-user-id="{{user_id}}" data-raw-text="{{raw_text}}" data-edited-at="{{edited_at}}" data-attachments="{{attachments_json}}" data-reactions="{{reactions_json}}" data-reply-count="{{reply_count}}">
       <span class="message-handle" data-user-id="{{user_id}}">{{user_display_name}}</span>
       <time class="message-time" datetime="{{ts}}">{{ts_fmt}}{{#if edited_at}}<span class="message-edited">(edited)</span>{{/if}}</time>
       <div class="message-text">{{{text}}}</div>
@@ -143,25 +129,16 @@
       <div class="reaction-bar"></div>
     </article>
     {{/each}}
-    <template>
-    <article class="message">
-      <span class="message-handle"></span>
-      <time class="message-time" datetime=""></time>
-      <p class="message-text" text="text"></p>
-    </article>
-    </template>
   </div>
 
   <footer class="composer">
-    <button onclick="toggleUrgentMode" class="btn-urgent-toggle" type="button"
-      cls="urgentClass"
+    <button class="btn-urgent-toggle" type="button"
       title="Toggle urgent mode — Enter sends as urgent (Ctrl+Enter for one-shot)" aria-label="Toggle urgent send">&#x1F514;</button>
-    <textarea model="draft" id="message-input" placeholder="Message in {{channel.name}}" aria-label="Write a message"
-      rows="1" onkeydown="handleComposerKey">
-    </textarea>
-    <button onclick="toggleComposeMode" class="btn-compose-expand btn-icon" type="button"
+    <textarea id="message-input" placeholder="Message in {{channel.name}}" aria-label="Write a message"
+      rows="1"></textarea>
+    <button class="btn-compose-expand btn-icon" type="button"
       title="Compose mode (Ctrl+E)" aria-label="Open compose mode">&#x26F6;</button>
-    <button onclick="sendMessage" class="btn-send" aria-label="Send message" type="button">Send</button>
+    <button class="btn-send" aria-label="Send message" type="button">Send</button>
   </footer>
 
   <!-- Compose overlay — full-panel editor with Write / Preview tabs -->

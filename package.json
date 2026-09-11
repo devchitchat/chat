@@ -29,8 +29,7 @@
     "styles.css"
   ],
   "dependencies": {
-    "@devchitchat/index97": "^3.3.0",
-    "@devchitchat/rdbljs": "^2.0.1"
+    "@devchitchat/index97": "^3.3.0"
   },
   "main": "index.js",
   "module": "index.js",

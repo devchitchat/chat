@@ -588,6 +588,8 @@ details summary {
 .result-handle { font-weight: 600; margin-right: 8px; }
 
 .messages {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: clip;
   touch-action: pan-y;
@@ -697,34 +699,6 @@ details summary {
 .reaction-add:hover { background: var(--fill-tertiary); color: var(--accent); }
 
 /* ── Message context menu (right-click) — Apple-style popover ────────────── */
-.msg-context-menu {
-  position: absolute;
-  background: var(--bg-sidebar);
-  border: none;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  z-index: 300;
-  min-width: 160px;
-  overflow: hidden;
-}
-.msg-context-menu-item {
-  display: block;
-  width: 100%;
-  padding: 0 16px;
-  height: 40px;
-  background: none;
-  border: none;
-  border-top: 0.5px solid var(--border);
-  cursor: pointer;
-  text-align: left;
-  color: var(--text-primary);
-  font-size: 15px;
-  transition: background var(--transition);
-}
-.msg-context-menu-item:first-child { border-top: none; }
-.msg-context-menu-item:hover { background: var(--bg-hover); }
-.msg-context-menu-item--danger { color: var(--color-danger); }
-.msg-context-menu-item--danger:hover { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
 
 /* ── Emoji picker ────────────────────────────────────────────────────────── */
 .emoji-picker {
@@ -2312,7 +2286,7 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
 
 /* Context menu */
 .msg-context-menu {
-  position: absolute;
+  position: fixed;
   z-index: 300;
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
