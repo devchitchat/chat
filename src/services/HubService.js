@@ -8,7 +8,7 @@ export class HubService {
   }
 
   createHub({ name, description = null, visibility = 'public', createdByUserId }) {
-    if (!['public', 'restricted'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Invalid hub visibility')
+    if (!['public', 'private'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Invalid hub visibility')
     if (!name?.trim()) throw new ServiceError('BAD_REQUEST', 'Hub name required')
     const hubId = newId('h')
     const now = this.nowFn()
@@ -40,11 +40,25 @@ export class HubService {
     return this.hubRepo.findMembership({ hubId, userId })
   }
 
-  joinHub(hubId, userId) {
+  joinHub(hubId, userId, roles = []) {
     const hub = this.getHub(hubId)
     if (!hub || hub.deleted_at) throw new ServiceError('NOT_FOUND', 'Hub not found')
+    if (hub.visibility === 'private' && !roles.includes('admin')) {
+      const member = this.getHubMembership(hubId, userId)
+      if (!member || member.left_at) throw new ServiceError('FORBIDDEN', 'Hub is private')
+    }
     this.hubRepo.upsertMembership({ hubId, userId, now: this.nowFn() })
     return { hub_id: hubId }
+  }
+
+  // Internal — adds hub membership without permission checks (used by ChannelService
+  // when adding a user to a private channel in a public hub).
+  ensureHubMembership(hubId, userId) {
+    const hub = this.getHub(hubId)
+    if (!hub || hub.deleted_at) return
+    const member = this.getHubMembership(hubId, userId)
+    if (member && !member.left_at) return
+    this.hubRepo.upsertMembership({ hubId, userId, now: this.nowFn() })
   }
 
   leaveHub(hubId, userId) {
@@ -71,7 +85,7 @@ export class HubService {
     }
     if (description !== null) patch.description = description
     if (visibility !== null) {
-      if (!['public', 'restricted'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Hub visibility must be public or restricted')
+      if (!['public', 'private'].includes(visibility)) throw new ServiceError('BAD_REQUEST', 'Hub visibility must be public or private')
       patch.visibility = visibility
     }
 

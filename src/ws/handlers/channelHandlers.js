@@ -79,16 +79,18 @@ export function handleChannelReorder(ws, msg, ctx) {
 }
 
 export function handleChannelAddMember(ws, msg, ctx) {
-  const { channelService, sendWs } = ctx
+  const { auth, channelService, sendWs } = ctx
   const { channel_id, user_id } = msg.body || {}
-  const result = channelService.addMember({ channelId: channel_id, createdByUserId: ws.data.userId, targetUserId: user_id })
+  const user = auth.getUser(ws.data.userId)
+  const result = channelService.addMember({ channelId: channel_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [], targetUserId: user_id })
   sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
 }
 
 export function handleChannelRemoveMember(ws, msg, ctx) {
-  const { channelService, sendWs, publishChannel } = ctx
+  const { auth, channelService, sendWs, publishChannel } = ctx
   const { channel_id, user_id } = msg.body || {}
-  const result = channelService.removeMember({ channelId: channel_id, removedByUserId: ws.data.userId, targetUserId: user_id })
+  const user = auth.getUser(ws.data.userId)
+  const result = channelService.removeMember({ channelId: channel_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [], targetUserId: user_id })
   sendWs(ws, { t: 'channel.member_removed', reply_to: msg.id, ok: true, body: result })
   publishChannel(channel_id, { t: 'channel.member_removed', ok: true, body: result })
 }

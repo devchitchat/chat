@@ -733,6 +733,144 @@ function _navigateAfterDeletion(remainingHubs) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Member management (shared by hub and channel forms)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _loadMembers(membersEl, { kind, id, ws }) {
+  const listType   = kind === 'hub' ? 'hub.list_members'        : 'channel.list_members'
+  const resultType = kind === 'hub' ? 'hub.list_members_result' : 'channel.list_members_result'
+  const addType    = kind === 'hub' ? 'hub.add_member'          : 'channel.add_member'
+  const removeType = kind === 'hub' ? 'hub.remove_member'       : 'channel.remove_member'
+  const idKey      = kind === 'hub' ? 'hub_id'                  : 'channel_id'
+
+  let allUsers = null
+  let members  = null
+
+  // Build fixed DOM structure once — member list and search row are separate nodes
+  // so search input is never destroyed by list re-renders.
+  membersEl.innerHTML = `
+    <div class="member-list-wrap"></div>
+    <div class="member-add-row">
+      <input class="member-add-search" type="text" placeholder="Search by name or handle…" autocomplete="off">
+      <button class="btn-primary btn-sm" type="button" data-add-member>Add</button>
+    </div>`
+
+  const listWrap    = membersEl.querySelector('.member-list-wrap')
+  const addRow      = membersEl.querySelector('.member-add-row')
+  const searchInput = addRow.querySelector('.member-add-search')
+
+  let filtered       = []
+  let selectedUserId = null
+  // available is a live reference updated by render() and read by event handlers
+  let available      = []
+
+  const updateDropdown = () => {
+    addRow.querySelector('.member-search-dropdown')?.remove()
+    if (!filtered.length) return
+    const dropdown = document.createElement('ul')
+    dropdown.className = 'member-search-dropdown'
+    for (const u of filtered.slice(0, 8)) {
+      const label = u.display_name ?? u.handle ?? u.user_id
+      const li = document.createElement('li')
+      li.className = 'member-search-option'
+      li.dataset.userId = u.user_id
+      li.textContent = label
+      if (u.user_id === selectedUserId) li.classList.add('selected')
+      li.addEventListener('mousedown', ev => {
+        ev.preventDefault()
+        selectedUserId = u.user_id
+        searchInput.value = label
+        filtered = []
+        updateDropdown()
+      })
+      dropdown.appendChild(li)
+    }
+    addRow.appendChild(dropdown)
+  }
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase()
+    selectedUserId = null
+    filtered = q.length >= 1
+      ? available.filter(u => {
+          const name   = (u.display_name ?? '').toLowerCase()
+          const handle = (u.handle ?? '').toLowerCase()
+          return name.includes(q) || handle.includes(q)
+        })
+      : []
+    updateDropdown()
+  })
+
+  searchInput.addEventListener('blur', () => {
+    setTimeout(() => addRow.querySelector('.member-search-dropdown')?.remove(), 150)
+  })
+
+  addRow.querySelector('[data-add-member]').addEventListener('click', () => {
+    if (!selectedUserId) {
+      const q = searchInput.value.trim().toLowerCase()
+      const match = available.find(u =>
+        (u.display_name ?? '').toLowerCase() === q || (u.handle ?? '').toLowerCase() === q
+      )
+      if (match) selectedUserId = match.user_id
+    }
+    if (!selectedUserId) return
+    ws.send({ t: addType, body: { [idKey]: id, user_id: selectedUserId } })
+    const user = allUsers.find(u => u.user_id === selectedUserId)
+    if (user) members = [...members, { user_id: selectedUserId, display_name: user.display_name, handle: user.handle }]
+    selectedUserId = null
+    searchInput.value = ''
+    filtered = []
+    updateDropdown()
+    render()
+  })
+
+  function render() {
+    if (!allUsers || !members) return
+
+    const humanIds  = new Set(allUsers.map(u => u.user_id))
+    const humans    = members.filter(m => humanIds.has(m.user_id))
+    const memberIds = new Set(humans.map(m => m.user_id))
+    available = allUsers.filter(u => !memberIds.has(u.user_id))
+
+    // Update only the member list — search row is untouched
+    listWrap.innerHTML = humans.length
+      ? `<ul class="member-list">${humans.map(m => `
+          <li class="member-item">
+            <span class="member-name">${escHtml(m.display_name ?? m.handle ?? m.user_id)}</span>
+            <button class="btn-ghost btn-sm" type="button" data-remove-user="${escHtml(m.user_id)}">Remove</button>
+          </li>`).join('')}</ul>`
+      : `<p style="font-size:13px;color:var(--text-muted);margin:0 0 8px">No members yet.</p>`
+
+    listWrap.querySelectorAll('[data-remove-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const userId = btn.dataset.removeUser
+        ws.send({ t: removeType, body: { [idKey]: id, user_id: userId } })
+        members = members.filter(m => m.user_id !== userId)
+        render()
+      })
+    })
+
+    // Re-run the search filter against the updated available list so the
+    // dropdown stays accurate after a member is added or removed.
+    const q = searchInput.value.trim().toLowerCase()
+    if (q.length >= 1) {
+      filtered = available.filter(u => {
+        const name   = (u.display_name ?? '').toLowerCase()
+        const handle = (u.handle ?? '').toLowerCase()
+        return name.includes(q) || handle.includes(q)
+      })
+      updateDropdown()
+    }
+  }
+
+  ws.once('user.list_result', ({ users }) => { allUsers = users; render() })
+  ws.once(resultType, body => { members = body.members ?? []; render() })
+
+  ws.send({ t: 'user.list', body: {} })
+  ws.send({ t: listType, body: { [idKey]: id } })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Admin form builders (module-private, called by button handlers)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -751,8 +889,12 @@ function _buildHubForm(container, { hubId, hubName, hubDescription, hubVisibilit
       <label for="hub-visibility-input">Visibility</label>
       <select id="hub-visibility-input">
         <option value="public" ${currentVisibility === 'public' ? 'selected' : ''}>Public</option>
-        <option value="restricted" ${currentVisibility === 'restricted' ? 'selected' : ''}>Restricted</option>
+        <option value="private" ${currentVisibility === 'private' ? 'selected' : ''}>Private</option>
       </select>
+    </div>
+    <div class="field" id="hub-members-field" style="${currentVisibility === 'public' ? 'display:none' : ''}">
+      <label>Members</label>
+      <div id="hub-members-container" style="min-height:32px;font-size:13px;color:var(--text-muted)">Loading…</div>
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="hub-cancel-btn" type="button">Cancel</button>
@@ -763,6 +905,19 @@ function _buildHubForm(container, { hubId, hubName, hubDescription, hubVisibilit
       <button class="btn-danger" id="hub-delete-btn" type="button">Delete hub</button>
     </div>`
 
+  const visibilitySelect  = container.querySelector('#hub-visibility-input')
+  const membersField      = container.querySelector('#hub-members-field')
+  let membersLoaded       = currentVisibility === 'private'
+
+  visibilitySelect.addEventListener('change', () => {
+    const isPrivate = visibilitySelect.value === 'private'
+    membersField.style.display = isPrivate ? '' : 'none'
+    if (isPrivate && !membersLoaded) {
+      membersLoaded = true
+      _loadMembers(container.querySelector('#hub-members-container'), { kind: 'hub', id: hubId, ws })
+    }
+  })
+
   container.querySelector('#hub-cancel-btn').addEventListener('click', dismiss)
   container.querySelector('#hub-save-btn').addEventListener('click', () => {
     const name = container.querySelector('#hub-name-input').value.trim()
@@ -770,7 +925,7 @@ function _buildHubForm(container, { hubId, hubName, hubDescription, hubVisibilit
     ws.send({ t: 'hub.update', body: {
       hub_id: hubId, name,
       description: container.querySelector('#hub-desc-input').value.trim() || null,
-      visibility:  container.querySelector('#hub-visibility-input').value,
+      visibility:  visibilitySelect.value,
     } })
     dismiss()
   })
@@ -778,10 +933,14 @@ function _buildHubForm(container, { hubId, hubName, hubDescription, hubVisibilit
     ws.send({ t: 'hub.delete', body: { hub_id: hubId } })
     dismiss()
   })
+  if (currentVisibility === 'private') {
+    _loadMembers(container.querySelector('#hub-members-container'), { kind: 'hub', id: hubId, ws })
+  }
   requestAnimationFrame(() => container.querySelector('#hub-name-input')?.focus())
 }
 
 function _buildChannelForm(container, { channelId, channelName, channelTopic, channelVisibility, ws, dismiss }) {
+  const currentVisibility = channelVisibility ?? 'public'
   container.innerHTML = `
     <div class="field">
       <label for="ch-name-input">Channel name</label>
@@ -790,6 +949,17 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     <div class="field">
       <label for="ch-topic-input">Topic <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
       <input id="ch-topic-input" type="text" value="${escHtml(channelTopic ?? '')}" maxlength="240" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="ch-visibility-input">Visibility</label>
+      <select id="ch-visibility-input">
+        <option value="public"  ${currentVisibility === 'public'  ? 'selected' : ''}>Public</option>
+        <option value="private" ${currentVisibility === 'private' ? 'selected' : ''}>Private</option>
+      </select>
+    </div>
+    <div class="field" id="ch-members-field" style="${currentVisibility === 'public' ? 'display:none' : ''}">
+      <label>Members</label>
+      <div id="ch-members-container" style="min-height:32px;font-size:13px;color:var(--text-muted)">Loading…</div>
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="ch-cancel-btn" type="button">Cancel</button>
@@ -800,6 +970,19 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
       <button class="btn-danger" id="ch-delete-btn" type="button">Delete channel</button>
     </div>`
 
+  const chVisibilitySelect = container.querySelector('#ch-visibility-input')
+  const chMembersField     = container.querySelector('#ch-members-field')
+  let chMembersLoaded      = currentVisibility === 'private'
+
+  chVisibilitySelect.addEventListener('change', () => {
+    const isPrivate = chVisibilitySelect.value === 'private'
+    chMembersField.style.display = isPrivate ? '' : 'none'
+    if (isPrivate && !chMembersLoaded) {
+      chMembersLoaded = true
+      _loadMembers(container.querySelector('#ch-members-container'), { kind: 'channel', id: channelId, ws })
+    }
+  })
+
   container.querySelector('#ch-cancel-btn').addEventListener('click', dismiss)
   container.querySelector('#ch-save-btn').addEventListener('click', () => {
     const name = container.querySelector('#ch-name-input').value.trim()
@@ -807,7 +990,7 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     ws.send({ t: 'channel.update', body: {
       channel_id: channelId, name,
       topic:      container.querySelector('#ch-topic-input').value.trim() || null,
-      visibility: channelVisibility,
+      visibility: chVisibilitySelect.value,
     } })
     dismiss()
   })
@@ -815,6 +998,9 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     ws.send({ t: 'channel.delete', body: { channel_id: channelId } })
     dismiss()
   })
+  if (currentVisibility === 'private') {
+    _loadMembers(container.querySelector('#ch-members-container'), { kind: 'channel', id: channelId, ws })
+  }
   requestAnimationFrame(() => container.querySelector('#ch-name-input')?.focus())
 }
 
@@ -828,6 +1014,13 @@ function _buildCreateHubForm(container, { ws, dismiss }) {
       <label for="new-hub-desc">Description <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
       <input id="new-hub-desc" type="text" maxlength="240" autocomplete="off">
     </div>
+    <div class="field">
+      <label for="new-hub-visibility">Visibility</label>
+      <select id="new-hub-visibility">
+        <option value="public">Public</option>
+        <option value="private">Private</option>
+      </select>
+    </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="new-hub-cancel" type="button">Cancel</button>
       <button class="btn-primary" id="new-hub-save" type="button">Create</button>
@@ -839,7 +1032,7 @@ function _buildCreateHubForm(container, { ws, dismiss }) {
     ws.send({ t: 'hub.create', body: {
       name,
       description: container.querySelector('#new-hub-desc').value.trim() || null,
-      visibility: 'public',
+      visibility:  container.querySelector('#new-hub-visibility').value,
     } })
     dismiss()
   })
@@ -856,6 +1049,13 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
       <label for="new-ch-topic">Topic <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
       <input id="new-ch-topic" type="text" maxlength="240" autocomplete="off">
     </div>
+    <div class="field">
+      <label for="new-ch-visibility">Visibility</label>
+      <select id="new-ch-visibility">
+        <option value="public">Public</option>
+        <option value="private">Private</option>
+      </select>
+    </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="new-ch-cancel" type="button">Cancel</button>
       <button class="btn-primary" id="new-ch-save" type="button">Create</button>
@@ -866,8 +1066,8 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
     if (!name) return
     ws.send({ t: 'channel.create', body: {
       hub_id: hubId, kind: 'text', name,
-      topic: container.querySelector('#new-ch-topic').value.trim() || null,
-      visibility: 'public',
+      topic:      container.querySelector('#new-ch-topic').value.trim() || null,
+      visibility: container.querySelector('#new-ch-visibility').value,
     } })
     dismiss()
   })

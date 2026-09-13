@@ -81,23 +81,44 @@ export class ChannelService {
     return this.channelRepo.listActiveMembers({ channelId })
   }
 
-  addMember({ channelId, createdByUserId, targetUserId }) {
-    const adder = this.getMembership(channelId, createdByUserId)
-    if (!adder || !['owner', 'mod'].includes(adder.role)) throw new ServiceError('FORBIDDEN', 'Only owner or mod can add members')
+  addMember({ channelId, requestingUserId, requestingRoles = [], targetUserId }) {
+    const isAdmin = requestingRoles.includes('admin')
     const channel = this.getChannel(channelId)
     if (!channel) throw new ServiceError('NOT_FOUND', 'Channel not found')
+    if (!isAdmin) {
+      const adder = this.getMembership(channelId, requestingUserId)
+      const isOwnerOrMod = adder && ['owner', 'mod'].includes(adder.role) && !adder.left_at && !adder.banned_at
+      const isCreator = channel.created_by_user_id === requestingUserId
+      if (!isOwnerOrMod && !isCreator) throw new ServiceError('FORBIDDEN', 'Only admin, owner, or mod can add members')
+    }
     const existing = this.getMembership(channelId, targetUserId)
     if (existing && !existing.left_at && !existing.banned_at) throw new ServiceError('BAD_REQUEST', 'User is already a member')
 
     this.channelRepo.upsertMembership({ channelId, userId: targetUserId, role: 'member', now: this.nowFn() })
 
+    // For private channels in a public hub, auto-grant hub membership so the user can
+    // actually reach the hub (canAccessChannel checks hub access before channel access).
+    if (channel.hub_id) {
+      const hub = this.hubService.getHub(channel.hub_id)
+      if (hub && hub.visibility === 'public') {
+        this.hubService.ensureHubMembership(channel.hub_id, targetUserId)
+      }
+    }
+
     return { channel_id: channelId, user_id: targetUserId }
   }
 
-  removeMember({ channelId, removedByUserId, targetUserId }) {
-    const remover = this.getMembership(channelId, removedByUserId)
-    if (!remover || !['owner', 'mod'].includes(remover.role)) throw new ServiceError('FORBIDDEN', 'Only owner or mod can remove members')
-    if (removedByUserId === targetUserId) throw new ServiceError('BAD_REQUEST', 'Use leaveChannel to leave a channel')
+  removeMember({ channelId, requestingUserId, requestingRoles = [], targetUserId }) {
+    const isAdmin = requestingRoles.includes('admin')
+    const channel = this.getChannel(channelId)
+    if (!channel) throw new ServiceError('NOT_FOUND', 'Channel not found')
+    if (!isAdmin) {
+      const remover = this.getMembership(channelId, requestingUserId)
+      const isOwnerOrMod = remover && ['owner', 'mod'].includes(remover.role) && !remover.left_at && !remover.banned_at
+      const isCreator = channel.created_by_user_id === requestingUserId
+      if (!isOwnerOrMod && !isCreator) throw new ServiceError('FORBIDDEN', 'Only admin, owner, or mod can remove members')
+    }
+    if (requestingUserId === targetUserId) throw new ServiceError('BAD_REQUEST', 'Use leaveChannel to leave a channel')
     const target = this.getMembership(channelId, targetUserId)
     if (!target || target.left_at || target.banned_at) throw new ServiceError('BAD_REQUEST', 'User is not a member')
 
