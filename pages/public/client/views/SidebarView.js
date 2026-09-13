@@ -31,6 +31,7 @@ export class SidebarView {
   #ws
   #root               // <aside>
   #dmListEl           // #dm-list
+  #canManage = false  // false for Guests
   #mentionedChannels  = new Set()  // channelId → mentioned
   #urgentChannels     = new Set()  // channelId → urgent
   #dmUnread           = new Set()  // channelId → unread DM
@@ -45,6 +46,22 @@ export class SidebarView {
     this.#ws     = ws
     this.#root   = rootEl
     this.#dmListEl = rootEl.querySelector('#dm-list')
+
+    const roles = document.querySelector('.chat-panel')?.dataset.userRoles ?? ''
+    this.#canManage = !roles.toLowerCase().includes('guest')
+
+    // Stamp data-channel-id / data-hub-id onto SSR-rendered <li> elements
+    // so drag-and-drop and context-menu handlers can read them before #renderHubs runs.
+    for (const li of rootEl.querySelectorAll('li.channel-item')) {
+      if (!li.dataset.channelId) {
+        const link = li.querySelector('[data-channel-id]')
+        if (link?.dataset.channelId) li.dataset.channelId = link.dataset.channelId
+      }
+      if (!li.dataset.hubId) {
+        const details = li.closest('details[data-hub-id]')
+        if (details?.dataset.hubId) li.dataset.hubId = details.dataset.hubId
+      }
+    }
 
     // Seed model from DOM on first load
     const hubs = _populateHubsFromDom(rootEl)
@@ -193,20 +210,18 @@ export class SidebarView {
                data-channel-topic="${escHtml(ch.topic ?? '')}"
                data-channel-visibility="${escHtml(ch.visibility ?? 'public')}"
                data-hub-id="${escHtml(hub.hub_id)}">
-              # ${escHtml(ch.name)}
+              ${escHtml(ch.name)}
             </a>
-            <button class="btn-channel-gear btn-icon" type="button"
-                    title="Channel settings" aria-label="Channel settings">⚙</button>
           </li>`
       }).join('')
+      const addBtn = this.#canManage
+        ? `<button class="btn-hub-add btn-icon" type="button" title="Add channel" aria-label="Add channel">+</button>`
+        : ''
       return `
         <details class="hub-header" data-hub-id="${escHtml(hub.hub_id)}" ${open}>
           <summary class="hub-name" data-hub-id="${escHtml(hub.hub_id)}">
             <span>${escHtml(hub.name)}</span>
-            <button class="btn-hub-gear btn-icon" type="button"
-                    title="Hub settings" aria-label="Hub settings">⚙</button>
-            <button class="btn-hub-add btn-icon" type="button"
-                    title="Add channel" aria-label="Add channel">+</button>
+            ${addBtn}
           </summary>
           <ul class="channel-list">${channels}</ul>
         </details>`
@@ -326,56 +341,65 @@ export class SidebarView {
   // ─────────────────────────────────────────────────────────────────────────
 
   #bindAdminHandlers() {
-    const root = this.#root
-    const ws   = this.#ws
+    const root  = this.#root
+    const ws    = this.#ws
     const model = this.#model
 
-    // New hub button
+    // New hub button (always visible — creating a hub is not a management action)
     root.querySelector('#btn-new-hub')?.addEventListener('click', () => {
-      isTouch()
-        ? _openCreateHubSheet(ws)
-        : _openCreateHubModal(ws)
+      isTouch() ? _openCreateHubSheet(ws) : _openCreateHubModal(ws)
     })
 
-    // Delegated: hub gear, hub add-channel, channel gear
+    if (!this.#canManage) return
+
+    // Add-channel button (delegated — rendered only for non-guests)
     root.addEventListener('click', e => {
-      if (e.target.closest('.btn-hub-gear')) {
-        e.stopPropagation()
-        const summary = e.target.closest('.hub-name')
-        const hubId   = summary?.dataset.hubId
-        if (!hubId) return
-        const hub = model.hubs.find(h => h.hub_id === hubId)
-        _openHubModal(hubId, hub?.name ?? '', hub?.description ?? null, hub?.visibility ?? 'public', ws)
-        return
-      }
-
-      if (e.target.closest('.btn-hub-add')) {
-        e.stopPropagation()
-        const summary = e.target.closest('.hub-name')
-        const hubId   = summary?.dataset.hubId
-        if (!hubId) return
-        const hub = model.hubs.find(h => h.hub_id === hubId)
-        _openCreateChannelModal(hubId, hub?.name ?? '', ws)
-        return
-      }
-
-      if (e.target.closest('.btn-channel-gear')) {
-        e.preventDefault()
-        const li        = e.target.closest('.channel-item')
-        const link      = li?.querySelector('.channel-link')
-        const channelId = link?.dataset.channelId
-        if (!channelId) return
-        let ch = null
-        for (const hub of model.hubs) {
-          ch = (hub.channels ?? []).find(c => c.channel_id === channelId)
-          if (ch) break
-        }
-        _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws)
-        return
-      }
+      const btn = e.target.closest('.btn-hub-add')
+      if (!btn) return
+      e.stopPropagation()
+      const hubId = btn.closest('.hub-name')?.dataset.hubId
+      if (!hubId) return
+      const hub = model.hubs.find(h => h.hub_id === hubId)
+      isTouch()
+        ? (() => { showActionSheet({ label: `New channel in ${hub?.name ?? ''}`, items: [] }); _buildCreateChannelForm(getItemsContainer(), { hubId, ws, dismiss: dismissSheet }) })()
+        : _openCreateChannelModal(hubId, hub?.name ?? '', ws)
     })
 
-    // Long-press on touch (hub summary or channel link)
+    // Desktop: right-click context menus
+    if (!isTouch()) {
+      root.addEventListener('contextmenu', e => {
+        const summary = e.target.closest('.hub-name')
+        if (summary) {
+          e.preventDefault()
+          const hubId = summary.dataset.hubId
+          if (!hubId) return
+          const hub = model.hubs.find(h => h.hub_id === hubId)
+          _showSidebarPopover(e, [
+            { label: 'Edit hub', action: () => _openHubModal(hubId, hub?.name ?? '', hub?.description ?? null, hub?.visibility ?? 'public', ws) },
+            { label: 'New channel', action: () => _openCreateChannelModal(hubId, hub?.name ?? '', ws) },
+            { label: 'Delete hub', danger: true, action: () => { ws.send({ t: 'hub.delete', body: { hub_id: hubId } }) } },
+          ])
+          return
+        }
+        const li = e.target.closest('.channel-item')
+        if (li) {
+          e.preventDefault()
+          const channelId = li.dataset.channelId
+          if (!channelId) return
+          let ch = null
+          for (const hub of model.hubs) {
+            ch = (hub.channels ?? []).find(c => c.channel_id === channelId)
+            if (ch) break
+          }
+          _showSidebarPopover(e, [
+            { label: 'Edit channel', action: () => _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws) },
+            { label: 'Delete channel', danger: true, action: () => { ws.send({ t: 'channel.delete', body: { channel_id: channelId } }) } },
+          ])
+        }
+      })
+    }
+
+    // Mobile: long-press → action sheet
     if (isTouch()) {
       addLongPress(root, e => {
         const target  = e.target ?? e.touches?.[0]?.target
@@ -848,6 +872,57 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
     dismiss()
   })
   requestAnimationFrame(() => container.querySelector('#new-ch-name')?.focus())
+}
+
+// ─── Desktop context-menu popover ────────────────────────────────────────────
+
+let _popoverEl       = null
+let _popoverCleanup  = null
+
+function _dismissSidebarPopover() {
+  _popoverEl?.remove()
+  _popoverEl = null
+  _popoverCleanup?.()
+  _popoverCleanup = null
+}
+
+function _showSidebarPopover(mouseEvent, items) {
+  _dismissSidebarPopover()
+
+  const el = document.createElement('div')
+  el.className = 'msg-context-menu'
+  el.setAttribute('role', 'menu')
+  for (const item of items) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'msg-context-menu-item' + (item.danger ? ' msg-context-menu-item--danger' : '')
+    btn.setAttribute('role', 'menuitem')
+    btn.textContent = item.label
+    btn.addEventListener('click', () => { _dismissSidebarPopover(); item.action() })
+    el.appendChild(btn)
+  }
+  document.body.appendChild(el)
+  _popoverEl = el
+
+  // Position at cursor, flip if needed
+  const gap = 4
+  let top  = mouseEvent.clientY + gap
+  let left = mouseEvent.clientX + gap
+  el.style.left = `${left}px`
+  el.style.top  = `${top}px`
+
+  const rect = el.getBoundingClientRect()
+  if (rect.right  > window.innerWidth  - 8) el.style.left = `${mouseEvent.clientX - rect.width  - gap}px`
+  if (rect.bottom > window.innerHeight - 8) el.style.top  = `${mouseEvent.clientY - rect.height - gap}px`
+
+  const onKey   = e => { if (e.key === 'Escape') _dismissSidebarPopover() }
+  const onClick = e => { if (!el.contains(e.target)) _dismissSidebarPopover() }
+  document.addEventListener('keydown', onKey,  { capture: true })
+  document.addEventListener('click',   onClick, { capture: true })
+  _popoverCleanup = () => {
+    document.removeEventListener('keydown', onKey,  { capture: true })
+    document.removeEventListener('click',   onClick, { capture: true })
+  }
 }
 
 // ─── Modal / sheet openers ────────────────────────────────────────────────────

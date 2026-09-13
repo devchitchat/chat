@@ -82,11 +82,14 @@ export class ComposerView {
         .filter(m => m.handle)
     })
 
-    this.#model.addEventListener(Ev.CHANNEL_SELECTED, () => {
+    this.#model.addEventListener(Ev.CHANNEL_SELECTED, e => {
       // Clear pending state on navigation
       this.#pendingAttachments = []
       this.#renderChips()
-      this.#textareaEl && (this.#textareaEl.value = '')
+      if (this.#textareaEl) {
+        this.#textareaEl.value = ''
+        this.#textareaEl.placeholder = `Message in ${e.detail?.meta?.name ?? ''}`
+      }
     })
   }
 

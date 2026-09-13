@@ -91,6 +91,13 @@ export function handleRtcStreamPublish(ws, msg, ctx) {
   publishCall(call_id, { t: 'rtc.stream_event', ok: true, body: { call_id, peer_id: ws.data.peerId, stream } })
 }
 
+export function handleRtcStreamRemoved(ws, msg, ctx) {
+  const { publishCall } = ctx
+  const { call_id, kind } = msg.body || {}
+  if (!ws.data.peerId || ws.data.callId !== call_id) return
+  publishCall(call_id, { t: 'rtc.stream_removed_event', ok: true, body: { call_id, peer_id: ws.data.peerId, kind } })
+}
+
 export function handleRtcLeave(ws, msg, ctx) {
   const { signalingService, sendWs, publishCall, publishChannel, publishCallState, peerConnections } = ctx
   const { call_id } = msg.body || {}

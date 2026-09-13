@@ -23,7 +23,7 @@ import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdm
 import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers, handleHubReorder } from './handlers/hubHandlers.js'
 import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThreadList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
-import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
+import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcStreamRemoved, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
 import { handleReactionAdd, handleReactionRemove } from './handlers/reactionHandlers.js'
 import { WebPushService } from '../services/WebPushService.js'
@@ -234,6 +234,7 @@ export class ChatServer {
       case 'rtc.answer':                 return handleRtcAnswer(ws, msg, ctx)
       case 'rtc.ice':                    return handleRtcIce(ws, msg, ctx)
       case 'rtc.stream_publish':         return handleRtcStreamPublish(ws, msg, ctx)
+      case 'rtc.stream_removed':         return handleRtcStreamRemoved(ws, msg, ctx)
       case 'rtc.leave':                  return handleRtcLeave(ws, msg, ctx)
       case 'rtc.end_call':               return handleRtcEndCall(ws, msg, ctx)
       // Web Push

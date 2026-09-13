@@ -86,8 +86,11 @@ export class RtcPeerManager {
       }
 
       // Video stream → render tile + ensure audio (video stream may carry audio track)
-      const tileId = `${peerId}-${event.transceiver?.mid ?? 'cam'}`
-      const label  = this.#displayNames.get(peerId) ?? peerId
+      // Use semantic slot name (cam/screen) so WS signaling can address tiles by kind.
+      const slots    = this.#getTransceiverSlots(pc)
+      const slotName = event.transceiver === slots.screen ? 'screen' : 'cam'
+      const tileId   = `${peerId}-${slotName}`
+      const label    = this.#displayNames.get(peerId) ?? peerId
       this.#handlers.onTrack(peerId, tileId, stream, label)
       this.#handlers.onAudio(peerId, stream)
     }

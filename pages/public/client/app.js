@@ -19,11 +19,13 @@ import { ThreadPanelView }       from './views/ThreadPanelView.js'
 import { ComposerView }          from './views/ComposerView.js'
 import { SidebarView }           from './views/SidebarView.js'
 import { CallView }              from './views/CallView.js'
+import { ChatHeaderView }        from './views/ChatHeaderView.js'
 import { cancelActiveEdit }      from './views/shared/MessageInteractions.js'
 import { closeEmojiPicker }      from './views/shared/EmojiPickerSingleton.js'
 import { getSettings, syncFromServer, patchSettings } from './settings-sync.js'
 import { initSwipeNav }          from './swipe-nav.js'
 import { initRouter }            from './router.js'
+import { attachResizeHandle }    from './resizable.js'
 
 const BASE_PATH = window.__BASE_PATH__ ?? ''
 
@@ -68,7 +70,7 @@ if (chatPanelEl) {
 
 const wsController   = new WebSocketController(model, `${BASE_PATH}/ws`)
 const ws             = wsController.ws
-const chatController = new ChatController(model, ws)
+new ChatController(model, ws)
 
 // ── 4. Views ──────────────────────────────────────────────────────────────────
 
@@ -85,12 +87,24 @@ if (chatPanelEl) {
   const composerEl   = chatPanelEl.querySelector('.composer')
   const threadPanelEl = document.getElementById('thread-panel')
 
+  const headerEl = chatPanelEl.querySelector('.chat-header')
+  if (headerEl) {
+    new ChatHeaderView(model, headerEl)
+  }
+
   if (messagesEl) {
     new MessageListView(model, messagesEl, sentinelEl)
   }
 
   if (threadPanelEl) {
     new ThreadPanelView(model, threadPanelEl)
+    attachResizeHandle(threadPanelEl, {
+      edge:       'left',
+      cssVar:     '--thread-panel-width',
+      min:        260,
+      max:        640,
+      prefKey: 'thread_panel_width',
+    })
   }
 
   if (composerEl) {
@@ -98,9 +112,30 @@ if (chatPanelEl) {
   }
 
   // CallView (WebRTC) — only if call UI elements are present
-  if (document.getElementById('tile-panel') || document.getElementById('btn-start-call')) {
-    new CallView(model, ws, chatPanelEl)
+  const tilePanelEl = document.getElementById('tile-panel')
+  if (tilePanelEl || document.getElementById('btn-start-call')) {
+    new CallView(model, ws)
   }
+  if (tilePanelEl) {
+    attachResizeHandle(tilePanelEl, {
+      edge:       'left',
+      cssVar:     '--tile-panel-width',
+      min:        200,
+      max:        640,
+      prefKey: 'tile_panel_width',
+    })
+  }
+}
+
+// Sidebar resize — desktop only (mobile sidebar is full-screen overlay)
+if (sidebarEl && window.matchMedia('(min-width: 769px)').matches) {
+  attachResizeHandle(sidebarEl, {
+    edge:       'right',
+    cssVar:     '--sidebar-width',
+    min:        180,
+    max:        480,
+    prefKey: 'sidebar_width',
+  })
 }
 
 // ── 5. SPA navigation ─────────────────────────────────────────────────────────

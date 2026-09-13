@@ -1,0 +1,147 @@
+<h1 class="ds-page-title">Principles</h1>
+<p class="ds-page-subtitle">
+  The design decisions behind how this codebase is built and how future features should be added.
+  These are not rules enforced by a linter — they are judgment guides that help resolve the
+  inevitable tensions between competing concerns.
+</p>
+
+<!-- ── 1. Ownership ─────────────────────────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">01</p>
+  <h2 class="principle-title">Ownership — with scope as a judgment call</h2>
+  <p class="principle-body">
+    Every piece of DOM has one owner. That owner is a View. The View reaches only <em>downward</em>
+    into its own subtree — never <code>closest()</code> up to a parent or sideways to a sibling.
+  </p>
+  <p class="principle-body">
+    But "single" ownership is only half the idea. The scope of that ownership requires judgment.
+    A view that owns too little becomes boilerplate with no coherent responsibility.
+    A view that owns too much conflates unrelated concerns and becomes hard to reason about.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> What is the smallest unit that has a coherent <em>responsibility</em>
+    (not just a coherent size)? <code>ChatHeaderView</code> is small in lines, but its responsibility
+    is clear: channel identity display and the call entry point. That coherence justifies it as a
+    distinct view — not its line count.
+  </div>
+  <p class="principle-body" style="margin-top: 12px;">
+    <strong>How to apply:</strong> When deciding where code belongs, ask: "what is this element's
+    job?" If two views have valid reasons to touch the same element, that element needs its own view
+    with a clear responsibility, and the two callers communicate through events.
+  </p>
+</div>
+
+<!-- ── 2. Unidirectional communication ───────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">02</p>
+  <h2 class="principle-title">Unidirectional communication</h2>
+  <p class="principle-body">
+    Communication flows in one direction: <strong>model → views</strong> and
+    <strong>user gestures → controllers → model</strong>. Views never push state back into the model
+    directly — they dispatch events that controllers handle.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> Event-driven systems can become chaotic and opaque.
+    The risk isn't events themselves — it's <em>bidirectional</em> or <em>cyclical</em> event flows
+    where A fires an event causing B to fire one that causes A to update. Naming the intended
+    direction makes violations obvious.
+  </div>
+  <p class="principle-body" style="margin-top: 12px;">
+    <strong>How to apply:</strong> Trace any event from where it is dispatched to where it is
+    handled. The flow should be a DAG, not a cycle. If you find yourself listening for an event
+    inside the same view that dispatches it, something is wrong.
+  </p>
+  <div class="ds-code" style="margin-top: 12px; margin-bottom: 0;">WebSocket → WebSocketController → AppModel (mutate)
+                               ↓
+                    Views (listen, render DOM)
+                               ↓
+               User gesture → dispatch CustomEvent
+                               ↓
+                    ChatController → ws.send()</div>
+</div>
+
+<!-- ── 3. Fat model, thin views ──────────────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">03</p>
+  <h2 class="principle-title">Fat model, thin views — held open for critique</h2>
+  <p class="principle-body">
+    Application state lives in <code>AppModel</code>. Views render it and dispatch user gestures.
+    A view that accumulates its own state is a signal that something belongs in the model.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> This was an anchoring design choice — it should not be
+    treated as permanently correct. A model that grows without discipline becomes a god object.
+    The countervailing test: <em>does any other view care about this state?</em> If no, keep it
+    local to the view. If yes, it belongs in the model.
+  </div>
+  <p class="principle-body" style="margin-top: 12px;">
+    <strong>Stay open to:</strong> View-local state that doesn't need to be shared is legitimate.
+    Urgency mode in <code>ComposerView</code>. Whether the compose overlay is open. Whether a
+    device picker is showing in <code>CallView</code>. These don't belong in <code>AppModel</code>
+    because nothing else observes them.
+  </p>
+</div>
+
+<!-- ── 4. Inside-out development ─────────────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">04</p>
+  <h2 class="principle-title">Inside-out development</h2>
+  <p class="principle-body">
+    Build from the center outward: schema → core → service → transport → client.
+    Never build UI against an API that doesn't exist yet. The model or schema is the anchoring
+    technique — starting there forces clarity about the data before the interface.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> Product iteration sometimes demands a UI prototype before
+    the backend is defined. In those cases, use a stub server response and stub data in the
+    model — but acknowledge explicitly that the real API must be designed before the UI ships.
+  </div>
+  <p class="principle-body" style="margin-top: 12px;">
+    <strong>How to apply:</strong> Before touching a template or a view, ask: does the WS message
+    type exist? Does the model event exist? If no, add those first — even as empty stubs — so the
+    client has something real to integrate against.
+  </p>
+</div>
+
+<!-- ── 5. Progressive disclosure ─────────────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">05</p>
+  <h2 class="principle-title">Progressive disclosure</h2>
+  <p class="principle-body">
+    Don't show management controls until the user signals intent to manage something.
+    Gear icons on every channel were noise — they answered a question nobody was asking.
+    Right-click / long-press surfaces them only at the moment of intent.
+  </p>
+  <p class="principle-body">
+    This is a UI practice rooted in deference (HIG): the interface steps back until the user steps
+    forward. It reduces visual weight and keeps the primary use case — reading and writing messages
+    — uncluttered.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> Discoverability. If an action is hidden until right-click,
+    new users may not find it. Mitigate with contextual hints (cursor changes, tooltips,
+    empty states that teach the gesture) rather than always-visible controls.
+  </div>
+</div>
+
+<!-- ── 6. Single source of truth ─────────────────────────────────────────── -->
+<div class="principle-card">
+  <p class="principle-num">06</p>
+  <h2 class="principle-title">Single source of truth per concern</h2>
+  <p class="principle-body">
+    Every concern has one owner. <code>localStorage</code> has one owner: <code>settings-sync.js</code>.
+    Channel state has one owner: <code>AppModel</code>. Theme state has one owner: <code>theme.js</code>.
+    This is an anchoring technique — it prevents concerns from becoming unwieldy as the codebase grows.
+  </p>
+  <p class="principle-body">
+    The alternative is scattered ownership: five views each reading <code>localStorage.getItem('theme')</code>,
+    each with slightly different key names and serialization. Any refactor requires finding and
+    updating all five.
+  </p>
+  <div class="principle-tension">
+    <strong>The tension:</strong> A single owner can become a bottleneck or a dumping ground.
+    Keep concerns narrow. <code>settings-sync.js</code> owns persistence preferences.
+    It should not own user identity or call state — those are different concerns with different
+    owners (<code>AppModel</code>, <code>CallView</code>).
+  </div>
+</div>

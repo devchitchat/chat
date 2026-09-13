@@ -180,7 +180,7 @@ export class MessageListView {
   // Event handlers
   // ─────────────────────────────────────────────────────────────────────────
 
-  #onChannelSelected({ channelId, prev }) {
+  #onChannelSelected({ channelId }) {
     this.#channelId = channelId
     cancelActiveEdit()
 
@@ -281,7 +281,7 @@ export class MessageListView {
     }
   }
 
-  #onLoadingMoreChanged({ loading }) {
+  #onLoadingMoreChanged(_e) {
     // The sentinel visibility is managed in #onMessagesPrepended.
     // Nothing to do here unless we want a loading spinner.
   }

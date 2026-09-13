@@ -12,7 +12,7 @@ for significant past decisions.
 - **Server framework:** `@devchitchat/index97` (file-based routing in `pages/`)
 - **Database:** SQLite via `bun:sqlite`, WAL mode, single file at `data/chat.db`
 - **Real-time:** Bun native WebSockets (`src/ws/ChatServer.js`)
-- **Client:** `@devchitchat/rdbljs` reactive islands, no build step
+- **Client:** Plain browser APIs — hub-and-spoke MVC, no build step, no framework
 - **Tests:** `bun:test`
 
 ---
@@ -53,10 +53,11 @@ before making changes.
 │  response formatting. Calls services.   │
 │  Should be thin — no business logic.    │
 ├─────────────────────────────────────────┤
-│  Client Islands                         │
-│  pages/public/client/islands/*.js       │
-│  Reactive UI, WebSocket client.         │
-│  No business logic.                     │
+│  Client MVC                             │
+│  pages/public/client/                   │
+│  Hub-and-spoke MVC — AppModel as        │
+│  EventTarget hub, Views as spokes.      │
+│  See plans/client-architecture.md       │
 └─────────────────────────────────────────┘
 ```
 
@@ -99,7 +100,7 @@ Follow this sequence for every non-trivial change:
 7. Service  → implement the service method to make the test pass
 8. Refactor → clean up; reassess whether the test is worth keeping
 9. Transport → add/update WS message handler or HTTP route (thin shell)
-10. Client  → update islands and templates last
+10. Client  → update views and templates last (see plans/client-architecture.md)
 ```
 
 Always work inside-out: schema → core → service → transport → client. Never build UI against
@@ -281,7 +282,6 @@ Screen share renegotiation is the highest-risk area — the v1 code has the work
 |---|---|
 | `plans/ideal-customer-profile.md` | Who this is for; use as product decision criteria |
 | `plans/architecture-decisions.md` | Significant past decisions; read before revisiting them |
-| `plans/hub-reorder.md` | Hub drag-and-drop reordering — schema + service + client |
-| `plans/notifications-revision.md` | Notification UX revision — what to change TBD |
+| `plans/client-architecture.md` | Client MVC design — read before adding any client feature |
 | `plans/event-sourcing.md` | Future: full event sourcing (no code yet) |
 | `plans/archive/` | Fully implemented plans — kept for reference |

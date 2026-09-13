@@ -14,8 +14,8 @@
 
 import { CATEGORIES, EMOJI_NAMES } from '../../emoji-data.js'
 import { escHtml } from '../../shared/messages.js'
+import { getPref, setPref } from '../../settings-sync.js'
 
-const RECENT_KEY = 'devchitchat_recent_emoji'
 const RECENT_MAX = 24
 const QUICK_PICKS_COUNT = 4
 
@@ -29,14 +29,14 @@ let currentOnPick  = null
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function loadRecentEmoji() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') } catch { return [] }
+  return getPref('recent_emoji', [])
 }
 
 export function saveRecentEmoji(emoji) {
   let recents = loadRecentEmoji().filter(e => e !== emoji)
   recents.unshift(emoji)
   if (recents.length > RECENT_MAX) recents = recents.slice(0, RECENT_MAX)
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recents))
+  setPref('recent_emoji', recents)
   refreshAllQuickPicks()
 }
 

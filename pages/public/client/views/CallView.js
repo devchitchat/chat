@@ -14,17 +14,13 @@
 
 import { escHtml } from '../shared/messages.js'
 import { RtcPeerManager } from '../rtc-peer-manager.js'
-import { patchSettings } from '../settings-sync.js'
+import { patchSettings, getPref, setPref } from '../settings-sync.js'
 import { navigateTo } from '../router.js'
 import * as Ev from '../model/events.js'
-
-const DEVICES_KEY = 'devchitchat_devices'
-const LAYOUT_KEY  = 'devchitchat_tile_layout'
 
 export class CallView {
   #model
   #ws
-  #root         // .chat-panel
 
   // DOM refs
   #tilePanelEl
@@ -34,7 +30,6 @@ export class CallView {
   #callStatusAvatars
   #callControlsEl
   #peerCountEl
-  #btnStartCall
   #btnJoinCall
   #btnLeaveCall
   #ctrlMic
@@ -77,10 +72,9 @@ export class CallView {
    * @param {WsClient}   ws
    * @param {HTMLElement} rootEl   — .chat-panel
    */
-  constructor(model, ws, rootEl) {
+  constructor(model, ws) {
     this.#model = model
     this.#ws    = ws
-    this.#root  = rootEl
 
     this.#grabDomRefs()
     this.#buildRtcManager()
@@ -103,7 +97,6 @@ export class CallView {
     this.#callStatusAvatars = q('call-status-avatars')
     this.#callControlsEl    = q('call-controls-bar')
     this.#peerCountEl       = q('call-peer-count')
-    this.#btnStartCall      = q('btn-start-call')
     this.#btnJoinCall       = q('btn-join-call')
     this.#btnLeaveCall      = q('btn-leave-call')
     this.#ctrlMic           = q('ctrl-mic')
@@ -142,14 +135,12 @@ export class CallView {
   }
 
   #restoreLayoutState() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
-      if (saved.collapsed) this.#tilePanelEl?.classList.add('collapsed')
-      if (saved.overlayRight && saved.overlayTop && this.#tilePanelEl) {
-        this.#tilePanelEl.style.right = saved.overlayRight
-        this.#tilePanelEl.style.top   = saved.overlayTop
-      }
-    } catch { /* ignore */ }
+    const saved = getPref('tile_layout', {})
+    if (saved.collapsed) this.#tilePanelEl?.classList.add('collapsed')
+    if (saved.overlayRight && saved.overlayTop && this.#tilePanelEl) {
+      this.#tilePanelEl.style.right = saved.overlayRight
+      this.#tilePanelEl.style.top   = saved.overlayTop
+    }
     this.#attachOverlayDrag(this.#tilePanelEl)
   }
 
@@ -158,12 +149,7 @@ export class CallView {
   // ─────────────────────────────────────────────────────────────────────────
 
   #bindControls() {
-    // Mobile "back to sidebar" button
-    this.#root.querySelector('.btn-back-mobile')?.addEventListener('click', () => {
-      document.body.classList.add('sidebar-open')
-    })
-
-    this.#btnStartCall?.addEventListener('click', () => {
+    document.addEventListener('call:start-requested', () => {
       const channelId = this.#model.currentChannelId
       this.#ws.send({ t: 'rtc.call_create', body: { channel_id: channelId, kind: 'mesh' } })
     })
@@ -188,8 +174,8 @@ export class CallView {
     document.getElementById('tile-panel-collapse')?.addEventListener('click', () => {
       const collapsed = this.#tilePanelEl?.classList.toggle('collapsed')
       try {
-        const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...saved, collapsed: !!collapsed }))
+        const saved = getPref('tile_layout', {})
+        setPref('tile_layout', { ...saved, collapsed: !!collapsed })
       } catch { /* ignore */ }
     })
   }
@@ -268,6 +254,11 @@ export class CallView {
       await this.#rtcManager.handleIceCandidate(from_peer_id, candidate)
     })
 
+    ws.on('rtc.stream_removed_event', ({ peer_id, kind }) => {
+      const slotName = kind === 'screen' ? 'screen' : 'cam'
+      this.#removeTile(`${peer_id}-${slotName}`)
+    })
+
     ws.on('rtc.call_end', ({ call_id }) => {
       if (call_id === this.#callId) this.#teardownCall()
     })
@@ -323,12 +314,12 @@ export class CallView {
   #showCallControls() {
     if (this.#callStatusEl) this.#callStatusEl.hidden = true
     this.#callControlsEl?.classList.add('active')
-    if (this.#btnStartCall) this.#btnStartCall.hidden = true
+    document.dispatchEvent(new CustomEvent('call:state-changed', { detail: { inCall: true } }))
   }
 
   #hideCallControls() {
     this.#callControlsEl?.classList.remove('active')
-    if (this.#btnStartCall) this.#btnStartCall.hidden = false
+    document.dispatchEvent(new CustomEvent('call:state-changed', { detail: { inCall: false } }))
   }
 
   #showTilePanel() {
@@ -384,6 +375,7 @@ export class CallView {
       this.#removeTile('local-cam')
       this.#videoStream = null
       this.#camOff = true
+      this.#ws.send({ t: 'rtc.stream_removed', body: { call_id: this.#callId, kind: 'camera' } })
       for (const peerId of this.#rtcManager.peerIds()) this.#rtcManager.negotiate(peerId)
       if (this.#ctrlCam) this.#ctrlCam.textContent = '📷'
       return
@@ -410,6 +402,7 @@ export class CallView {
       this.#removeTile('local-screen')
       this.#screenStream = null
       this.#screenSharing = false
+      this.#ws.send({ t: 'rtc.stream_removed', body: { call_id: this.#callId, kind: 'screen' } })
       for (const peerId of this.#rtcManager.peerIds()) this.#rtcManager.negotiate(peerId)
       if (this.#ctrlScreen) this.#ctrlScreen.textContent = '🖥'
       return
@@ -547,11 +540,11 @@ export class CallView {
   // ─────────────────────────────────────────────────────────────────────────
 
   #loadSavedDevices() {
-    try { return JSON.parse(localStorage.getItem(DEVICES_KEY) ?? '{}') } catch { return {} }
+    return getPref('devices', {})
   }
 
   #saveDevices(patch) {
-    localStorage.setItem(DEVICES_KEY, JSON.stringify({ ...this.#loadSavedDevices(), ...patch }))
+    setPref('devices', { ...this.#loadSavedDevices(), ...patch })
   }
 
   async #refreshDevices() {
@@ -740,8 +733,8 @@ export class CallView {
       document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup',   onEnd)
       document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend',  onEnd)
       try {
-        const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...saved, overlayRight: panel.style.right, overlayTop: panel.style.top }))
+        const saved = getPref('tile_layout', {})
+        setPref('tile_layout', { ...saved, overlayRight: panel.style.right, overlayTop: panel.style.top })
       } catch { /* ignore */ }
     }
 

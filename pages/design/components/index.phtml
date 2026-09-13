@@ -1,0 +1,380 @@
+<h1 class="ds-page-title">Components</h1>
+<p class="ds-page-subtitle">
+  Live examples using the real CSS classes. No stubs — every element here is styled by
+  <code>base.css</code> and the active theme.
+</p>
+
+<!-- ── Buttons ────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Buttons</h2>
+  <p class="ds-section-desc">
+    Three roles: primary (one per view), ghost (secondary actions), icon (toolbars).
+    Danger is a modifier, not a fourth role.
+  </p>
+
+  <span class="ds-label">Primary actions</span>
+  <div class="ds-canvas ds-canvas--grid">
+    <button class="btn-primary" type="button">Send</button>
+    <button class="btn-primary" type="button" disabled>Disabled</button>
+  </div>
+  <div class="ds-code">&lt;button class="btn-primary" type="button"&gt;Send&lt;/button&gt;</div>
+
+  <span class="ds-label">Ghost — secondary / low-emphasis</span>
+  <div class="ds-canvas ds-canvas--grid">
+    <button class="btn-ghost" type="button">Cancel</button>
+    <button class="btn-ghost btn-sm" type="button">Admin</button>
+    <button class="btn-ghost btn-sm" type="button">Sign out</button>
+  </div>
+  <div class="ds-code">&lt;button class="btn-ghost" type="button"&gt;Cancel&lt;/button&gt;
+&lt;button class="btn-ghost btn-sm" type="button"&gt;Admin&lt;/button&gt;</div>
+
+  <span class="ds-label">Icon — toolbars and tight spaces</span>
+  <div class="ds-canvas ds-canvas--grid">
+    <button class="btn-icon" type="button" title="Reply">&#x21A9;</button>
+    <button class="btn-icon" type="button" title="React">🙂</button>
+    <button class="btn-icon" type="button" title="More">&#8943;</button>
+    <button class="btn-icon" type="button" title="Add">+</button>
+    <button class="btn-icon" type="button" title="Close">&#x2715;</button>
+    <button class="btn-icon" type="button" title="Settings">&#9881;</button>
+  </div>
+  <div class="ds-code">&lt;button class="btn-icon" type="button" title="Reply"&gt;&#x21A9;&lt;/button&gt;</div>
+
+  <span class="ds-label">Danger — destructive actions</span>
+  <div class="ds-canvas ds-canvas--grid">
+    <button class="btn-danger" type="button">Delete channel</button>
+    <button class="btn-ghost" style="color: var(--color-danger);" type="button">Remove</button>
+  </div>
+  <div class="ds-annotation">
+    <strong>Naming inconsistency:</strong> Buttons like <code>.btn-start-call</code>,
+    <code>.btn-join-call</code>, and <code>.btn-leave</code> are hardcoded to specific use cases.
+    They should be replaced with semantic compositions: <code>.btn-primary</code> for Join,
+    <code>.btn-ghost</code> for Leave (with <code>--color-danger</code>). Reduces CSS surface area.
+  </div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Form controls ──────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Form Controls</h2>
+
+  <span class="ds-label">Text input</span>
+  <div class="ds-canvas">
+    <div class="field">
+      <label for="ex-name">Channel name</label>
+      <input id="ex-name" type="text" placeholder="e.g. general" maxlength="80" autocomplete="off">
+    </div>
+    <div class="field" style="margin-top: 12px;">
+      <label for="ex-topic">Topic <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <input id="ex-topic" type="text" placeholder="What this channel is for" maxlength="240" autocomplete="off">
+    </div>
+  </div>
+  <div class="ds-code">&lt;div class="field"&gt;
+  &lt;label for="ch-name"&gt;Channel name&lt;/label&gt;
+  &lt;input id="ch-name" type="text" placeholder="e.g. general" autocomplete="off"&gt;
+&lt;/div&gt;</div>
+
+  <span class="ds-label">Select</span>
+  <div class="ds-canvas">
+    <div class="field">
+      <label for="ex-visibility">Visibility</label>
+      <select id="ex-visibility">
+        <option value="public">Public</option>
+        <option value="restricted">Restricted</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Tags ───────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Tags</h2>
+  <p class="ds-section-desc">Used in admin views to label user roles and status.</p>
+  <div class="ds-canvas ds-canvas--grid">
+    <span class="tag">User</span>
+    <span class="tag tag--admin">Admin</span>
+    <span class="tag tag--bot">Bot</span>
+    <span class="tag tag--warn">Guest</span>
+  </div>
+  <div class="ds-code">&lt;span class="tag"&gt;User&lt;/span&gt;
+&lt;span class="tag tag--admin"&gt;Admin&lt;/span&gt;
+&lt;span class="tag tag--bot"&gt;Bot&lt;/span&gt;
+&lt;span class="tag tag--warn"&gt;Guest&lt;/span&gt;</div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Message ────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Message</h2>
+  <p class="ds-section-desc">
+    The core display unit. Uses CSS grid: handle + timestamp on one row, text spanning the full width.
+    Reaction bar and thread link appear below the text.
+  </p>
+
+  <span class="ds-label">Default</span>
+  <div class="ds-canvas ds-canvas--dark">
+    <div id="messages" style="padding: 8px 0; pointer-events: none;">
+      <article class="message" data-msg-id="ex1" data-user-id="u_ex" data-seq="1">
+        <span class="message-handle" data-user-id="u_ex">Alice</span>
+        <time class="message-time" datetime="2026-09-12T10:00:00Z">10:00 AM</time>
+        <div class="message-text">
+          <p>This is a message. It can contain <strong>bold</strong>, <em>italic</em>,
+          <code>inline code</code>, and <a href="#">links</a>.</p>
+        </div>
+        <div class="reaction-bar">
+          <button class="reaction-pill reacted" type="button" title="3 reactions" data-emoji="👍" data-msg-id="ex1">
+            👍 <span class="reaction-count">3</span>
+          </button>
+          <button class="reaction-pill" type="button" title="1 reaction" data-emoji="🔥" data-msg-id="ex1">
+            🔥 <span class="reaction-count">1</span>
+          </button>
+        </div>
+      </article>
+      <article class="message" data-msg-id="ex2" data-user-id="u_ex2" data-seq="2">
+        <span class="message-handle" data-user-id="u_ex2">Bob</span>
+        <time class="message-time" datetime="2026-09-12T10:01:00Z">10:01 AM<span class="message-edited">(edited)</span></time>
+        <div class="message-text">
+          <p>A reply mentioning <span class="mention">@Alice</span> — mentions are highlighted inline.</p>
+        </div>
+        <a class="thread-replies-link" href="#">3 replies</a>
+        <div class="reaction-bar"></div>
+      </article>
+    </div>
+  </div>
+  <div class="ds-annotation">
+    <strong>Ownership note:</strong> <code>.message-hover-actions</code> is created and injected
+    by <code>MessageInteractions.js</code>, not baked into the HTML. The message article is pure
+    content; interaction affordances are layered on top. This keeps the SSR template clean and
+    lets the same <code>makeMessageEl</code> function work in both the channel view and thread panel.
+  </div>
+  <div class="ds-code">&lt;article class="message" data-seq="…" data-msg-id="…" data-user-id="…"&gt;
+  &lt;span class="message-handle" data-user-id="…"&gt;Alice&lt;/span&gt;
+  &lt;time class="message-time" datetime="…"&gt;10:00 AM&lt;/time&gt;
+  &lt;div class="message-text"&gt;…&lt;/div&gt;
+  &lt;div class="reaction-bar"&gt;&lt;!-- populated by renderReactionBar() --&gt;&lt;/div&gt;
+&lt;/article&gt;</div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Reaction bar ────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Reaction Bar</h2>
+  <p class="ds-section-desc">Emoji reactions on a message. Reacted pills are tinted with the accent color.</p>
+  <div class="ds-canvas ds-canvas--grid">
+    <button class="reaction-pill reacted" type="button" title="3 reactions">👍 <span class="reaction-count">3</span></button>
+    <button class="reaction-pill" type="button" title="1 reaction">🔥 <span class="reaction-count">1</span></button>
+    <button class="reaction-pill" type="button" title="2 reactions">❤️ <span class="reaction-count">2</span></button>
+  </div>
+  <div class="ds-code">&lt;!-- reacted = current user has reacted --&gt;
+&lt;button class="reaction-pill reacted" …&gt;👍 &lt;span class="reaction-count"&gt;3&lt;/span&gt;&lt;/button&gt;
+&lt;button class="reaction-pill" …&gt;🔥 &lt;span class="reaction-count"&gt;1&lt;/span&gt;&lt;/button&gt;</div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Sidebar Navigation</h2>
+  <p class="ds-section-desc">
+    Hubs use <code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code> for native collapse.
+    Channel items are <code>&lt;li&gt;</code> inside <code>&lt;ul class="channel-list"&gt;</code>.
+  </p>
+
+  <div class="ds-canvas ds-canvas--flush" style="max-width: 260px;">
+    <div style="padding: 8px 0;">
+      <details class="hub-header" data-hub-id="ex-hub" open>
+        <summary class="hub-name" data-hub-id="ex-hub">
+          <span>Engineering</span>
+        </summary>
+        <ul class="channel-list">
+          <li class="channel-item active">
+            <a class="channel-link" href="#" data-channel-id="c_1">general</a>
+            <span class="call-badge" aria-label="Call active"></span>
+          </li>
+          <li class="channel-item">
+            <a class="channel-link" href="#" data-channel-id="c_2">design</a>
+            <span class="call-badge" aria-label="Call active"></span>
+          </li>
+          <li class="channel-item" data-mention="">
+            <a class="channel-link" href="#" data-channel-id="c_3">backend</a>
+            <span class="call-badge" aria-label="Call active"></span>
+          </li>
+        </ul>
+      </details>
+    </div>
+  </div>
+  <div class="ds-annotation">
+    <strong>Progressive disclosure:</strong> Hub management (edit, delete) is available only via
+    right-click on desktop or long-press on mobile. No gear icon is shown at rest — this keeps
+    the sidebar focused on navigation, not administration.
+  </div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Context menu ───────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Context Menu</h2>
+  <p class="ds-section-desc">
+    Desktop right-click on messages and sidebar items. Positioned near the cursor, flips if near
+    viewport edge. Shared between <code>MessageInteractions</code> and <code>SidebarView</code>.
+  </p>
+  <div class="ds-canvas">
+    <div class="msg-context-menu" style="position: relative; display: inline-block; box-shadow: var(--shadow-md);">
+      <button class="msg-context-menu-item" type="button" role="menuitem">React</button>
+      <button class="msg-context-menu-item" type="button" role="menuitem">Reply in thread</button>
+      <button class="msg-context-menu-item" type="button" role="menuitem">Edit message</button>
+      <button class="msg-context-menu-item msg-context-menu-item--danger" type="button" role="menuitem">Delete message</button>
+    </div>
+  </div>
+  <div class="ds-code">&lt;div class="msg-context-menu" role="menu"&gt;
+  &lt;button class="msg-context-menu-item" role="menuitem"&gt;React&lt;/button&gt;
+  &lt;button class="msg-context-menu-item msg-context-menu-item--danger" role="menuitem"&gt;Delete&lt;/button&gt;
+&lt;/div&gt;</div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Modal ──────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Modal</h2>
+  <p class="ds-section-desc">
+    Used for hub and channel settings on desktop. Managed by <code>modal.js</code>
+    — call <code>showModal({ title, build })</code> rather than constructing the HTML directly.
+  </p>
+  <div class="ds-canvas ds-canvas--flush" style="position: relative; min-height: 360px; overflow: hidden;">
+    <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); border-radius: var(--radius-lg);"></div>
+    <div class="modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0;">
+      <div class="modal-header">
+        <span class="modal-title">Channel settings</span>
+        <button class="btn-icon modal-close" type="button" aria-label="Close">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="ex-modal-name">Channel name</label>
+          <input id="ex-modal-name" type="text" value="general" autocomplete="off">
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label for="ex-modal-topic">Topic</label>
+          <input id="ex-modal-topic" type="text" placeholder="Optional" autocomplete="off">
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ghost" type="button">Cancel</button>
+          <button class="btn-primary" type="button">Save</button>
+        </div>
+        <div class="modal-danger-zone">
+          <p>Deleting this channel removes all its messages permanently.</p>
+          <button class="btn-danger" type="button">Delete channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ds-code">import { showModal, dismiss } from './modal.js'
+
+showModal({
+  title: 'Channel settings',
+  build: body =&gt; {
+    // populate body element with form content
+  }
+})</div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Mention ────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Mentions</h2>
+  <p class="ds-section-desc">
+    Inline @mention spans. Only rendered when the handle matches a known member or bot — unknown
+    handles are left as plain text.
+  </p>
+  <div class="ds-canvas">
+    <p style="font-size: 14px; line-height: 1.6; margin: 0;">
+      Hey <span class="mention">@alice</span> can you review this before <span class="mention">@bob</span> ships it?
+      (Unknown handles like @nobody stay as plain text.)
+    </p>
+  </div>
+  <div class="ds-annotation">
+    <strong>Validation:</strong> <code>renderText()</code> in <code>shared/messages.js</code> accepts
+    a <code>knownHandles</code> Set. If provided, only handles in that set get the
+    <code>.mention</code> class. The set is derived from <code>AppModel.knownHandles</code>
+    (members + bots). This prevents styling random @-prefixed words as mentions.
+  </div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Admin components ───────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Admin Components</h2>
+  <p class="ds-section-desc">Used only in <code>/admin/*</code> routes. Not part of the chat UI.</p>
+
+  <span class="ds-label">Data table</span>
+  <div class="ds-canvas">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Handle</th>
+          <th>Role</th>
+          <th>Joined</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Alice</td>
+          <td>@alice</td>
+          <td><span class="tag tag--admin">Admin</span></td>
+          <td>Sep 1, 2026</td>
+        </tr>
+        <tr>
+          <td>Bob</td>
+          <td>@bob</td>
+          <td><span class="tag">User</span></td>
+          <td>Sep 5, 2026</td>
+        </tr>
+        <tr>
+          <td>Helpbot</td>
+          <td>@helpbot</td>
+          <td><span class="tag tag--bot">Bot</span></td>
+          <td>Sep 8, 2026</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <span class="ds-label" style="margin-top: 24px;">Notice banners</span>
+  <div class="ds-canvas" style="display: flex; flex-direction: column; gap: 8px;">
+    <div class="admin-notice admin-notice--success">Invite link created and ready to share.</div>
+  </div>
+</div>
+
+<hr class="ds-divider">
+
+<!-- ── Resize handles ────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Resizable Panels</h2>
+  <p class="ds-section-desc">
+    Drag handles injected by <code>resizable.js</code>. Width persisted via <code>getPref</code>
+    and applied as a CSS custom property on <code>:root</code>.
+  </p>
+  <div class="ds-canvas" style="display: flex; gap: 0; height: 100px; overflow: hidden; border-radius: var(--radius-lg); position: relative;">
+    <div style="flex: 1; background: var(--bg-sidebar); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-muted);">Sidebar</div>
+    <div class="resize-handle resize-handle--right" style="position: relative; cursor: col-resize;"></div>
+    <div style="flex: 2; background: var(--bg-base); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-muted);">Chat panel</div>
+    <div class="resize-handle resize-handle--left" style="position: relative; cursor: col-resize;"></div>
+    <div style="flex: 1; background: var(--bg-sidebar); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-muted);">Thread panel</div>
+  </div>
+  <div class="ds-code">import { attachResizeHandle } from './resizable.js'
+
+attachResizeHandle(sidebarEl, {
+  edge:    'right',
+  cssVar:  '--sidebar-width',
+  min:     180, max: 480,
+  prefKey: 'sidebar_width',
+})</div>
+</div>

@@ -1,25 +1,63 @@
 /**
- * settings-sync.js — client-side settings: localStorage + background server sync.
+ * settings-sync.js — all client-side persistence in one place.
  *
- * This module owns all localStorage reads/writes and server sync. Islands import
- * from here — they never touch localStorage or the API directly.
+ * Two namespaces:
+ *   settings  — synced to server (last_channel_id, mobile_chat_open, …)
+ *   prefs     — local-only UI preferences (theme, panel widths, devices, …)
  *
- * Storage shape: { settings: { last_channel_id, mobile_chat_open }, updated_at: number }
+ * Callers never touch localStorage directly — they use the exports below.
+ *
+ * Storage keys:
+ *   devchitchat_settings  { settings: {…}, updated_at: number }
+ *   devchitchat_prefs     { theme, sidebar_width, thread_panel_width,
+ *                           tile_panel_width, tile_layout, devices, … }
  */
 
-const STORAGE_KEY = 'devchitchat_settings'
+const SETTINGS_KEY = 'devchitchat_settings'
+const PREFS_KEY    = 'devchitchat_prefs'
 const BASE_PATH = window.__BASE_PATH__ ?? ''
 
 function readLocal() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}')
   } catch {
     return {}
   }
 }
 
 function writeLocal(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(data))
+}
+
+// ── Local-only UI preferences ─────────────────────────────────────────────────
+
+function readPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Read a UI preference. Returns `defaultValue` when the key has never been set.
+ * @param {string} key
+ * @param {*} [defaultValue]
+ */
+export function getPref(key, defaultValue = null) {
+  const prefs = readPrefs()
+  return key in prefs ? prefs[key] : defaultValue
+}
+
+/**
+ * Write one or more UI preferences.
+ * @param {string|Record<string,*>} keyOrPatch  — key string or { key: value } map
+ * @param {*} [value]                           — value when keyOrPatch is a string
+ */
+export function setPref(keyOrPatch, value) {
+  const prefs = readPrefs()
+  const patch  = typeof keyOrPatch === 'string' ? { [keyOrPatch]: value } : keyOrPatch
+  localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, ...patch }))
 }
 
 // Returns current settings object (instant, synchronous)

@@ -19,6 +19,8 @@ input, textarea, select, button { font: inherit; }
   --radius-pill: 999px;
 
   --sidebar-width: 260px;
+  --thread-panel-width: 380px;
+  --tile-panel-width: 360px;
   --composer-height: 80px;
   --call-bar-height: 0px; /* expands when a call is active */
 
@@ -62,6 +64,8 @@ details summary {
   top: 0;
   z-index: 1;
   padding-top: env(safe-area-inset-top);
+  /* needed for the resize handle to anchor correctly */
+  overflow-x: visible;
 }
 
 .hub-group { padding: 0 0 4px; }
@@ -996,6 +1000,23 @@ details summary {
 .mention-option-name   { font-weight: 600; color: var(--text-primary); }
 .mention-option-handle { color: var(--text-secondary); font-size: 13px; }
 
+/* ── Resize handles ──────────────────────────────────────────────────────── */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+}
+.resize-handle--right { right: 0; }
+.resize-handle--left  { left: 0; }
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
 /* ── Auth page — Apple-style centered card ───────────────────────────────── */
 .auth-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .auth-shell { width: 100%; max-width: 420px; padding: 40px 32px; background: var(--bg-sidebar); border-radius: var(--radius-xl); border: none; box-shadow: var(--shadow-lg); }
@@ -1260,6 +1281,8 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   background: var(--bg-sidebar);
   border-left: 1px solid var(--border);
   overflow: hidden;
+  /* position: relative so the .resize-handle--left child anchors to this element */
+  position: relative;
 }
 .tile-panel.active { display: flex; }
 
@@ -1293,7 +1316,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
     height: 100%;
   }
   .tile-panel {
-    width: 360px;
+    width: var(--tile-panel-width);
     flex-shrink: 0;
     height: 100vh;
     overflow-y: auto;
@@ -1440,7 +1463,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   position: absolute;
   top: 0;
   right: 0;
-  width: 380px;
+  width: var(--thread-panel-width);
   height: 100%;
   z-index: 30;
   overflow: hidden;

@@ -1,0 +1,78 @@
+<h1 class="ds-page-title">Design System</h1>
+<p class="ds-page-subtitle">
+  A living reference for the UI language of devchitchat. Built with and for the codebase —
+  every example here uses the real CSS and renders in the actual running app.
+  Themed: change the picker in the nav to see all tokens update live.
+</p>
+
+<div class="ds-section">
+  <h2 class="ds-section-title">What's in here</h2>
+  <p class="ds-section-desc">Three sections, each with a specific job.</p>
+
+  <div class="ds-canvas">
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
+      <div>
+        <a href="{{base}}/design/principles" style="text-decoration: none;">
+          <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin: 0 0 4px;">Principles</p>
+          <p style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Why we build the way we build</p>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">Ownership, direction of communication, progressive disclosure, and the tensions between them.</p>
+        </a>
+      </div>
+      <div>
+        <a href="{{base}}/design/tokens" style="text-decoration: none;">
+          <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin: 0 0 4px;">Tokens</p>
+          <p style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Colors, typography, spacing, radii</p>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">Every CSS custom property used across all five themes, with live swatches that update when you switch.</p>
+        </a>
+      </div>
+      <div>
+        <a href="{{base}}/design/components" style="text-decoration: none;">
+          <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin: 0 0 4px;">Components</p>
+          <p style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Every UI pattern in one place</p>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">Live examples of every button, input, message, overlay, and sidebar element with their class names.</p>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ds-section">
+  <h2 class="ds-section-title">Design language</h2>
+  <p class="ds-section-desc">Informed by Apple's Human Interface Guidelines.</p>
+
+  <div class="ds-canvas">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+      <div>
+        <p style="font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Clarity</p>
+        <p style="margin: 0;">Text is legible. Icons are unambiguous. Whitespace is generous. The interface
+        surfaces what the user needs without decoration for its own sake.</p>
+      </div>
+      <div>
+        <p style="font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Deference</p>
+        <p style="margin: 0;">The UI steps back so content — messages, names, channels — takes focus.
+        Backgrounds recede. Borders are subtle. Actions appear when needed, not always.</p>
+      </div>
+      <div>
+        <p style="font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Depth</p>
+        <p style="margin: 0;">Layering through blur, shadow, and elevation communicates hierarchy.
+        Modals float above content. The sidebar is behind the chat. The call panel is beside it.</p>
+      </div>
+      <div>
+        <p style="font-weight: 600; color: var(--text-primary); margin: 0 0 6px;">Feedback</p>
+        <p style="margin: 0;">Every interaction has a response — hover states, transitions at
+        200ms cubic-bezier ease, and status indicators so the user always knows what the app is doing.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ds-section">
+  <h2 class="ds-section-title">Stack</h2>
+  <p class="ds-section-desc">No build step. No framework. Plain browser APIs throughout.</p>
+  <div class="ds-code">CSS custom properties → theming
+ES modules (import/export) → component isolation
+EventTarget → model observation
+CustomEvent (document) → view-to-view + view-to-controller communication
+Handlebars (.phtml) → server-side rendering
+index97 → file-based routing</div>
+</div>

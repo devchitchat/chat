@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design System — devchitchat</title>
+  <link rel="stylesheet" href="{{base}}/themes/base.css">
+  <link rel="stylesheet" href="{{base}}/themes/dark.css" id="theme-stylesheet">
+  <script>window.__BASE_PATH__ = "{{base}}"</script>
+  <style>
+    /* ── Design system shell ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box }
+
+    .ds-shell {
+      display: flex;
+      min-height: 100dvh;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+    }
+
+    /* ── Left nav ────────────────────────────────────────────────── */
+    .ds-nav {
+      width: 220px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background: var(--bg-sidebar);
+      display: flex;
+      flex-direction: column;
+      padding: 0 0 24px;
+    }
+
+    .ds-nav-brand {
+      padding: 20px 16px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .ds-nav-brand a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .ds-nav-brand a:hover { color: var(--text-secondary) }
+
+    .ds-nav-section {
+      padding: 16px 16px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .ds-nav-link {
+      display: block;
+      padding: 6px 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      margin: 1px 6px;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .ds-nav-link:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .ds-nav-link.active {
+      background: var(--bg-active);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .ds-nav-footer {
+      margin-top: auto;
+      padding: 12px 16px 0;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── Main content ─────────────────────────────────────────────── */
+    .ds-content {
+      flex: 1;
+      min-width: 0;
+      padding: 48px 56px;
+      max-width: 960px;
+    }
+
+    /* ── Page sections ────────────────────────────────────────────── */
+    .ds-page-title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin: 0 0 6px;
+    }
+
+    .ds-page-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin: 0 0 40px;
+      line-height: 1.5;
+    }
+
+    .ds-section {
+      margin-bottom: 56px;
+    }
+
+    .ds-section-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0 0 4px;
+    }
+
+    .ds-section-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0 0 20px;
+      line-height: 1.5;
+    }
+
+    .ds-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* ── Canvas: live component previews ─────────────────────────── */
+    .ds-canvas {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 12px;
+    }
+
+    .ds-canvas--flush { padding: 0; overflow: hidden; }
+    .ds-canvas--dark  { background: var(--bg-base) }
+    .ds-canvas--grid  {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    /* ── Code block ──────────────────────────────────────────────── */
+    .ds-code {
+      background: var(--code-background);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      margin-bottom: 24px;
+      white-space: pre;
+    }
+
+    /* ── Annotation: refactoring notes ──────────────────────────── */
+    .ds-annotation {
+      border-left: 3px solid var(--color-warning);
+      background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    .ds-annotation strong { color: var(--color-warning); font-weight: 600 }
+
+    /* ── Token grid ──────────────────────────────────────────────── */
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .token-swatch {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .token-swatch-preview {
+      height: 56px;
+    }
+
+    .token-swatch-label {
+      padding: 8px 10px;
+      background: var(--bg-elevated);
+    }
+
+    .token-swatch-name {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-primary);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .token-swatch-value {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .token-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .token-row:last-child { border-bottom: none }
+
+    .token-row-preview {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      flex-shrink: 0;
+    }
+
+    .token-row-name {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-primary);
+      flex: 1;
+    }
+
+    .token-row-value {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── Inline label ─────────────────────────────────────────────── */
+    .ds-label {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* ── Principle cards ─────────────────────────────────────────── */
+    .principle-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }
+
+    .principle-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .principle-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0 0 8px;
+    }
+
+    .principle-body {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .principle-body + .principle-body {
+      margin-top: 8px;
+    }
+
+    .principle-tension {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .principle-tension strong { color: var(--accent) }
+  </style>
+</head>
+<body>
+  <div class="ds-shell">
+    <nav class="ds-nav">
+      <div class="ds-nav-brand">
+        <a href="{{base}}/">← devchitchat</a><br>
+        Design System
+      </div>
+
+      <span class="ds-nav-section">Foundation</span>
+      <a href="{{base}}/design" class="ds-nav-link {{#if activeOverview}}active{{/if}}">Overview</a>
+      <a href="{{base}}/design/principles" class="ds-nav-link {{#if activePrinciples}}active{{/if}}">Principles</a>
+      <a href="{{base}}/design/tokens" class="ds-nav-link {{#if activeTokens}}active{{/if}}">Tokens</a>
+
+      <span class="ds-nav-section">Components</span>
+      <a href="{{base}}/design/components" class="ds-nav-link {{#if activeComponents}}active{{/if}}">All Components</a>
+
+      <div class="ds-nav-footer">
+        <label for="theme-picker" class="sr-only">Theme</label>
+        <select id="theme-picker" aria-label="Choose theme" autocomplete="off">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="ocean">Ocean</option>
+          <option value="forest">Forest</option>
+          <option value="rose">Rose</option>
+        </select>
+      </div>
+    </nav>
+
+    <main class="ds-content">
+      {{content}}
+    </main>
+  </div>
+
+  <script type="module" src="{{base}}/client/theme.js"></script>
+</body>
+</html>
