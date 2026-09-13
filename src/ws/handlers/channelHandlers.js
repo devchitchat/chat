@@ -79,11 +79,28 @@ export function handleChannelReorder(ws, msg, ctx) {
 }
 
 export function handleChannelAddMember(ws, msg, ctx) {
-  const { auth, channelService, sendWs } = ctx
+  const { auth, channelService, sendWs, subscribeUserToChannel } = ctx
   const { channel_id, user_id } = msg.body || {}
   const user = auth.getUser(ws.data.userId)
   const result = channelService.addMember({ channelId: channel_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [], targetUserId: user_id })
   sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
+
+  // Subscribe the target user's active connections to the channel topic immediately.
+  // For bots this is the only way they learn about the new channel at runtime;
+  // humans will join explicitly but subscribing now is harmless and ensures
+  // they receive any messages sent before they navigate to the channel.
+  subscribeUserToChannel(user_id, channel_id)
+
+  // If the target is a bot, also send bot.channels_updated so the bot process
+  // can refresh its channel list and internal state.
+  const targetUser = auth.getUser(user_id)
+  if (targetUser?.roles?.includes('bot')) {
+    for (const [, conn] of ctx.connections) {
+      if (conn.data.userId === user_id) {
+        sendWs(conn, { t: 'bot.channels_updated', body: { user_id } })
+      }
+    }
+  }
 }
 
 export function handleChannelRemoveMember(ws, msg, ctx) {
