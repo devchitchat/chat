@@ -27,7 +27,7 @@ test('createHub throws BAD_REQUEST for invalid visibility', () => {
 
 test('listHubs returns only public hubs to non-member', () => {
   service.createHub({ name: 'Public', visibility: 'public', createdByUserId: 'u1' })
-  service.createHub({ name: 'Restricted', visibility: 'restricted', createdByUserId: 'u1' })
+  service.createHub({ name: 'Private', visibility: 'private', createdByUserId: 'u1' })
   const hubs = service.listHubs('u2')
   expect(hubs.length).toBe(1)
   expect(hubs[0].name).toBe('Public')
@@ -35,7 +35,7 @@ test('listHubs returns only public hubs to non-member', () => {
 
 test('listHubs returns all hubs to admin', () => {
   service.createHub({ name: 'Public', visibility: 'public', createdByUserId: 'u1' })
-  service.createHub({ name: 'Restricted', visibility: 'restricted', createdByUserId: 'u1' })
+  service.createHub({ name: 'Private', visibility: 'private', createdByUserId: 'u1' })
   const hubs = service.listHubs('u2', ['admin'])
   expect(hubs.length).toBe(2)
 })
@@ -45,17 +45,23 @@ test('canAccessHub returns true for public hub', () => {
   expect(service.canAccessHub(hub.hub_id, 'u2')).toBe(true)
 })
 
-test('canAccessHub returns false for restricted hub when not a member', () => {
-  const hub = service.createHub({ name: 'Restricted', visibility: 'restricted', createdByUserId: 'u1' })
+test('canAccessHub returns false for private hub when not a member', () => {
+  const hub = service.createHub({ name: 'Private', visibility: 'private', createdByUserId: 'u1' })
   expect(service.canAccessHub(hub.hub_id, 'u2')).toBe(false)
 })
 
-test('joinHub and leaveHub update membership', () => {
-  const hub = service.createHub({ name: 'Restricted', visibility: 'restricted', createdByUserId: 'u1' })
+test('joinHub succeeds for private hub when user is already a member', () => {
+  const hub = service.createHub({ name: 'Private', visibility: 'private', createdByUserId: 'u1' })
+  service.ensureHubMembership(hub.hub_id, 'u2')
   service.joinHub(hub.hub_id, 'u2')
   expect(service.canAccessHub(hub.hub_id, 'u2')).toBe(true)
   service.leaveHub(hub.hub_id, 'u2')
   expect(service.canAccessHub(hub.hub_id, 'u2')).toBe(false)
+})
+
+test('joinHub throws FORBIDDEN for private hub when user is not a member', () => {
+  const hub = service.createHub({ name: 'Private', visibility: 'private', createdByUserId: 'u1' })
+  expect(() => service.joinHub(hub.hub_id, 'u2')).toThrow(ServiceError)
 })
 
 test('ensureDefaultHub creates Lobby once', () => {

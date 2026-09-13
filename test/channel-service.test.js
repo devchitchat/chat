@@ -3,9 +3,11 @@ import { ChannelService } from '../src/services/ChannelService.js'
 import { InMemoryChannelRepository } from '../src/adapters/InMemoryChannelRepository.js'
 import { ServiceError } from '../src/util/errors.js'
 
-// Hub service stub — 'h1' is accessible to all; 'h_restricted' only to 'u1'
+// Hub service stub — 'h1' is a public hub accessible to all; 'h_restricted' only to 'u1'
 const hubService = {
   canAccessHub: (hubId, userId) => hubId === 'h1' || userId === 'u1',
+  getHub: (hubId) => hubId === 'h1' ? { hub_id: 'h1', visibility: 'public', deleted_at: null } : null,
+  ensureHubMembership: () => {},
 }
 
 let repo, service
@@ -62,14 +64,20 @@ test('listChannelMembers returns active members only', () => {
   expect(members[0].user_id).toBe('u1')
 })
 
-test('addMember fails when adder is not owner or mod', () => {
+test('addMember fails when requester has no permission', () => {
   const ch = service.createChannel({ hubId: 'h1', kind: 'text', name: 'priv', visibility: 'private', createdByUserId: 'u1' })
-  expect(() => service.addMember({ channelId: ch.channel_id, createdByUserId: 'u2', targetUserId: 'u3' })).toThrow(ServiceError)
+  expect(() => service.addMember({ channelId: ch.channel_id, requestingUserId: 'u2', requestingRoles: [], targetUserId: 'u3' })).toThrow(ServiceError)
 })
 
-test('addMember adds the target user', () => {
+test('addMember succeeds when requester is the channel creator', () => {
   const ch = service.createChannel({ hubId: 'h1', kind: 'text', name: 'priv', visibility: 'private', createdByUserId: 'u1' })
-  service.addMember({ channelId: ch.channel_id, createdByUserId: 'u1', targetUserId: 'u2' })
+  service.addMember({ channelId: ch.channel_id, requestingUserId: 'u1', requestingRoles: [], targetUserId: 'u2' })
+  expect(service.isMember(ch.channel_id, 'u2')).toBe(true)
+})
+
+test('addMember succeeds when requester is admin', () => {
+  const ch = service.createChannel({ hubId: 'h1', kind: 'text', name: 'priv', visibility: 'private', createdByUserId: 'u1' })
+  service.addMember({ channelId: ch.channel_id, requestingUserId: 'u99', requestingRoles: ['admin'], targetUserId: 'u2' })
   expect(service.isMember(ch.channel_id, 'u2')).toBe(true)
 })
 
