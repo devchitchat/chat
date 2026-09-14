@@ -9,5 +9,6 @@ export async function data(req) {
     activePrinciples: pathname === '/design/principles',
     activeTokens:     pathname === '/design/tokens',
     activeComponents: pathname === '/design/components',
+    activeMobile:     pathname === '/design/mobile',
   }
 }

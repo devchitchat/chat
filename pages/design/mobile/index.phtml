@@ -1,0 +1,3277 @@
+<h1 class="ds-page-title">Mobile Layout</h1>
+<p class="ds-page-subtitle">
+  Interactive prototype for refining swipe navigation, panel layout, and scroll isolation.
+  Tune the knobs, swipe around, and verify the behaviour before touching the real app.
+</p>
+
+<!-- ── Knobs ──────────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Gesture knobs</h2>
+  <p class="ds-section-desc">Adjust these to find the right feel, then copy values into <code>swipe-nav.js</code>.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;margin-bottom:4px">
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--text-secondary)">
+      Lock threshold (px) — how far before direction is decided
+      <input id="knob-lock" type="range" min="4" max="40" value="20" style="width:200px">
+      <span id="knob-lock-val" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">20</span>
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--text-secondary)">
+      Commit threshold (% of panel width)
+      <input id="knob-commit" type="range" min="10" max="60" value="13" style="width:200px">
+      <span id="knob-commit-val" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">13%</span>
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--text-secondary)">
+      Velocity threshold (px/ms) for fast flick
+      <input id="knob-vel" type="range" min="10" max="100" value="100" style="width:200px">
+      <span id="knob-vel-val" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">1.00</span>
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--text-secondary)">
+      Rubber-band resistance (0 = rigid, 1 = none)
+      <input id="knob-rubber" type="range" min="0" max="90" value="0" style="width:200px">
+      <span id="knob-rubber-val" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">0.00</span>
+    </label>
+  </div>
+</div>
+
+<!-- ── Phone frame ─────────────────────────────────────────────────────────────── -->
+<div class="ds-section">
+  <h2 class="ds-section-title">Prototype</h2>
+  <p class="ds-section-desc">
+    Swipe left/right to switch between the channel list (sidebar) and the message panel.
+    Bottom tab bar switches workspaces — 5 hubs are defined so the overflow algorithm kicks in.
+    Long-press a channel or tab for the context menu.
+  </p>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+
+    <!-- Phone frame -->
+    <div class="mob-frame" id="mob-frame">
+      <div class="mob-status-bar">
+        <span>9:41</span>
+        <span style="display:flex;gap:6px;align-items:center">
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><rect x="0" y="3" width="3" height="9" rx="1"/><rect x="4" y="2" width="3" height="10" rx="1"/><rect x="8" y="0" width="3" height="12" rx="1"/><rect x="12" y="0" width="3" height="12" rx="1" opacity=".3"/></svg>
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 2C5.2 2 2.7 3.1 0.9 4.9L2.3 6.3C3.7 4.9 5.7 4 8 4s4.3.9 5.7 2.3l1.4-1.4C13.3 3.1 10.8 2 8 2z"/><path d="M8 6c-1.7 0-3.2.7-4.3 1.8L5.1 9.2C5.9 8.4 6.9 8 8 8s2.1.4 2.9 1.2l1.4-1.4C11.2 6.7 9.7 6 8 6z"/><circle cx="8" cy="11" r="1.5"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="currentColor" opacity=".35"/><rect x="1.5" y="1.5" width="16" height="9" rx="2.5" fill="currentColor"/><path d="M23 4v4a2 2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+        </span>
+      </div>
+
+      <div class="mob-viewport" id="mob-viewport">
+        <div class="mob-track" id="mob-track">
+
+          <!-- Panel 0: Sidebar / channel list -->
+          <div class="mob-panel" id="mob-panel-sidebar" data-panel="0">
+            <!-- Compact nav bar — avatar always fixed here; compact title + gear crossfade in on scroll -->
+            <div class="mob-sidebar-header" id="mob-sidebar-header">
+              <span class="mob-compact-title" id="mob-compact-title">Engineering</span>
+              <div style="display:flex;align-items:center;gap:4px">
+                <button class="btn-icon mob-nav-gear" id="mob-nav-gear" type="button" title="Hub settings" style="opacity:0">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <button class="mob-avatar" type="button" title="Your profile" aria-label="Your profile">JG</button>
+              </div>
+            </div>
+
+            <div class="mob-sidebar-scroll">
+              <!-- Large title + gear — scroll together as a unit.
+                   Gear is contextually tied to the hub name here rather than floating in the nav bar. -->
+              <div class="mob-large-title-area">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <h1 class="mob-large-title" id="mob-hub-name">Engineering</h1>
+                  <button class="btn-icon mob-hub-gear" id="mob-hub-edit-btn" type="button" title="Hub settings">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Active hub's channels — populated by JS -->
+              <div class="mob-section-label" id="mob-section-channels">
+                Channels
+                <button class="btn-icon mob-section-add" id="mob-channel-add-btn" type="button" title="New channel" aria-label="New channel">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg>
+                </button>
+              </div>
+              <ul class="channel-list" id="mob-channel-list" style="padding:0 6px 4px"></ul>
+
+              <!-- DMs — always visible -->
+              <div class="mob-section-label" style="margin-top:4px">Direct Messages</div>
+              <ul class="channel-list" id="mob-dm-list" style="padding:0 6px 16px">
+                <li class="channel-item" data-channel-id="dm1"><a class="channel-link" href="#" data-channel-id="dm1">Alice</a></li>
+                <li class="channel-item" data-channel-id="dm2" data-mention=""><a class="channel-link" href="#" data-channel-id="dm2">Bob</a></li>
+                <li class="channel-item" data-channel-id="dm3"><a class="channel-link" href="#" data-channel-id="dm3">Carol</a></li>
+              </ul>
+            </div>
+
+          </div><!-- /panel-sidebar -->
+
+          <!-- Panel 1: Main chat -->
+          <div class="mob-panel" id="mob-panel-main" data-panel="1">
+            <div class="mob-chat-header">
+              <button class="btn-back-mobile" type="button" id="mob-back-btn" style="display:flex">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8.5 1.5 2 8l6.5 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <span id="mob-chat-title" style="font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">#general</span>
+              <button class="btn-icon" type="button" title="Search" style="font-size:16px">&#128269;</button>
+              <button class="btn-icon mob-call-btn-header" id="mob-call-header-btn" type="button" title="Start call" aria-label="Start call">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.59 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.83a16 16 0 0 0 6.29 6.29l1.13-1.13a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </button>
+            </div>
+
+            <!-- Active call bar — visible when in a call -->
+            <div class="mob-call-bar" id="mob-call-bar">
+              <span class="mob-call-bar-dot"></span>
+              <span class="mob-call-bar-text" id="mob-call-bar-text">1 in call</span>
+              <span class="mob-call-bar-timer" id="mob-call-bar-timer">0:00</span>
+              <button class="mob-call-bar-leave" id="mob-call-bar-leave" type="button">Leave</button>
+            </div>
+
+            <!-- Pull-to-refresh indicator -->
+            <div class="mob-ptr-bar" id="mob-ptr-bar"><div class="mob-ptr-spinner" id="mob-ptr-spinner"></div></div>
+
+            <!-- Reply quote bar — shown above composer when replying inline -->
+            <div class="mob-reply-quote" id="mob-reply-quote" style="display:none">
+              <span class="mob-reply-quote-bar"></span>
+              <span class="mob-reply-quote-name" id="mob-reply-quote-name">Alice</span>&nbsp;
+              <span class="mob-reply-quote-text" id="mob-reply-quote-text"></span>
+              <button class="mob-reply-quote-dismiss" id="mob-reply-quote-dismiss" type="button" title="Cancel reply">×</button>
+            </div>
+
+            <div class="mob-messages" id="mob-messages">
+              <article class="message new-sender" data-sender="Alice">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#5865f2">AL</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#5865f2">Alice</span><time class="message-time">9:01 AM</time></div>
+                <div class="message-text"><p>Good morning everyone! Ready for the standup?</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Bob">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#22c55e">BO</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#22c55e">Bob</span><time class="message-time">9:02 AM</time></div>
+                <div class="message-text"><p>Morning! Just need 2 mins, finishing something up.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Carol">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#f59e0b">CA</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#f59e0b">Carol</span><time class="message-time">9:03 AM</time></div>
+                <div class="message-text"><p>No rush, I'm here whenever you're ready.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Alice">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#5865f2">AL</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#5865f2">Alice</span><time class="message-time">9:05 AM</time></div>
+                <div class="message-text"><p>Ok let's start. Yesterday I finished the auth refactor and opened a PR. Today I'm starting on the notification service. No blockers.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Bob">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#22c55e">BO</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#22c55e">Bob</span><time class="message-time">9:07 AM</time></div>
+                <div class="message-text"><p>Yesterday: reviewed 3 PRs, fixed the flaky test in CI. Today: finishing the DB migration and writing tests for the new schema. Blocker: need <span class="mention">@Carol</span> to approve the migration plan.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Carol">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#f59e0b">CA</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#f59e0b">Carol</span><time class="message-time">9:08 AM</time></div>
+                <div class="message-text"><p>Will do! Sending you my comments now. Yesterday I synced with design on the mobile flows, today I'll update the Figma. No blockers.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Alice">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#5865f2">AL</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#5865f2">Alice</span><time class="message-time">9:09 AM</time></div>
+                <div class="message-text"><p>Great standup everyone. Let's aim to ship the migration by EOD.</p></div>
+                <div class="reaction-bar"><button class="reaction-pill reacted" type="button">👍 <span class="reaction-count">2</span></button></div>
+              </article>
+              <article class="message new-sender" data-sender="Bob">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#22c55e">BO</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#22c55e">Bob</span><time class="message-time">9:15 AM</time></div>
+                <div class="message-text"><p>Migration PR is up: <a href="#">pr/mobile-schema-v2</a></p></div>
+              </article>
+              <article class="message new-sender" data-sender="Carol">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#f59e0b">CA</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#f59e0b">Carol</span><time class="message-time">9:32 AM</time></div>
+                <div class="message-text"><p>Left a few comments on the migration — mostly nits. LGTM overall 🚢</p></div>
+              </article>
+              <article class="message new-sender" data-sender="Alice">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#5865f2">AL</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#5865f2">Alice</span><time class="message-time">9:45 AM</time></div>
+                <div class="message-text"><p>Merged! Good work everyone. CI is running now.</p></div>
+                <div class="reaction-bar"><button class="reaction-pill" type="button">🎉 <span class="reaction-count">3</span></button><button class="reaction-pill reacted" type="button">🚀 <span class="reaction-count">2</span></button></div>
+              </article>
+              <article class="message new-sender" data-sender="Bob">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#22c55e">BO</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#22c55e">Bob</span><time class="message-time">10:12 AM</time></div>
+                <div class="message-text"><p>CI passed ✅ — all 143 tests green.</p></div>
+              </article>
+              <article class="message new-sender" data-sender="You">
+                <div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:#6366f1">JG</div></div>
+                <div class="mob-msg-header"><span class="message-handle" style="color:#6366f1">You</span><time class="message-time">10:14 AM</time></div>
+                <div class="message-text"><p>Nice work! I'll start on the next migration this afternoon.</p></div>
+              </article>
+            </div>
+
+            <div class="mob-composer">
+              <input class="mob-composer-input" type="text" placeholder="Message #general…" autocomplete="off">
+              <button class="btn-icon mob-composer-send" type="button" title="Send" aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div><!-- /panel-main -->
+
+          <!-- Panel 2: Thread detail -->
+          <div class="mob-panel" id="mob-panel-thread" data-panel="2">
+            <div class="mob-chat-header">
+              <button class="btn-back-mobile" type="button" id="mob-thread-back-btn" style="display:flex">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8.5 1.5 2 8l6.5 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div style="flex:1;min-width:0">
+                <div id="mob-thread-title" style="font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Thread</div>
+                <div id="mob-thread-subtitle" style="font-size:12px;color:var(--text-muted)">#general</div>
+              </div>
+            </div>
+            <div class="mob-messages" id="mob-thread-messages" style="padding-top:0"></div>
+            <div class="mob-composer">
+              <input class="mob-composer-input" id="mob-thread-composer" type="text" placeholder="Reply in thread…" autocomplete="off">
+              <button class="btn-icon mob-composer-send" id="mob-thread-send" type="button" title="Send" aria-label="Send reply">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div><!-- /panel-thread -->
+
+        </div><!-- /mob-track -->
+
+        <!-- Context menu overlay (positioned within viewport) -->
+        <div class="mob-ctx-backdrop" id="mob-ctx-backdrop"></div>
+        <div class="mob-ctx-menu" id="mob-ctx-menu" role="menu" aria-label="Context menu"></div>
+      </div><!-- /mob-viewport -->
+
+      <!-- ── Tab bar — persistent hub switcher ─────────────────────────────────
+           HIG: bottom tab bar on iPhone. Shows up to MAX_TABS hubs directly;
+           extra hubs go behind a "More" tab that slides up an overflow sheet.
+           Algorithm: if hubs.length > MAX_TABS → show first (MAX_TABS-1) tabs + ••• -->
+      <div class="mob-tab-bar" id="mob-tab-bar">
+        <!-- Populated by JS renderTabBar() -->
+      </div>
+
+      <!-- Overflow sheet — slides up when "More" tab is tapped -->
+      <div class="mob-overflow-backdrop" id="mob-overflow-backdrop"></div>
+      <div class="mob-overflow-sheet" id="mob-overflow-sheet" role="dialog" aria-label="More workspaces">
+        <div class="mob-overflow-handle"></div>
+        <p class="mob-overflow-title">More Workspaces</p>
+        <ul class="mob-overflow-list" id="mob-overflow-list"></ul>
+      </div>
+
+      <!-- Hub edit sheet — full-height card, slides up over everything including tab bar -->
+      <div class="mob-edit-backdrop" id="mob-edit-backdrop"></div>
+      <div class="mob-edit-sheet" id="mob-edit-sheet" role="dialog" aria-label="Edit hub">
+        <div class="mob-edit-handle" id="mob-edit-handle"></div>
+        <div class="mob-edit-toolbar">
+          <button class="mob-edit-btn-cancel" id="mob-edit-cancel" type="button">Cancel</button>
+          <span class="mob-edit-title" id="mob-edit-sheet-title">Hub Settings</span>
+          <button class="mob-edit-btn-done" id="mob-edit-done" type="button">Done</button>
+        </div>
+        <div class="mob-edit-body">
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-edit-hub-name">Name</label>
+            <input class="mob-edit-input" id="mob-edit-hub-name" type="text" placeholder="Hub name" autocomplete="off">
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-edit-hub-visibility">Visibility</label>
+            <select class="mob-edit-input" id="mob-edit-hub-visibility">
+              <option value="public">Public — anyone can join</option>
+              <option value="private">Private — invite only</option>
+            </select>
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-edit-hub-desc">Description</label>
+            <textarea class="mob-edit-input" id="mob-edit-hub-desc" rows="3" placeholder="What's this hub for?"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- User preferences sheet -->
+      <div class="mob-edit-backdrop" id="mob-prefs-backdrop"></div>
+      <div class="mob-edit-sheet" id="mob-prefs-sheet" role="dialog" aria-label="Preferences">
+        <div class="mob-edit-handle" id="mob-prefs-handle"></div>
+        <div class="mob-edit-toolbar">
+          <button class="mob-edit-btn-cancel" id="mob-prefs-cancel" type="button">Done</button>
+          <span class="mob-edit-title">You</span>
+          <span style="min-width:64px"></span><!-- balance the Done button -->
+        </div>
+        <div class="mob-edit-body">
+          <!-- Identity block -->
+          <div style="display:flex;align-items:center;gap:14px;padding-bottom:8px">
+            <div class="mob-prefs-avatar">JG</div>
+            <div>
+              <div style="font-size:17px;font-weight:600;color:var(--text-primary)">Joey Guerra</div>
+              <div style="font-size:13px;color:var(--text-muted)">@joey</div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="mob-edit-group">
+            <label class="mob-edit-label">Status</label>
+            <div class="mob-prefs-status-row" id="mob-prefs-status-row">
+              <button class="mob-prefs-status active" data-status="online">
+                <span class="mob-prefs-dot" style="background:#22c55e"></span>Online
+              </button>
+              <button class="mob-prefs-status" data-status="away">
+                <span class="mob-prefs-dot" style="background:#f59e0b"></span>Away
+              </button>
+              <button class="mob-prefs-status" data-status="dnd">
+                <span class="mob-prefs-dot" style="background:#ef4444"></span>Do Not Disturb
+              </button>
+              <button class="mob-prefs-status" data-status="offline">
+                <span class="mob-prefs-dot" style="background:var(--text-muted)"></span>Appear Offline
+              </button>
+            </div>
+          </div>
+
+          <!-- Preferences links -->
+          <div class="mob-edit-group">
+            <label class="mob-edit-label">Settings</label>
+            <div class="mob-prefs-links">
+              <button class="mob-prefs-link" type="button">Notifications</button>
+              <button class="mob-prefs-link" type="button">Appearance</button>
+              <button class="mob-prefs-link" type="button">Privacy</button>
+            </div>
+          </div>
+
+          <button class="mob-prefs-signout" type="button">Sign Out</button>
+        </div>
+      </div>
+
+      <!-- Hub create sheet -->
+      <div class="mob-edit-backdrop" id="mob-hub-create-backdrop"></div>
+      <div class="mob-edit-sheet" id="mob-hub-create-sheet" role="dialog" aria-label="New workspace">
+        <div class="mob-edit-handle" id="mob-hub-create-handle"></div>
+        <div class="mob-edit-toolbar">
+          <button class="mob-edit-btn-cancel" id="mob-hub-create-cancel" type="button">Cancel</button>
+          <span class="mob-edit-title">New Workspace</span>
+          <button class="mob-edit-btn-done" id="mob-hub-create-done" type="button">Create</button>
+        </div>
+        <div class="mob-edit-body">
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-hub-create-name">Name</label>
+            <input class="mob-edit-input" id="mob-hub-create-name" type="text"
+                   placeholder="e.g. Engineering" autocomplete="off" autocapitalize="words">
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-hub-create-vis">Visibility</label>
+            <select class="mob-edit-input" id="mob-hub-create-vis">
+              <option value="public">Public — anyone can join</option>
+              <option value="private">Private — invite only</option>
+            </select>
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label">Color</label>
+            <div class="mob-hub-color-row" id="mob-hub-color-row"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Channel create sheet -->
+      <div class="mob-edit-backdrop" id="mob-ch-backdrop"></div>
+      <div class="mob-edit-sheet" id="mob-ch-sheet" role="dialog" aria-label="New channel">
+        <div class="mob-edit-handle" id="mob-ch-handle"></div>
+        <div class="mob-edit-toolbar">
+          <button class="mob-edit-btn-cancel" id="mob-ch-cancel" type="button">Cancel</button>
+          <span class="mob-edit-title">New Channel</span>
+          <button class="mob-edit-btn-done" id="mob-ch-create" type="button">Create</button>
+        </div>
+        <div class="mob-edit-body">
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-ch-name">Name</label>
+            <div class="mob-ch-name-wrap">
+              <span class="mob-ch-prefix">#</span>
+              <input class="mob-edit-input mob-ch-name-input" id="mob-ch-name" type="text"
+                     placeholder="channel-name" autocomplete="off"
+                     autocapitalize="none" spellcheck="false">
+            </div>
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-ch-visibility">Visibility</label>
+            <select class="mob-edit-input" id="mob-ch-visibility">
+              <option value="public">Public — visible to everyone in this hub</option>
+              <option value="private">Private — invite only</option>
+            </select>
+          </div>
+          <div class="mob-edit-group">
+            <label class="mob-edit-label" for="mob-ch-desc">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);font-size:11px">(optional)</span></label>
+            <textarea class="mob-edit-input" id="mob-ch-desc" rows="3" placeholder="What's this channel for?"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Incoming call toast -->
+      <div class="mob-call-toast" id="mob-call-toast" role="alert">
+        <div class="mob-call-toast-avatar" id="mob-call-toast-avatar" style="background:#5865f2">AL</div>
+        <div class="mob-call-toast-body">
+          <div class="mob-call-toast-name" id="mob-call-toast-name">Alice</div>
+          <div class="mob-call-toast-sub" id="mob-call-toast-sub">started a call in #general</div>
+        </div>
+        <div class="mob-call-toast-btns">
+          <button class="mob-call-toast-btn decline" id="mob-call-toast-decline" type="button">Decline</button>
+          <button class="mob-call-toast-btn accept" id="mob-call-toast-accept" type="button">Join</button>
+        </div>
+      </div>
+
+      <!-- Call sheet backdrop + sheet -->
+      <div class="mob-call-backdrop" id="mob-call-backdrop"></div>
+      <div class="mob-call-sheet" id="mob-call-sheet" role="dialog" aria-label="Voice call">
+        <div class="mob-call-handle" id="mob-call-handle"></div>
+        <div class="mob-call-header">
+          <div class="mob-call-channel" id="mob-call-channel-info">Engineering › #general</div>
+          <div class="mob-call-timer" id="mob-call-timer">0:00</div>
+        </div>
+        <div class="mob-call-participants" id="mob-call-participants"></div>
+        <div class="mob-call-controls">
+          <div class="mob-call-controls-row">
+            <button class="mob-call-btn" id="mob-call-mute" type="button">
+              <div class="mob-call-btn-icon">🎤</div>
+              <span class="mob-call-btn-label">Mute</span>
+            </button>
+            <button class="mob-call-btn" id="mob-call-camera" type="button">
+              <div class="mob-call-btn-icon">📷</div>
+              <span class="mob-call-btn-label">Camera</span>
+            </button>
+            <button class="mob-call-btn" id="mob-call-speaker" type="button">
+              <div class="mob-call-btn-icon">🔊</div>
+              <span class="mob-call-btn-label">Speaker</span>
+            </button>
+            <button class="mob-call-btn" id="mob-call-share" type="button">
+              <div class="mob-call-btn-icon">🖥</div>
+              <span class="mob-call-btn-label">Share</span>
+            </button>
+          </div>
+          <div class="mob-call-controls-row" style="justify-content:center">
+            <button class="mob-call-hangup" id="mob-call-hangup" type="button" aria-label="End call">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debug bar -->
+      <div class="mob-debug" id="mob-debug">
+        <span id="dbg-panel">panel: sidebar</span>
+        <span id="dbg-dir">dir: –</span>
+        <span id="dbg-dx">dx: 0</span>
+        <span id="dbg-vel">vel: –</span>
+      </div>
+    </div><!-- /mob-frame -->
+
+    <!-- Annotations column -->
+    <div style="flex:1;min-width:260px;max-width:420px;display:flex;flex-direction:column;gap:16px">
+      <div class="ds-annotation" style="margin:0">
+        <strong>Tab bar algorithm:</strong> <code>MAX_TABS = 4</code>. With ≤ 4 hubs all fit directly.
+        With 5+ hubs the first <code>MAX_TABS − 1</code> are shown as direct tabs; the rest go behind
+        a <strong>•••</strong> tab that slides up an overflow sheet. This prototype has 5 hubs so
+        you can see the overflow in action.
+      </div>
+      <div class="ds-annotation" style="margin:0">
+        <strong>Tab tap behaviour (HIG):</strong> Tapping a tab always navigates to that workspace's
+        channel list (sidebar panel). Re-tapping the active tab while already on the sidebar scrolls
+        the list to top — standard iOS convention.
+      </div>
+      <div class="ds-annotation" style="margin:0">
+        <strong>44 pt tap targets:</strong> HIG minimum for interactive elements. Channel rows are
+        now <code>min-height: 44px</code>. Tab items are <code>min-height: 50px</code> (iOS tab bar height).
+      </div>
+      <div class="ds-annotation" style="margin:0">
+        <strong>Long-press peek:</strong> At 300 ms a scale-down + background flash hints that a
+        context menu is coming. At 500 ms the menu fires. This signals affordance without cluttering
+        the UI with permanent controls.
+      </div>
+      <div class="ds-annotation" style="margin:0">
+        <strong>Scroll isolation:</strong> Each panel uses <code>overscroll-behavior-y: contain</code>.
+        Direction locks at the knob threshold — once classified as vertical, native scroll takes over
+        with no horizontal interference.
+      </div>
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;font-size:13px;color:var(--text-secondary);line-height:1.6">
+        <strong style="color:var(--text-primary);display:block;margin-bottom:8px">Still to resolve</strong>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li>Active tab when selected hub is in overflow — <strong>•••</strong> tab should highlight.</li>
+          <li>Composer focus (keyboard open) changes <code>100dvh</code> — track should resize cleanly.</li>
+          <li>iOS overscroll bounce shouldn't trigger a panel switch — rubber band knob = 0 helps.</li>
+          <li>Re-tap active tab → scroll channel list to top.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /flex row -->
+</div>
+
+<style>
+/* ── Phone frame ────────────────────────────────────────────────────────────── */
+.mob-frame {
+  width: 390px;
+  flex-shrink: 0;
+  border-radius: 44px;
+  overflow: hidden;
+  border: 8px solid color-mix(in srgb, var(--text-primary) 20%, transparent);
+  box-shadow: 0 0 0 1px var(--border), 0 24px 64px rgba(0,0,0,.4);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative; /* overflow sheet anchors here */
+}
+
+.mob-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+}
+
+/* ── Viewport + track ───────────────────────────────────────────────────────── */
+.mob-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  height: 600px; /* fixed so frame doesn't grow with page */
+}
+
+.mob-track {
+  display: flex;
+  width: 300%; /* 3 panels: sidebar / main / thread */
+  height: 100%;
+  will-change: transform;
+  transform: translateX(0);
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────────── */
+.mob-panel {
+  width: 33.333%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sidebar panel */
+.mob-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px 8px 16px;
+  background: color-mix(in srgb, var(--bg-sidebar) 80%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  border-bottom: 1px solid transparent; /* becomes visible on scroll via JS class */
+  transition: border-color 160ms;
+}
+.mob-sidebar-header.scrolled { border-bottom-color: var(--border); }
+
+/* Compact title — starts invisible, crossfades in as large title scrolls away */
+.mob-compact-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  opacity: 0;
+  transition: opacity 80ms linear;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+/* Avatar button — user profile, top right */
+.mob-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-avatar:active { opacity: 0.7; }
+
+/* Large title — first element inside the scroll area */
+.mob-large-title-area {
+  padding: 16px 16px 4px;
+}
+
+.mob-large-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.15;
+  transition: opacity 80ms linear;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Gear sits at the bottom of the large title's cap height */
+.mob-hub-gear {
+  align-self: flex-end;
+  color: var(--text-muted);
+  padding-bottom: 3px;
+  flex-shrink: 0;
+}
+.mob-hub-gear:hover { color: var(--text-secondary); }
+
+.mob-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  background: var(--bg-sidebar);
+  touch-action: pan-y;
+}
+
+/* Section labels inside sidebar (replaces hub <details> headers) */
+.mob-section-label {
+  padding: 14px 10px 4px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.mob-section-add {
+  margin-left: auto;
+  color: var(--text-muted);
+  opacity: 0.7;
+  padding: 4px;
+}
+.mob-section-add:hover { opacity: 1; color: var(--accent); }
+
+/* Channel rows — HIG minimum 44 pt tap target */
+.mob-sidebar-scroll .channel-item {
+  min-height: 44px;
+}
+
+.mob-sidebar-scroll .channel-item a {
+  min-height: 44px;
+  height: auto;
+  line-height: 44px;
+}
+
+/* # prefix on channels (not DMs) */
+#mob-channel-list .channel-link::before {
+  content: '#';
+  opacity: 0.3;
+  font-size: 14px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+/* Unread dot — the global rule uses margin-left:auto which only works in flex.
+   The channel link is display:block, so position the dot absolutely instead. */
+.mob-sidebar-scroll .channel-item a {
+  position: relative;
+  padding-right: 24px; /* reserve room so text doesn't run into the dot */
+}
+.mob-sidebar-scroll .channel-item[data-mention] .channel-link::after,
+.mob-sidebar-scroll .channel-item[data-urgent]  .channel-link::after {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0;
+}
+
+.mob-sidebar-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Main chat panel */
+.mob-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mob-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  padding: 8px 0 4px;
+}
+
+.mob-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+
+.mob-composer-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 15px;
+  background: var(--fill-secondary);
+  color: var(--text-primary);
+  outline: none;
+  min-width: 0;
+}
+.mob-composer-input:focus { border-color: var(--accent); }
+.mob-composer-send { color: var(--accent); flex-shrink: 0; }
+
+/* ── Tab bar ────────────────────────────────────────────────────────────────── */
+.mob-tab-bar {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-sidebar) 96%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.mob-tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px 6px;
+  min-height: 50px; /* iOS tab bar height */
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 200ms;
+}
+
+.mob-tab-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  transition: box-shadow 200ms;
+  position: relative; /* badge anchor */
+}
+
+/* Unread badge on hub tab icon */
+.mob-tab-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+  border: 1.5px solid var(--bg-sidebar);
+  pointer-events: none;
+}
+
+.mob-tab-item.active .mob-tab-icon {
+  box-shadow: 0 0 0 2.5px var(--bg-sidebar), 0 0 0 4px currentColor;
+}
+
+.mob-tab-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 56px;
+  transition: color 160ms;
+}
+
+.mob-tab-item.active .mob-tab-label { color: var(--accent); }
+
+/* "More" (overflow) tab icon */
+.mob-tab-more {
+  background: var(--bg-hover) !important;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Active ring colour on the more icon inherits the active hub colour set via JS */
+.mob-tab-item.active .mob-tab-more {
+  box-shadow: 0 0 0 2.5px var(--bg-sidebar), 0 0 0 4px var(--accent);
+}
+
+/* "New hub" (+) tab */
+.mob-tab-plus {
+  background: var(--bg-hover) !important;
+  color: var(--text-secondary);
+  font-size: 18px;
+  font-weight: 300;
+  border: 1.5px dashed color-mix(in srgb, var(--border) 80%, transparent);
+}
+.mob-tab-new-hub:active .mob-tab-plus {
+  background: var(--bg-active) !important;
+  color: var(--text-primary);
+}
+
+/* Hub color picker */
+.mob-hub-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mob-hub-color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms, box-shadow 120ms;
+  flex-shrink: 0;
+}
+.mob-hub-color-swatch.selected {
+  box-shadow: 0 0 0 2.5px var(--bg-elevated), 0 0 0 4.5px var(--text-primary);
+  transform: scale(1.12);
+}
+.mob-hub-color-swatch:active { transform: scale(0.92); }
+
+/* ── Overflow sheet ─────────────────────────────────────────────────────────── */
+.mob-overflow-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0,0,0,.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms;
+}
+.mob-overflow-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+.mob-overflow-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 61;
+  background: var(--bg-elevated);
+  border-radius: 20px 20px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.mob-overflow-sheet.is-open { transform: translateY(0); pointer-events: auto; }
+
+.mob-overflow-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 10px auto 0;
+  cursor: grab;
+}
+.mob-overflow-handle:active { cursor: grabbing; }
+
+.mob-overflow-title {
+  padding: 12px 20px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.mob-overflow-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  max-height: 340px; /* leaves room for the handle + title within the frame */
+}
+
+.mob-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  min-height: 56px;
+  cursor: pointer;
+}
+.mob-overflow-item:hover { background: var(--bg-hover); }
+.mob-overflow-item:active { background: var(--bg-active); }
+.mob-overflow-item.active { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+.mob-overflow-item-name {
+  font-size: 16px;
+  flex: 1;
+  color: var(--text-primary);
+}
+.mob-overflow-item.active .mob-overflow-item-name { font-weight: 600; }
+
+.mob-overflow-checkmark {
+  font-size: 16px;
+  color: var(--accent);
+  width: 20px;
+  text-align: center;
+}
+
+/* ── Context menu ─────────────────────────────────────────────────────────── */
+.mob-ctx-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: none;
+}
+
+@keyframes mob-ctx-in {
+  from { opacity: 0; transform: scale(0.92) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+.mob-ctx-menu {
+  position: absolute;
+  z-index: 51;
+  min-width: 192px;
+  background: color-mix(in srgb, var(--bg-elevated) 95%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.2);
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  transform-origin: top left;
+  animation: mob-ctx-in 160ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.mob-ctx-menu.is-open { display: flex; }
+
+.mob-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+.mob-ctx-item:hover  { background: var(--bg-hover); }
+.mob-ctx-item:active { background: var(--bg-active); }
+.mob-ctx-item.danger { color: var(--color-error, #ef4444); }
+.mob-ctx-icon { width: 16px; text-align: center; flex-shrink: 0; font-size: 12px; opacity: .65; }
+.mob-ctx-divider { height: 1px; background: var(--border); flex-shrink: 0; margin: 2px 0; }
+
+/* ── Long-press peek ─────────────────────────────────────────────────────── */
+@keyframes mob-peek {
+  to { transform: scale(0.95); opacity: 0.75; }
+}
+/* Applied to channel items */
+.mob-lp-peek.channel-item {
+  animation: mob-peek 180ms ease forwards;
+  border-radius: var(--radius-sm);
+}
+/* Applied to tab items — slightly different since they're already flex column */
+.mob-lp-peek.mob-tab-item {
+  animation: mob-peek 180ms ease forwards;
+}
+
+/* ── Hub edit sheet ─────────────────────────────────────────────────────────── */
+.mob-edit-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0,0,0,.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms;
+}
+.mob-edit-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+.mob-edit-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 71;
+  background: var(--bg-elevated);
+  border-radius: 20px 20px 0 0;
+  height: 88%;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.mob-edit-sheet.is-open { transform: translateY(0); pointer-events: auto; }
+
+.mob-edit-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+  cursor: grab;
+}
+.mob-edit-handle:active { cursor: grabbing; }
+
+.mob-edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mob-edit-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  text-align: center;
+}
+
+.mob-edit-btn-cancel,
+.mob-edit-btn-done {
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 0;
+  min-width: 64px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-edit-btn-cancel { color: var(--text-secondary); text-align: left; }
+.mob-edit-btn-done   { color: var(--accent); text-align: right; font-weight: 600; }
+.mob-edit-btn-done:active { opacity: 0.6; }
+
+.mob-edit-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 28px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.mob-edit-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mob-edit-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mob-edit-input {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 16px; /* 16px prevents iOS auto-zoom on focus */
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  resize: none;
+}
+.mob-edit-input:focus { border-color: var(--accent); }
+
+/* ── Preferences sheet content ───────────────────────────────────────────── */
+.mob-prefs-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mob-prefs-status-row {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.mob-prefs-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--text-secondary);
+  background: var(--bg-base);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-prefs-status:last-child { border-bottom: none; }
+.mob-prefs-status:active { background: var(--bg-hover); }
+.mob-prefs-status.active { color: var(--text-primary); font-weight: 500; }
+.mob-prefs-status.active::after { content: '✓'; margin-left: auto; color: var(--accent); font-size: 15px; }
+
+.mob-prefs-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mob-prefs-links {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.mob-prefs-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-prefs-link:last-child { border-bottom: none; }
+.mob-prefs-link:active { background: var(--bg-hover); }
+.mob-prefs-link::after { content: '›'; font-size: 18px; color: var(--text-muted); }
+
+.mob-prefs-signout {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-base);
+  color: var(--color-error, #ef4444);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-prefs-signout:active { opacity: 0.7; }
+
+/* Channel name input with inline # prefix */
+.mob-ch-name-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  gap: 3px;
+  transition: border-color 160ms;
+}
+.mob-ch-name-wrap:focus-within { border-color: var(--accent); }
+.mob-ch-prefix {
+  font-size: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+.mob-ch-name-input {
+  border: none !important;
+  background: none;
+  padding: 10px 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+}
+.mob-ch-name-input:focus { outline: none; }
+
+/* ── Pull-to-refresh ────────────────────────────────────────────────────────── */
+.mob-ptr-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 0;
+  overflow: hidden;
+  transition: height 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+.mob-ptr-bar.is-visible { height: 44px; }
+
+@keyframes mob-spin { to { transform: rotate(360deg); } }
+.mob-ptr-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 160ms;
+}
+.mob-ptr-bar.is-visible .mob-ptr-spinner { opacity: 1; }
+.mob-ptr-bar.is-loading .mob-ptr-spinner { animation: mob-spin 0.75s linear infinite; }
+
+/* ── Thread panel ────────────────────────────────────────────────────────────── */
+.mob-thread-root {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.mob-thread-divider {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.mob-thread-reply {
+  border-left: 2px solid var(--border);
+  margin-left: 14px;
+}
+
+/* Reply mode in main composer: quoted context above input */
+.mob-reply-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px 4px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.mob-reply-quote-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 16px;
+}
+.mob-reply-quote-name { font-weight: 600; color: var(--text-primary); }
+.mob-reply-quote-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mob-reply-quote-dismiss {
+  border: none; background: none; color: var(--text-muted); font-size: 16px;
+  cursor: pointer; padding: 0 0 0 4px; line-height: 1; flex-shrink: 0;
+}
+
+/* ── Debug bar ──────────────────────────────────────────────────────────────── */
+.mob-debug {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--color-accent, #6366f1) 12%, var(--bg-base));
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.mob-debug span { white-space: nowrap; }
+
+/* ── Call bar ────────────────────────────────────────────────────────────────── */
+.mob-call-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 0;
+  overflow: hidden;
+  padding: 0 12px;
+  background: color-mix(in srgb, #22c55e 12%, var(--bg-elevated));
+  border-bottom: 1px solid color-mix(in srgb, #22c55e 30%, transparent);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: height 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mob-call-bar.is-active { height: 36px; }
+
+@keyframes mob-call-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+.mob-call-bar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  animation: mob-call-pulse 1.4s ease-in-out infinite;
+}
+
+.mob-call-bar-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.mob-call-bar-timer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.mob-call-bar-leave {
+  border: none;
+  background: none;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-call-bar-leave:active { opacity: 0.7; }
+
+/* ── Call toast ──────────────────────────────────────────────────────────────── */
+.mob-call-toast {
+  position: absolute;
+  top: 0;           /* anchor at top of frame */
+  left: 12px;
+  right: 12px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  /* -100% = exactly one toast-height above top: 0, guaranteed fully clipped */
+  transform: translateY(-100%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+/* Slide down to 52px below top — clears the status bar */
+.mob-call-toast.is-visible {
+  transform: translateY(52px);
+  pointer-events: auto;
+}
+
+.mob-call-toast-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.mob-call-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mob-call-toast-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mob-call-toast-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-call-toast-btns {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mob-call-toast-btn {
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-call-toast-btn.decline {
+  background: color-mix(in srgb, #ef4444 15%, var(--bg-base));
+  color: #ef4444;
+}
+.mob-call-toast-btn.accept {
+  background: #22c55e;
+  color: white;
+}
+.mob-call-toast-btn:active { opacity: 0.75; }
+
+/* ── Call sheet ──────────────────────────────────────────────────────────────── */
+.mob-call-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  background: rgba(0,0,0,.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms;
+}
+.mob-call-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+.mob-call-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 76;
+  background: var(--bg-elevated);
+  border-radius: 20px 20px 0 0;
+  height: 92%;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.mob-call-sheet.is-open { transform: translateY(0); pointer-events: auto; }
+
+.mob-call-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+  cursor: grab;
+}
+.mob-call-handle:active { cursor: grabbing; }
+
+.mob-call-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  flex-shrink: 0;
+}
+
+.mob-call-channel {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.mob-call-timer {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Participant grid */
+.mob-call-participants {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  align-content: flex-start;
+  overflow-y: auto;
+}
+
+.mob-call-tile {
+  width: calc(50% - 6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px 12px;
+  background: var(--bg-base);
+  border-radius: 16px;
+  position: relative;
+}
+
+@keyframes mob-call-speaking {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.7); }
+  50%       { box-shadow: 0 0 0 6px rgba(34,197,94,.0); }
+}
+
+.mob-call-tile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mob-call-tile.speaking .mob-call-tile-avatar {
+  animation: mob-call-speaking 1s ease-in-out infinite;
+  outline: 2.5px solid #22c55e;
+  outline-offset: 2px;
+}
+
+.mob-call-tile-mic {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 11px;
+  line-height: 1;
+  background: var(--bg-elevated);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.mob-call-tile-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Controls */
+.mob-call-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 28px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+
+.mob-call-controls-row {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.mob-call-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 60px;
+}
+
+.mob-call-btn-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: background 160ms, transform 100ms;
+}
+.mob-call-btn:active .mob-call-btn-icon { transform: scale(0.92); }
+.mob-call-btn.active .mob-call-btn-icon { background: color-mix(in srgb, var(--accent) 18%, var(--bg-base)); }
+
+.mob-call-btn-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.mob-call-hangup {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(239,68,68,.4);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms, box-shadow 100ms;
+}
+.mob-call-hangup:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px rgba(239,68,68,.4);
+}
+
+/* ── Messages — HIG: avatar column + sender grouping ───────────────────────
+   Overrides the global .message grid (auto 1fr) for the mobile prototype.
+   Layout: fixed 44px avatar column | 1fr content column.
+   First message in a group (new-sender) shows the avatar circle + handle + time.
+   Follow-up messages from the same sender: avatar space is empty (reserved),
+   no handle, tight vertical spacing — standard iOS/Slack group-message pattern. */
+
+.mob-messages .message {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  column-gap: 0;
+  row-gap: 2px;
+  padding: 2px 12px;
+  margin-top: 2px;
+}
+.mob-messages .message.new-sender { margin-top: 10px; }
+.mob-messages .message.new-sender:first-child,
+.mob-thread-root { margin-top: 0 !important; }
+
+/* Avatar column — always reserves 44px; circle hidden on follow-ups */
+.mob-msg-avatar {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  display: flex;
+  justify-content: center;
+  padding-top: 1px;
+}
+.mob-msg-avatar-circle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.mob-messages .message:not(.new-sender) .mob-msg-avatar-circle {
+  visibility: hidden;
+}
+
+/* Header row: handle + time, inline */
+.mob-msg-header {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.mob-messages .message:not(.new-sender) .mob-msg-header { display: none; }
+
+/* Override global grid-placement on handle + time */
+.mob-messages .message-handle {
+  grid-column: unset;
+  grid-row: unset;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+}
+.mob-messages .message-time {
+  grid-column: unset;
+  grid-row: unset;
+  text-align: left;
+  align-self: unset;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Text body: content column, 15px (iOS body standard) */
+.mob-messages .message-text {
+  grid-column: 2;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* Reactions: content column, override global grid-column: 1/-1 */
+.mob-messages .reaction-bar { grid-column: 2 !important; }
+
+/* Larger reaction touch targets on mobile (HIG 44pt minimum) */
+.mob-messages .reaction-pill {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+/* Mention chip */
+.mob-messages .mention {
+  color: var(--accent);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+</style>
+
+<script type="module">
+// ══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════════════════════════════
+const HUBS_DATA = [
+  { id:'h1', name:'Engineering', short:'Eng',   initials:'EN', color:'#5865f2',
+    channels: [
+      { id:'c1', name:'general',  active:true },
+      { id:'c2', name:'backend' },
+      { id:'c3', name:'frontend' },
+      { id:'c4', name:'design',   mention:true },
+      { id:'c5', name:'devops' },
+      { id:'c6', name:'platform' },
+      { id:'c7', name:'security' },
+      { id:'c8', name:'releases' },
+    ]},
+  { id:'h2', name:'Product',     short:'Prod',  initials:'PR', color:'#22c55e',
+    channels: [
+      { id:'c9',  name:'roadmap' },
+      { id:'c10', name:'feedback', urgent:true },
+      { id:'c11', name:'metrics',  mention:true },
+      { id:'c12', name:'launches' },
+    ]},
+  { id:'h3', name:'Company',     short:'Co',    initials:'CO', color:'#f59e0b',
+    channels: [
+      { id:'c13', name:'announcements', mention:true },
+      { id:'c14', name:'random' },
+      { id:'c15', name:'hiring' },
+      { id:'c16', name:'offsite' },
+    ]},
+  { id:'h4', name:'Infra',       short:'Infra', initials:'IN', color:'#ef4444',
+    channels: [
+      { id:'c17', name:'incidents' },
+      { id:'c18', name:'monitoring' },
+      { id:'c19', name:'deployments' },
+    ]},
+  { id:'h5', name:'Marketing',   short:'Mktg',  initials:'MK', color:'#8b5cf6',
+    channels: [
+      { id:'c20', name:'campaigns' },
+      { id:'c21', name:'content' },
+    ]},
+  { id:'h6', name:'Design',      short:'Dsn',   initials:'DS', color:'#ec4899',
+    channels: [
+      { id:'c22', name:'ux-reviews' },
+      { id:'c23', name:'assets' },
+      { id:'c24', name:'tokens' },
+    ]},
+  { id:'h7', name:'Sales',       short:'Sales', initials:'SL', color:'#14b8a6',
+    channels: [
+      { id:'c25', name:'pipeline' },
+      { id:'c26', name:'demos' },
+      { id:'c27', name:'wins' },
+    ]},
+  { id:'h8', name:'Support',     short:'Sup',   initials:'SP', color:'#f97316',
+    channels: [
+      { id:'c28', name:'tickets' },
+      { id:'c29', name:'escalations' },
+      { id:'c30', name:'docs' },
+    ]},
+  { id:'h9', name:'Legal',       short:'Legal', initials:'LG', color:'#64748b',
+    channels: [
+      { id:'c31', name:'contracts' },
+      { id:'c32', name:'compliance' },
+    ]},
+  { id:'h10', name:'Finance',    short:'Fin',   initials:'FN', color:'#84cc16',
+    channels: [
+      { id:'c33', name:'budgets' },
+      { id:'c34', name:'reporting' },
+      { id:'c35', name:'payroll' },
+    ]},
+]
+
+const MAX_TABS   = 4
+const PANELS     = ['sidebar', 'main', 'thread']
+const HUB_COLORS = ['#5865f2','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b','#84cc16','#06b6d4','#a855f7']
+
+// ══════════════════════════════════════════════════════════════════════════════
+// KNOB CONFIG  (gesture tuning sliders)
+// ══════════════════════════════════════════════════════════════════════════════
+const knobDefs = [
+  { key:'lockPx',     elId:'knob-lock',   valId:'knob-lock-val',   fn: v => +v,       fmt: v => `${v}`      },
+  { key:'commitPct',  elId:'knob-commit', valId:'knob-commit-val', fn: v => +v,       fmt: v => `${v}%`     },
+  { key:'velocityPx', elId:'knob-vel',    valId:'knob-vel-val',    fn: v => v / 100,  fmt: v => v.toFixed(2)},
+  { key:'rubberBand', elId:'knob-rubber', valId:'knob-rubber-val', fn: v => v / 100,  fmt: v => v.toFixed(2)},
+]
+const config = {}
+for (const d of knobDefs) {
+  const el = document.getElementById(d.elId)
+  const vl = document.getElementById(d.valId)
+  Object.defineProperty(config, d.key, { get: () => d.fn(+el.value) })
+  const upd = () => { vl.textContent = d.fmt(d.fn(+el.value)) }
+  el.addEventListener('input', upd); upd()
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+const timeStr = () => new Date().toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' })
+
+// ── Sender avatar helpers ──────────────────────────────────────────────────
+const AVATAR_PALETTE = ['#5865f2','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316']
+const SENDER_COLORS  = { You:'#6366f1', System:'#64748b', Alice:'#5865f2', Bob:'#22c55e', Carol:'#f59e0b' }
+const senderColor    = name => SENDER_COLORS[name] ?? AVATAR_PALETTE[Math.abs([...name].reduce((h,c) => (h*31+c.charCodeAt(0))|0, 0)) % AVATAR_PALETTE.length]
+const senderInitials = name => { const p=name.trim().split(/\s+/); return (p.length>1 ? p[0][0]+p[p.length-1][0] : name.slice(0,2)).toUpperCase() }
+
+// Build the inner HTML for a message article.
+// timeHtml is omitted for thread root messages where time isn't shown.
+const msgInnerHtml = (handle, time, bodyHtml, extraHtml = '') => {
+  const color = senderColor(handle); const init = senderInitials(handle)
+  const timeEl = time ? `<time class="message-time">${escHtml(time)}</time>` : ''
+  return `<div class="mob-msg-avatar"><div class="mob-msg-avatar-circle" style="background:${color}">${escHtml(init)}</div></div>` +
+    `<div class="mob-msg-header"><span class="message-handle" style="color:${color}">${escHtml(handle)}</span>${timeEl}</div>` +
+    `<div class="message-text">${bodyHtml}</div>${extraHtml}`
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// APP MODEL
+// The hub. All state lives here. Views never share mutable state directly —
+// they read via getters and mutate via methods.
+// ══════════════════════════════════════════════════════════════════════════════
+class AppModel extends EventTarget {
+  #hubs; #activeHubId; #activeChannelId; #replyingTo = null; #maxTabs
+  #callState = 'idle'  // 'idle' | 'active'
+  #callParticipants = []
+  #callChannelId = null
+  #callHubId = null
+
+  constructor(hubs, activeHubId, activeChannelId, maxTabs = 4) {
+    super()
+    // Deep-copy so HUBS_DATA stays clean if model is ever re-instantiated
+    this.#hubs            = hubs.map(h => ({ ...h, channels: h.channels.map(c => ({ ...c })) }))
+    this.#activeHubId     = activeHubId
+    this.#activeChannelId = activeChannelId
+    this.#maxTabs         = maxTabs
+  }
+
+  // ── Accessors ──────────────────────────────────────────────────────────────
+  get hubs()            { return this.#hubs }
+  get maxTabs()         { return this.#maxTabs }
+  get activeHubId()     { return this.#activeHubId }
+  get activeChannelId() { return this.#activeChannelId }
+  get replyingTo()      { return this.#replyingTo }
+  get activeHub()       { return this.#hubs.find(h => h.id === this.#activeHubId) ?? null }
+  get activeChannel()   { return this.activeHub?.channels.find(c => c.id === this.#activeChannelId) ?? null }
+  get callState()        { return this.#callState }
+  get callParticipants() { return this.#callParticipants }
+  get callChannelId()    { return this.#callChannelId }
+
+  // ── Private ────────────────────────────────────────────────────────────────
+  #emit(type, detail = {}) { this.dispatchEvent(new CustomEvent(type, { detail })) }
+
+  // ── Hub mutations ──────────────────────────────────────────────────────────
+  selectHub(hubId) {
+    const hub = this.#hubs.find(h => h.id === hubId)
+    if (!hub) return
+    this.#activeHubId     = hubId
+    this.#activeChannelId = hub.channels[0]?.id ?? null
+    this.#emit('hub:changed', { hub })
+  }
+
+  createHub({ name, visibility, color }) {
+    const initials = name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
+                     || name.slice(0, 2).toUpperCase()
+    const short = name.length > 6 ? name.slice(0, 4) + '…' : name
+    const hub = { id:`h${Date.now()}`, name, short, initials, color, visibility,
+                  channels: [{ id:`c${Date.now()}`, name:'general' }] }
+    this.#hubs.push(hub)
+    this.#emit('hub:created', { hub })
+    this.selectHub(hub.id)
+  }
+
+  updateHub(hubId, { name, visibility, description }) {
+    const hub = this.#hubs.find(h => h.id === hubId)
+    if (!hub) return
+    if (name) { hub.name = name; hub.short = name.length > 6 ? name.slice(0,4)+'…' : name }
+    if (visibility  !== undefined) hub.visibility  = visibility
+    if (description !== undefined) hub.description = description
+    this.#emit('hub:updated', { hub })
+  }
+
+  // ── Channel mutations ──────────────────────────────────────────────────────
+  selectChannel(channelId) {
+    this.#activeChannelId = channelId
+    const ch = this.activeHub?.channels.find(c => c.id === channelId)
+    this.#emit('channel:selected', { channel: ch, hub: this.activeHub })
+  }
+
+  createChannel(hubId, { name, visibility, description }) {
+    const hub = this.#hubs.find(h => h.id === hubId)
+    if (!hub) return null
+    const ch = { id:`c${Date.now()}`, name, visibility, description }
+    hub.channels.push(ch)
+    this.#emit('channel:created', { hub, channel: ch })
+    this.selectChannel(ch.id)
+    return ch
+  }
+
+  markChannelRead(channelId) {
+    for (const hub of this.#hubs) {
+      const ch = hub.channels.find(c => c.id === channelId)
+      if (ch) { delete ch.mention; delete ch.urgent; this.#emit('channel:read', { hub, channel: ch }); return }
+    }
+  }
+
+  // ── Message / reply mutations ──────────────────────────────────────────────
+  setReplyingTo(handle, text) {
+    this.#replyingTo = { handle, text }
+    this.#emit('reply:changed', { replyingTo: this.#replyingTo })
+  }
+
+  clearReply() {
+    this.#replyingTo = null
+    this.#emit('reply:changed', { replyingTo: null })
+  }
+
+  sendMessage(text) {
+    const msg = { text, handle:'You', replyingTo: this.#replyingTo, ts: Date.now() }
+    this.clearReply()
+    this.#emit('message:sent', { message: msg })
+  }
+
+  openThread(handle, text) {
+    this.#emit('thread:opened', { handle, text, hub: this.activeHub, channel: this.activeChannel })
+  }
+
+  sendThreadReply(text) {
+    this.#emit('thread:reply-sent', { message: { text, handle:'You', ts: Date.now() } })
+  }
+
+  startCall() {
+    if (this.#callState === 'active') { this.#emit('call:sheet-requested'); return }
+    this.#callState = 'active'
+    this.#callChannelId = this.#activeChannelId
+    this.#callHubId     = this.#activeHubId
+    this.#callParticipants = [
+      { id:'you', name:'You', initials:'JG', color:'#5865f2', muted:false, speaking:false },
+    ]
+    this.#emit('call:started', { hub: this.activeHub, channel: this.activeChannel, participants: this.#callParticipants })
+    // Simulate Alice joining after 1.5 s
+    setTimeout(() => {
+      this.#callParticipants.push({ id:'u_alice', name:'Alice', initials:'AL', color:'#22c55e', muted:false, speaking:true })
+      this.#emit('call:participants-changed', { participants: this.#callParticipants })
+    }, 1500)
+    // Simulate Bob joining + Alice speaking stops after 4 s
+    setTimeout(() => {
+      this.#callParticipants.push({ id:'u_bob', name:'Bob', initials:'BO', color:'#f59e0b', muted:true, speaking:false })
+      this.#callParticipants.find(p => p.id === 'u_alice').speaking = false
+      this.#emit('call:participants-changed', { participants: this.#callParticipants })
+    }, 4000)
+  }
+
+  simulateIncomingCall() {
+    this.#emit('call:incoming', {
+      from: { name:'Alice', initials:'AL', color:'#22c55e' },
+      hub:  this.activeHub,
+      channel: this.activeChannel,
+    })
+  }
+
+  joinCall() {
+    this.startCall()
+  }
+
+  leaveCall() {
+    if (this.#callState === 'idle') return
+    this.#callState = 'idle'
+    this.#callParticipants = []
+    this.#callChannelId = null
+    this.#callHubId     = null
+    this.#emit('call:ended')
+  }
+
+  toggleMute() {
+    const you = this.#callParticipants.find(p => p.id === 'you')
+    if (!you) return
+    you.muted = !you.muted
+    this.#emit('call:participants-changed', { participants: this.#callParticipants })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SHEET CONTROLLER  (reusable swipe-to-dismiss)
+// Eliminates the 5× duplicated drag logic that existed before the refactor.
+// ══════════════════════════════════════════════════════════════════════════════
+class SheetController {
+  #sheet; #backdrop
+  #dragStart = 0; #dragTime = 0; #dragging = false
+  #isDragTargetFn
+  static #COMMIT_PX = 80; static #COMMIT_VEL = 0.4
+
+  constructor(sheet, backdrop, {
+    handleSelector = '.mob-edit-handle, .mob-edit-toolbar',
+    isDragTarget,
+  } = {}) {
+    this.#sheet    = sheet
+    this.#backdrop = backdrop
+    this.#isDragTargetFn = isDragTarget ?? (el => !!el.closest(handleSelector))
+    this.#bindSwipeDismiss()
+    if (backdrop) {
+      backdrop.addEventListener('click',    () => this.hide())
+      backdrop.addEventListener('touchend', e  => { e.preventDefault(); this.hide() }, { passive: false })
+    }
+  }
+
+  get el()     { return this.#sheet }
+  isOpen()     { return this.#sheet.classList.contains('is-open') }
+
+  show() { this.#backdrop?.classList.add('is-open'); this.#sheet.classList.add('is-open') }
+
+  hide() {
+    this.#sheet.style.transform = 'translateY(100%)'
+    this.#sheet.addEventListener('transitionend', () => {
+      this.#sheet.style.transform = ''
+      this.#backdrop?.classList.remove('is-open')
+      this.#sheet.classList.remove('is-open')
+    }, { once: true })
+  }
+
+  #begin(clientY, ts) {
+    this.#dragging = true; this.#dragStart = clientY; this.#dragTime = ts
+    this.#sheet.style.transition = 'none'
+  }
+  #move(clientY) {
+    if (!this.#dragging) return
+    this.#sheet.style.transform = `translateY(${Math.max(0, clientY - this.#dragStart)}px)`
+  }
+  #end(clientY, ts) {
+    if (!this.#dragging) return
+    this.#dragging = false
+    const dy  = Math.max(0, clientY - this.#dragStart)
+    const vel = dy / Math.max(ts - this.#dragTime, 1)
+    this.#sheet.style.transition = ''
+    if (dy > SheetController.#COMMIT_PX || vel > SheetController.#COMMIT_VEL) {
+      this.hide()
+    } else {
+      this.#sheet.style.transform = ''
+    }
+  }
+
+  #bindSwipeDismiss() {
+    const s = this.#sheet
+    s.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || !this.#isDragTargetFn(e.target)) return
+      this.#begin(e.touches[0].clientY, e.timeStamp)
+    }, { passive: true })
+    s.addEventListener('touchmove', e => {
+      if (!this.#dragging) return
+      this.#move(e.touches[0].clientY)
+    }, { passive: true })
+    s.addEventListener('touchend',   e => { this.#end(e.changedTouches[0].clientY, e.timeStamp) }, { passive: true })
+    s.addEventListener('touchcancel', () => { this.#dragging = false; s.style.transition = ''; s.style.transform = '' })
+    s.addEventListener('mousedown', e => {
+      if (!this.#isDragTargetFn(e.target)) return
+      this.#begin(e.clientY, e.timeStamp); e.preventDefault()
+    })
+    document.addEventListener('mousemove', e => { if (this.#dragging) this.#move(e.clientY) })
+    document.addEventListener('mouseup',   e => { if (this.#dragging) this.#end(e.clientY, e.timeStamp) })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NAVIGATION VIEW
+// Owns the swipe gesture engine and panel transitions. Listens to model events
+// that should trigger navigation (hub change → sidebar, thread opened → thread).
+// ══════════════════════════════════════════════════════════════════════════════
+class NavigationView {
+  #model; #viewport; #track; #config
+  #panel = 0
+  #startX = 0; #startY = 0; #startTime = 0
+  #locked = null; #active = false
+  #ctx = null  // set after ContextMenuController is constructed
+  #dbg         // debug element refs
+
+  constructor(model, { viewport, track, backBtn, threadBackBtn, config, dbg = {} }) {
+    this.#model    = model
+    this.#viewport = viewport
+    this.#track    = track
+    this.#config   = config
+    this.#dbg      = dbg
+
+    model.addEventListener('hub:changed',   () => this.goTo(0))
+    model.addEventListener('thread:opened', () => this.goTo(2))
+
+    backBtn?.addEventListener('click',       () => this.goTo(0))
+    threadBackBtn?.addEventListener('click', () => this.goTo(1))
+
+    this.#bindTouch()
+    this.#bindMouse()
+    this.goTo(1, false)  // start on the message panel
+  }
+
+  setCtx(ctx) { this.#ctx = ctx }
+  get panel()  { return this.#panel }
+
+  goTo(index, animate = true) {
+    this.#panel = Math.max(0, Math.min(PANELS.length - 1, index))
+    const pct   = -(this.#panel * (100 / PANELS.length))
+    this.#track.style.transition = animate ? 'transform 320ms cubic-bezier(0.32,0.72,0,1)' : 'none'
+    this.#track.style.transform  = `translateX(${pct}%)`
+    if (this.#dbg.panel) this.#dbg.panel.textContent = `panel: ${PANELS[this.#panel]}`
+    this.#model.dispatchEvent(new CustomEvent('panel:changed',
+      { detail: { panel: this.#panel, name: PANELS[this.#panel] } }))
+  }
+
+  #panelPct(i) { return -(i * (100 / PANELS.length)) }
+
+  #clamp(raw, min, max) {
+    if (raw >= min && raw <= max) return raw
+    const r = this.#config.rubberBand
+    return raw < min ? min - (min - raw) * r : max + (raw - max) * r
+  }
+
+  #moveXY(cx, cy) {
+    const dx = cx - this.#startX, dy = cy - this.#startY
+    if (this.#dbg.dx) this.#dbg.dx.textContent = `dx: ${Math.round(dx)}`
+    if (!this.#locked) {
+      if (Math.abs(dx) < this.#config.lockPx && Math.abs(dy) < this.#config.lockPx) return false
+      this.#locked = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v'
+      if (this.#dbg.dir) this.#dbg.dir.textContent = `dir: ${this.#locked}`
+    }
+    if (this.#locked !== 'h') return false
+    const vpW    = this.#viewport.offsetWidth
+    const trackW = vpW * PANELS.length
+    const base   = this.#panelPct(this.#panel) / 100 * trackW
+    const clamped = this.#clamp(base + dx, -(trackW - vpW), 0)
+    this.#track.style.transform = `translateX(${clamped / trackW * 100}%)`
+    return true
+  }
+
+  #endGesture(cx, ts) {
+    this.#active = false
+    if (this.#locked !== 'h') { this.#locked = null; return }
+    const dx   = cx - this.#startX
+    const vel  = Math.abs(dx) / Math.max(ts - this.#startTime, 1)
+    const vpW  = this.#viewport.offsetWidth
+    const past = Math.abs(dx) >= vpW * (this.#config.commitPct / 100)
+    if (this.#dbg.vel) this.#dbg.vel.textContent = `vel: ${vel.toFixed(2)}`
+    let target = this.#panel
+    if ((past || vel >= this.#config.velocityPx) && dx < 0) target = Math.min(this.#panel + 1, PANELS.length - 1)
+    if ((past || vel >= this.#config.velocityPx) && dx > 0) target = Math.max(this.#panel - 1, 0)
+    this.goTo(target)
+    this.#locked = null
+  }
+
+  #begin(cx, cy, ts) {
+    this.#startX = cx; this.#startY = cy; this.#startTime = ts
+    this.#locked = null; this.#active = true
+    this.#track.style.transition = 'none'
+    if (this.#dbg.dir) this.#dbg.dir.textContent = 'dir: ?'
+    if (this.#dbg.vel) this.#dbg.vel.textContent = 'vel: –'
+  }
+
+  #bindTouch() {
+    this.#viewport.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || this.#ctx?.isOpen) return
+      this.#begin(e.touches[0].clientX, e.touches[0].clientY, e.timeStamp)
+    }, { passive: true })
+    this.#viewport.addEventListener('touchmove', e => {
+      if (!this.#active || e.touches.length !== 1) return
+      if (this.#moveXY(e.touches[0].clientX, e.touches[0].clientY)) e.preventDefault()
+    }, { passive: false })
+    this.#viewport.addEventListener('touchend', e => {
+      if (!this.#active) return
+      this.#endGesture(e.changedTouches[0].clientX, e.timeStamp)
+    }, { passive: true })
+    this.#viewport.addEventListener('touchcancel', () => {
+      if (!this.#active) return
+      this.#active = false; this.#locked = null; this.goTo(this.#panel)
+    })
+  }
+
+  #bindMouse() {
+    this.#viewport.addEventListener('mousedown', e => {
+      if (e.button !== 0 || this.#ctx?.isOpen) return
+      this.#begin(e.clientX, e.clientY, e.timeStamp); e.preventDefault()
+    })
+    document.addEventListener('mousemove', e => { if (this.#active) this.#moveXY(e.clientX, e.clientY) })
+    document.addEventListener('mouseup',   e => { if (this.#active) this.#endGesture(e.clientX, e.timeStamp) })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB BAR VIEW
+// Renders hub tabs + unread badges + New / More buttons.
+// Delegates hub switching to the model; sheet visibility to sheet instances.
+// ══════════════════════════════════════════════════════════════════════════════
+class TabBarView {
+  #model; #el; #nav; #overflow; #hubCreateSheet; #ctx
+
+  constructor(model, el, { nav, overflow, hubCreateSheet, ctx }) {
+    this.#model = model; this.#el = el; this.#nav = nav
+    this.#overflow = overflow; this.#hubCreateSheet = hubCreateSheet; this.#ctx = ctx
+
+    for (const ev of ['hub:changed','hub:created','hub:updated','channel:read']) {
+      model.addEventListener(ev, () => this.render())
+    }
+
+    el.addEventListener('click', e => {
+      const item = e.target.closest('.mob-tab-item')
+      if (!item || this.#ctx.lpFired) return
+      if (item.dataset.action === 'overflow') { overflow.show(); return }
+      if (item.dataset.action === 'new-hub')  { hubCreateSheet.show(); return }
+      const hubId = item.dataset.hubId
+      if (!hubId) return
+      if (hubId === model.activeHubId) {
+        document.querySelector('.mob-sidebar-scroll')?.scrollTo({ top: 0, behavior: 'smooth' })
+        nav.goTo(0)
+      } else {
+        model.selectHub(hubId)
+      }
+    })
+  }
+
+  #unread(hub)  { return hub.channels.filter(c => c.mention || c.urgent).length }
+  #badge(hub) {
+    if (hub.id === this.#model.activeHubId) return ''
+    const n = this.#unread(hub)
+    return n ? `<span class="mob-tab-badge">${n > 9 ? '9+' : n}</span>` : ''
+  }
+
+  render() {
+    const m = this.#model, hubs = m.hubs
+    const overflow   = hubs.length > m.maxTabs ? hubs.slice(m.maxTabs - 1) : []
+    const direct     = hubs.length > m.maxTabs ? hubs.slice(0, m.maxTabs - 1) : hubs
+    const inOverflow = overflow.some(h => h.id === m.activeHubId)
+    const ovBadge    = overflow.some(h => this.#unread(h) > 0 && h.id !== m.activeHubId)
+
+    this.#el.innerHTML =
+      direct.map(hub => `
+        <button class="mob-tab-item${hub.id === m.activeHubId ? ' active' : ''}"
+                data-hub-id="${hub.id}" type="button" aria-label="${escHtml(hub.name)}">
+          <span class="mob-tab-icon" style="background:${hub.color};color:white">
+            ${escHtml(hub.initials)}${this.#badge(hub)}
+          </span>
+          <span class="mob-tab-label">${escHtml(hub.short)}</span>
+        </button>`).join('') + `
+      <button class="mob-tab-item mob-tab-new-hub" data-action="new-hub" type="button" aria-label="New workspace">
+        <span class="mob-tab-icon mob-tab-plus">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg>
+        </span>
+        <span class="mob-tab-label">New</span>
+      </button>` + (overflow.length ? `
+      <button class="mob-tab-item${inOverflow ? ' active' : ''}"
+              data-action="overflow" type="button" aria-label="More workspaces">
+        <span class="mob-tab-icon mob-tab-more">•••${ovBadge ? '<span class="mob-tab-badge">·</span>' : ''}</span>
+        <span class="mob-tab-label">More</span>
+      </button>` : '')
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SIDEBAR VIEW
+// Renders the channel list and drives the large-title ↔ compact-title crossfade.
+// ══════════════════════════════════════════════════════════════════════════════
+class SidebarView {
+  #model; #nav; #channelCreateSheet; #hubEditSheet; #ctx
+  #scroll; #channelList; #hubNameEl; #compactTitle; #navGear; #hubGear; #header
+
+  constructor(model, { nav, channelCreateSheet, hubEditSheet, ctx }) {
+    this.#model = model; this.#nav = nav
+    this.#channelCreateSheet = channelCreateSheet
+    this.#hubEditSheet = hubEditSheet; this.#ctx = ctx
+
+    this.#scroll      = document.querySelector('.mob-sidebar-scroll')
+    this.#channelList = document.getElementById('mob-channel-list')
+    this.#hubNameEl   = document.getElementById('mob-hub-name')
+    this.#compactTitle = document.getElementById('mob-compact-title')
+    this.#navGear     = document.getElementById('mob-nav-gear')
+    this.#hubGear     = document.getElementById('mob-hub-edit-btn')
+    this.#header      = document.getElementById('mob-sidebar-header')
+
+    model.addEventListener('hub:changed',      () => this.#renderHub())
+    model.addEventListener('hub:updated',      () => this.#renderHub())
+    model.addEventListener('channel:created',  () => this.#renderChannels())
+    model.addEventListener('channel:selected', () => this.#renderChannels())
+
+    this.#scroll.addEventListener('scroll', () => this.#onScroll(), { passive: true })
+
+    // Channel link clicks
+    document.getElementById('mob-panel-sidebar').addEventListener('click', e => {
+      if (this.#ctx.lpFired) return
+      const link = e.target.closest('.channel-link')
+      if (!link) return
+      e.preventDefault()
+      model.selectChannel(link.dataset.channelId)
+      const ch = model.activeHub?.channels.find(c => c.id === link.dataset.channelId)
+      const name = ch ? `#${ch.name}` : link.textContent.trim()
+      document.getElementById('mob-chat-title').textContent = name
+      document.querySelector('#mob-panel-main .mob-composer-input').placeholder = `Message ${name}…`
+      nav.goTo(1)
+    }, true)  // capture so lpFired check fires before link default
+
+    // Gear buttons (both large-title and compact-nav)
+    this.#hubGear.addEventListener('click', () => hubEditSheet.open(model.activeHub))
+    this.#navGear.addEventListener('click', () => hubEditSheet.open(model.activeHub))
+
+    // New channel button
+    document.getElementById('mob-channel-add-btn').addEventListener('click',
+      () => channelCreateSheet.show())
+  }
+
+  #onScroll() {
+    const bottom = this.#hubNameEl.getBoundingClientRect().bottom
+    const hdrBot = this.#header.getBoundingClientRect().bottom
+    const t = Math.max(0, Math.min(1, (hdrBot - bottom) / (this.#hubNameEl.offsetHeight * 0.6)))
+    this.#compactTitle.style.opacity = t
+    this.#navGear.style.opacity      = t
+    this.#hubNameEl.style.opacity    = 1 - t
+    this.#hubGear.style.opacity      = 1 - t
+    this.#header.classList.toggle('scrolled', this.#scroll.scrollTop > 4)
+  }
+
+  #renderHub() {
+    const hub = this.#model.activeHub
+    if (!hub) return
+    this.#hubNameEl.textContent     = hub.name
+    this.#compactTitle.textContent  = hub.name
+    this.#scroll.scrollTop          = 0
+    this.#hubNameEl.style.opacity   = 1
+    this.#compactTitle.style.opacity = 0
+    this.#navGear.style.opacity     = 0
+    this.#hubGear.style.opacity     = 1
+    this.#header.classList.remove('scrolled')
+    this.#renderChannels()
+  }
+
+  #renderChannels() {
+    const hub = this.#model.activeHub
+    if (!hub) return
+    const activeId = this.#model.activeChannelId
+    this.#channelList.innerHTML = hub.channels.map(ch => `
+      <li class="channel-item${ch.id === activeId ? ' active' : ''}"
+          data-channel-id="${ch.id}"
+          ${ch.mention ? 'data-mention=""' : ''}
+          ${ch.urgent  ? 'data-urgent=""'  : ''}>
+        <a class="channel-link" href="#" data-channel-id="${ch.id}">${escHtml(ch.name)}</a>
+      </li>`).join('')
+  }
+
+  render() { this.#renderHub() }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CHAT VIEW
+// Manages the main message panel: send, append, reply bar, pull-to-refresh.
+// ══════════════════════════════════════════════════════════════════════════════
+class ChatView {
+  #model
+  #messages; #input; #sendBtn
+  #replyBar; #replyName; #replyText; #replyDismiss
+  #ptrBar; #ptrStartY = 0; #ptrPulling = false; #ptrLocked = false
+
+  constructor(model) {
+    this.#model      = model
+    this.#messages   = document.getElementById('mob-messages')
+    this.#input      = document.querySelector('#mob-panel-main .mob-composer-input')
+    this.#sendBtn    = document.querySelector('#mob-panel-main .mob-composer-send')
+    this.#replyBar   = document.getElementById('mob-reply-quote')
+    this.#replyName  = document.getElementById('mob-reply-quote-name')
+    this.#replyText  = document.getElementById('mob-reply-quote-text')
+    this.#replyDismiss = document.getElementById('mob-reply-quote-dismiss')
+    this.#ptrBar     = document.getElementById('mob-ptr-bar')
+
+    model.addEventListener('message:sent',  ({ detail: { message } }) => this.#append(message))
+    model.addEventListener('reply:changed', ({ detail: { replyingTo } }) => this.#updateReplyBar(replyingTo))
+
+    this.#sendBtn.addEventListener('click', () => this.#send())
+    this.#input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.#send() }
+      if (e.key === 'Escape') model.clearReply()
+    })
+    this.#replyDismiss.addEventListener('click', () => model.clearReply())
+
+    this.#bindPtr()
+    this.#messages.scrollTop = 9999
+  }
+
+  // Public: called by ContextMenuController for reaction actions
+  addReaction(article, emoji) {
+    let bar = article.querySelector('.reaction-bar')
+    if (!bar) { bar = document.createElement('div'); bar.className = 'reaction-bar'; article.appendChild(bar) }
+    const pill = [...bar.querySelectorAll('.reaction-pill')].find(p => p.textContent.startsWith(emoji))
+    if (pill) {
+      pill.querySelector('.reaction-count').textContent = +pill.querySelector('.reaction-count').textContent + 1
+      pill.classList.toggle('reacted')
+    } else {
+      const btn = document.createElement('button')
+      btn.className = 'reaction-pill reacted'; btn.type = 'button'
+      btn.innerHTML = `${emoji} <span class="reaction-count">1</span>`
+      bar.appendChild(btn)
+    }
+  }
+
+  #send() {
+    const text = this.#input.value.trim()
+    if (!text) return
+    this.#model.sendMessage(text)
+    this.#input.value = ''
+  }
+
+  #append(msg) {
+    const lastSender = this.#messages.lastElementChild?.dataset.sender
+    const isNew = lastSender !== msg.handle
+    const art = document.createElement('article')
+    art.className = 'message' + (isNew ? ' new-sender' : '')
+    art.dataset.sender = msg.handle
+    let replyHtml = ''
+    if (msg.replyingTo) replyHtml =
+      `<div style="font-size:12px;color:var(--text-muted);padding:2px 0 4px;display:flex;gap:6px;align-items:center">` +
+      `<span style="width:2px;height:12px;background:var(--accent);border-radius:1px;flex-shrink:0"></span>` +
+      `<b style="color:var(--text-secondary)">${escHtml(msg.replyingTo.handle)}</b>` +
+      `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(msg.replyingTo.text)}</span></div>`
+    art.innerHTML = msgInnerHtml(msg.handle, timeStr(), `${replyHtml}<p>${escHtml(msg.text)}</p>`)
+    this.#messages.appendChild(art)
+    this.#messages.scrollTop = this.#messages.scrollHeight
+  }
+
+  #updateReplyBar(rt) {
+    if (!rt) {
+      this.#replyBar.style.display = 'none'
+    } else {
+      this.#replyName.textContent = rt.handle
+      this.#replyText.textContent = rt.text
+      this.#replyBar.style.display = 'flex'
+      this.#input.focus()
+    }
+  }
+
+  #bindPtr() {
+    const el = this.#messages
+    el.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || el.scrollTop > 0) return
+      this.#ptrStartY = e.touches[0].clientY; this.#ptrPulling = true; this.#ptrLocked = false
+    }, { passive: true })
+    el.addEventListener('touchmove', e => {
+      if (!this.#ptrPulling) return
+      const dy = e.touches[0].clientY - this.#ptrStartY
+      this.#ptrBar.classList.toggle('is-visible', dy > 24)
+      this.#ptrLocked = dy > 72
+    }, { passive: true })
+    el.addEventListener('touchend', () => {
+      if (!this.#ptrPulling) return; this.#ptrPulling = false
+      if (this.#ptrLocked) {
+        this.#ptrBar.classList.add('is-loading')
+        setTimeout(() => {
+          const stub = document.createElement('article')
+          stub.className = 'message new-sender'
+          stub.dataset.sender = 'System'
+          stub.innerHTML = msgInnerHtml('System', 'earlier', '<p>↑ Earlier messages loaded.</p>')
+          el.insertBefore(stub, el.firstChild)
+          this.#ptrBar.classList.remove('is-visible','is-loading')
+        }, 1000)
+      } else {
+        this.#ptrBar.classList.remove('is-visible')
+      }
+    }, { passive: true })
+    el.addEventListener('touchcancel', () => {
+      this.#ptrPulling = false; this.#ptrBar.classList.remove('is-visible','is-loading')
+    }, { passive: true })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// THREAD VIEW
+// Renders the thread panel when thread:opened fires; handles replies.
+// ══════════════════════════════════════════════════════════════════════════════
+class ThreadView {
+  #model; #messages; #composer; #sendBtn; #title; #subtitle
+
+  constructor(model) {
+    this.#model    = model
+    this.#messages = document.getElementById('mob-thread-messages')
+    this.#composer = document.getElementById('mob-thread-composer')
+    this.#sendBtn  = document.getElementById('mob-thread-send')
+    this.#title    = document.getElementById('mob-thread-title')
+    this.#subtitle = document.getElementById('mob-thread-subtitle')
+
+    model.addEventListener('thread:opened',     ({ detail }) => this.#open(detail))
+    model.addEventListener('thread:reply-sent', ({ detail: { message } }) => this.#appendReply(message))
+
+    this.#sendBtn.addEventListener('click', () => this.#send())
+    this.#composer.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.#send() }
+    })
+  }
+
+  #open({ handle, text, channel }) {
+    const chName = channel ? `#${channel.name}` : 'channel'
+    this.#title.textContent    = 'Thread'
+    this.#subtitle.textContent = chName
+    this.#composer.placeholder = `Reply in ${chName}…`
+
+    const root = document.createElement('article')
+    root.className = 'message mob-thread-root new-sender'
+    root.dataset.sender = handle
+    root.innerHTML = msgInnerHtml(handle, '', `<p>${escHtml(text)}</p>`)
+
+    const divider = document.createElement('div')
+    divider.className = 'mob-thread-divider'
+    divider.textContent = '1 reply'
+
+    const stub = document.createElement('article')
+    stub.className = 'message mob-thread-reply new-sender'
+    stub.dataset.sender = 'Alice'
+    stub.innerHTML = msgInnerHtml('Alice', 'just now', '<p>Thanks for the heads up 👍</p>')
+
+    this.#messages.replaceChildren(root, divider, stub)
+    this.#messages.scrollTop = 0
+  }
+
+  #appendReply(msg) {
+    const divider = this.#messages.querySelector('.mob-thread-divider')
+    if (divider) {
+      const n = +divider.textContent + 1
+      divider.textContent = `${n} repl${n === 1 ? 'y' : 'ies'}`
+    }
+    const lastSender = this.#messages.lastElementChild?.dataset.sender
+    const isNew = lastSender !== msg.handle
+    const art = document.createElement('article')
+    art.className = 'message mob-thread-reply' + (isNew ? ' new-sender' : '')
+    art.dataset.sender = msg.handle
+    art.innerHTML = msgInnerHtml(msg.handle, timeStr(), `<p>${escHtml(msg.text)}</p>`)
+    this.#messages.appendChild(art)
+    this.#messages.scrollTop = this.#messages.scrollHeight
+  }
+
+  #send() {
+    const text = this.#composer.value.trim()
+    if (!text) return
+    this.#model.sendThreadReply(text)
+    this.#composer.value = ''
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CALL VIEW
+// Manages the call sheet, active call bar, and participant grid.
+// ══════════════════════════════════════════════════════════════════════════════
+class CallView {
+  #model; #sc
+  #sheetEl; #backdropEl; #barEl; #barTextEl; #barTimerEl
+  #participantsEl; #timerEl; #channelInfoEl
+  #muteBtn; #cameraBtn; #speakerBtn; #hangupBtn; #barLeaveBtn; #callHeaderBtn
+  #timerInterval = null; #elapsed = 0
+  #muted = false; #cameraOn = false; #speakerOn = true
+
+  constructor(model) {
+    this.#model       = model
+    this.#sheetEl     = document.getElementById('mob-call-sheet')
+    this.#backdropEl  = document.getElementById('mob-call-backdrop')
+    this.#barEl       = document.getElementById('mob-call-bar')
+    this.#barTextEl   = document.getElementById('mob-call-bar-text')
+    this.#barTimerEl  = document.getElementById('mob-call-bar-timer')
+    this.#participantsEl = document.getElementById('mob-call-participants')
+    this.#timerEl        = document.getElementById('mob-call-timer')
+    this.#channelInfoEl  = document.getElementById('mob-call-channel-info')
+    this.#muteBtn    = document.getElementById('mob-call-mute')
+    this.#cameraBtn  = document.getElementById('mob-call-camera')
+    this.#speakerBtn = document.getElementById('mob-call-speaker')
+    this.#hangupBtn  = document.getElementById('mob-call-hangup')
+    this.#barLeaveBtn = document.getElementById('mob-call-bar-leave')
+    this.#callHeaderBtn = document.getElementById('mob-call-header-btn')
+
+    this.#sc = new SheetController(this.#sheetEl, this.#backdropEl, {
+      handleSelector: '.mob-call-handle',
+    })
+
+    this.#bindEvents()
+
+    model.addEventListener('call:started',             e => this.#onCallStarted(e.detail))
+    model.addEventListener('call:participants-changed', e => this.#renderParticipants(e.detail.participants))
+    model.addEventListener('call:ended',               () => this.#onCallEnded())
+    model.addEventListener('call:sheet-requested',     () => this.#sc.show())
+  }
+
+  #onCallStarted({ hub, channel, participants }) {
+    this.#channelInfoEl.textContent = `${hub?.name ?? ''} › #${channel?.name ?? ''}`
+    this.#renderParticipants(participants)
+    this.#startTimer()
+    this.#barEl.classList.add('is-active')
+    this.#sc.show()
+    this.#muted = false; this.#cameraOn = false; this.#speakerOn = true
+    this.#updateControlState()
+  }
+
+  #onCallEnded() {
+    this.#sc.hide()
+    this.#stopTimer()
+    this.#barEl.classList.remove('is-active')
+    this.#elapsed = 0
+    this.#timerEl.textContent = '0:00'
+    this.#barTimerEl.textContent = '0:00'
+  }
+
+  #renderParticipants(participants) {
+    const count = participants.length
+    this.#barTextEl.textContent = `${count} in call`
+    this.#participantsEl.innerHTML = participants.map(p => `
+      <div class="mob-call-tile${p.speaking ? ' speaking' : ''}${p.muted ? ' muted' : ''}">
+        <div class="mob-call-tile-avatar" style="background:${escHtml(p.color)}">
+          ${escHtml(p.initials)}
+          <span class="mob-call-tile-mic">${p.muted ? '🔇' : '🎤'}</span>
+        </div>
+        <span class="mob-call-tile-name">${escHtml(p.name)}</span>
+      </div>
+    `).join('')
+  }
+
+  #startTimer() {
+    this.#elapsed = 0
+    this.#timerInterval = setInterval(() => {
+      this.#elapsed++
+      const m = Math.floor(this.#elapsed / 60)
+      const s = String(this.#elapsed % 60).padStart(2, '0')
+      const str = `${m}:${s}`
+      this.#timerEl.textContent = str
+      this.#barTimerEl.textContent = str
+    }, 1000)
+  }
+
+  #stopTimer() {
+    clearInterval(this.#timerInterval)
+    this.#timerInterval = null
+  }
+
+  #updateControlState() {
+    this.#muteBtn.classList.toggle('active', this.#muted)
+    this.#muteBtn.querySelector('.mob-call-btn-icon').textContent = this.#muted ? '🔇' : '🎤'
+    this.#muteBtn.querySelector('.mob-call-btn-label').textContent = this.#muted ? 'Unmute' : 'Mute'
+    this.#cameraBtn.classList.toggle('active', this.#cameraOn)
+    this.#cameraBtn.querySelector('.mob-call-btn-icon').textContent = this.#cameraOn ? '📷' : '📵'
+    this.#speakerBtn.classList.toggle('active', this.#speakerOn)
+  }
+
+  #bindEvents() {
+    this.#callHeaderBtn.addEventListener('click', () => this.#model.startCall())
+
+    this.#barEl.addEventListener('click', e => {
+      if (e.target === this.#barLeaveBtn) return
+      if (this.#model.callState === 'active') this.#sc.show()
+    })
+
+    this.#barLeaveBtn.addEventListener('click', e => {
+      e.stopPropagation()
+      this.#model.leaveCall()
+    })
+
+    this.#hangupBtn.addEventListener('click', () => this.#model.leaveCall())
+
+    this.#muteBtn.addEventListener('click', () => {
+      this.#muted = !this.#muted
+      this.#model.toggleMute()
+      this.#updateControlState()
+    })
+
+    this.#cameraBtn.addEventListener('click', () => {
+      this.#cameraOn = !this.#cameraOn
+      this.#updateControlState()
+    })
+
+    this.#speakerBtn.addEventListener('click', () => {
+      this.#speakerOn = !this.#speakerOn
+      this.#updateControlState()
+    })
+
+    document.getElementById('mob-call-share').addEventListener('click', () => {
+      const icon = document.querySelector('#mob-call-share .mob-call-btn-icon')
+      const label = document.querySelector('#mob-call-share .mob-call-btn-label')
+      const sharing = document.getElementById('mob-call-share').classList.toggle('active')
+      icon.textContent  = sharing ? '⏹' : '🖥'
+      label.textContent = sharing ? 'Stop' : 'Share'
+    })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INCOMING CALL VIEW
+// Shows a toast when a call:incoming event is received.
+// ══════════════════════════════════════════════════════════════════════════════
+class IncomingCallView {
+  #model; #toastEl; #avatarEl; #nameEl; #subEl
+  #acceptBtn; #declineBtn; #timeout = null
+
+  constructor(model) {
+    this.#model     = model
+    this.#toastEl   = document.getElementById('mob-call-toast')
+    this.#avatarEl  = document.getElementById('mob-call-toast-avatar')
+    this.#nameEl    = document.getElementById('mob-call-toast-name')
+    this.#subEl     = document.getElementById('mob-call-toast-sub')
+    this.#acceptBtn  = document.getElementById('mob-call-toast-accept')
+    this.#declineBtn = document.getElementById('mob-call-toast-decline')
+
+    this.#acceptBtn.addEventListener('click', () => {
+      this.#hide()
+      this.#model.joinCall()
+    })
+    this.#declineBtn.addEventListener('click', () => this.#hide())
+
+    model.addEventListener('call:incoming', e => this.#show(e.detail))
+  }
+
+  #show({ from, hub, channel }) {
+    this.#avatarEl.textContent    = from.initials
+    this.#avatarEl.style.background = from.color
+    this.#nameEl.textContent      = from.name
+    this.#subEl.textContent       = `started a call in #${channel?.name ?? 'unknown'}`
+    this.#toastEl.classList.add('is-visible')
+    this.#timeout = setTimeout(() => this.#hide(), 8000)
+  }
+
+  #hide() {
+    clearTimeout(this.#timeout)
+    this.#toastEl.classList.remove('is-visible')
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONTEXT MENU CONTROLLER
+// Long-press detection across channels, tabs, and messages. Owns lpFired so
+// that other views can guard their click handlers against ghost clicks.
+// ══════════════════════════════════════════════════════════════════════════════
+class ContextMenuController {
+  #model; #chat; #nav
+  #menuEl; #backdropEl; #viewport
+  #lpTimer = null; #lpPeekTimer = null
+  #lpStartX = 0; #lpStartY = 0; #lpTarget = null; #lpFired = false
+  #ctxTarget = null
+  static #PEEK_MS = 300; static #FIRE_MS = 500; static #MOVE_PX = 8
+
+  constructor(model, { chat, nav, viewport, menuEl, backdropEl }) {
+    this.#model      = model; this.#chat = chat; this.#nav = nav
+    this.#menuEl     = menuEl; this.#backdropEl = backdropEl; this.#viewport = viewport
+
+    menuEl.addEventListener('click', e => {
+      const btn = e.target.closest('[data-action]')
+      if (!btn) return
+      this.#handleAction(btn.dataset.action); this.#hide()
+    })
+    backdropEl.addEventListener('click',    () => this.#hide())
+    backdropEl.addEventListener('touchend', e  => { e.preventDefault(); this.#hide() }, { passive: false })
+
+    this.#bindPressTargets()
+  }
+
+  get isOpen()  { return this.#menuEl.classList.contains('is-open') }
+  get lpFired() { return this.#lpFired }
+
+  // ── Bind long-press on three zones ────────────────────────────────────────
+  #bindPressTargets() {
+    const zones = [
+      { el: document.querySelector('.mob-sidebar-scroll'),
+        pick: el => el.closest('.channel-item') },
+      { el: document.getElementById('mob-tab-bar'),
+        pick: el => el.closest('.mob-tab-item[data-hub-id]') },
+      { el: document.getElementById('mob-panel-main'),
+        pick: el => el.closest('.reaction-pill, .mob-composer') ? null : el.closest('.message') },
+    ]
+
+    for (const { el, pick } of zones) {
+      el.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return
+        const p = pick(e.target); if (!p) return
+        this.#startLP(p, e.touches[0].clientX, e.touches[0].clientY)
+      }, { passive: true })
+      el.addEventListener('touchmove', e => {
+        if (!this.#lpTimer) return
+        if (this.#tooFar(e.touches[0].clientX, e.touches[0].clientY)) this.#cancel()
+      }, { passive: true })
+      el.addEventListener('touchend',    () => { if (!this.#lpFired) this.#cancel() }, { passive: true })
+      el.addEventListener('touchcancel', () => this.#cancel(), { passive: true })
+      el.addEventListener('mousedown', e => {
+        if (e.button !== 0) return
+        const p = pick(e.target); if (!p) return
+        this.#startLP(p, e.clientX, e.clientY)
+      })
+      // Suppress the ghost click that fires after a long press
+      el.addEventListener('click', e => {
+        if (!this.#lpFired) return
+        e.preventDefault(); e.stopImmediatePropagation(); this.#lpFired = false
+      }, true)
+    }
+
+    document.addEventListener('mousemove', e => {
+      if (this.#lpTimer && this.#tooFar(e.clientX, e.clientY)) this.#cancel()
+    })
+    document.addEventListener('mouseup', () => { if (!this.#lpFired) this.#cancel() })
+  }
+
+  #startLP(el, x, y) {
+    this.#lpStartX = x; this.#lpStartY = y; this.#lpTarget = el; this.#lpFired = false
+    this.#lpPeekTimer = setTimeout(() => el.classList.add('mob-lp-peek'), ContextMenuController.#PEEK_MS)
+    this.#lpTimer     = setTimeout(() => {
+      el.classList.remove('mob-lp-peek')
+      this.#fire(x, y)
+    }, ContextMenuController.#FIRE_MS)
+  }
+
+  #cancel() {
+    clearTimeout(this.#lpPeekTimer); clearTimeout(this.#lpTimer)
+    this.#lpPeekTimer = null; this.#lpTimer = null
+    this.#lpTarget?.classList.remove('mob-lp-peek'); this.#lpTarget = null
+  }
+
+  #tooFar(x, y) {
+    return Math.abs(x - this.#lpStartX) > ContextMenuController.#MOVE_PX
+        || Math.abs(y - this.#lpStartY) > ContextMenuController.#MOVE_PX
+  }
+
+  // ── Menu item definitions ─────────────────────────────────────────────────
+  #buildItems(el) {
+    const article = el.closest?.('.message')
+    if (article) {
+      const own = article.querySelector('.message-handle')?.textContent.trim() === 'You'
+      return [
+        { action:'reply-thread',  icon:'↩',  label:'Reply in Thread' },
+        { action:'reply-inline',  icon:'↰',  label:'Reply' },
+        '---',
+        { action:'react-thumbs',  icon:'👍', label:'Thumbs Up' },
+        { action:'react-heart',   icon:'❤️', label:'Heart' },
+        { action:'copy-text',     icon:'⎘',  label:'Copy Text' },
+        ...(own ? ['---', { action:'delete-msg', icon:'✕', label:'Delete Message', danger:true }] : []),
+      ]
+    }
+    if (el.classList.contains('mob-tab-item')) {
+      const hub = this.#model.hubs.find(h => h.id === el.dataset.hubId)
+      return hub ? [
+        { action:'hub-new-channel', icon:'+',  label:'New Channel' },
+        '---',
+        { action:'hub-settings',    icon:'⚙', label:'Hub Settings' },
+        { action:'hub-leave',       icon:'→',  label:`Leave ${hub.name}`, danger:true },
+      ] : []
+    }
+    const li = el.closest?.('.channel-item')
+    if (li) {
+      const isDm   = !!li.closest('#mob-dm-list')
+      const unread = li.hasAttribute('data-mention') || li.hasAttribute('data-urgent')
+      if (isDm) return [
+        ...(unread ? [{ action:'mark-read', icon:'✓', label:'Mark as Read' }] : []),
+        { action:'mute-dm',  icon:'🔇', label:'Mute' },
+        '---',
+        { action:'close-dm', icon:'✕',  label:'Close Conversation', danger:true },
+      ]
+      return [
+        ...(unread ? [{ action:'mark-read', icon:'✓', label:'Mark as Read' }] : []),
+        { action:'mute-channel',  icon:'🔇', label:'Mute Channel' },
+        { action:'copy-link',     icon:'🔗', label:'Copy Link' },
+        '---',
+        { action:'leave-channel', icon:'→',  label:'Leave Channel', danger:true },
+      ]
+    }
+    return []
+  }
+
+  #fire(clientX, clientY) {
+    this.#lpFired = true
+    this.#ctxTarget = this.#lpTarget
+
+    const items = this.#buildItems(this.#lpTarget)
+    if (!items.length) return
+
+    this.#menuEl.innerHTML = items.map(item =>
+      item === '---'
+        ? `<div class="mob-ctx-divider"></div>`
+        : `<button class="mob-ctx-item${item.danger ? ' danger' : ''}" type="button" data-action="${item.action}">
+             <span class="mob-ctx-icon">${item.icon ?? ''}</span>
+             <span>${item.label}</span>
+           </button>`
+    ).join('')
+
+    this.#menuEl.style.display = 'flex'
+    const vp   = this.#viewport.getBoundingClientRect()
+    const mW   = this.#menuEl.offsetWidth  || 192
+    const mH   = this.#menuEl.offsetHeight || 160
+    const isTab = this.#lpTarget?.classList.contains('mob-tab-item')
+    let cx = clientX - vp.left + 6
+    let cy = isTab ? vp.height - mH - 58 : clientY - vp.top + 8
+    cx = Math.max(8, Math.min(cx, vp.width  - mW - 8))
+    cy = Math.max(8, Math.min(cy, vp.height - mH - 8))
+    this.#menuEl.style.left = `${cx}px`
+    this.#menuEl.style.top  = `${cy}px`
+    this.#menuEl.classList.add('is-open')
+    this.#backdropEl.style.display = 'block'
+  }
+
+  #hide() {
+    this.#menuEl.classList.remove('is-open')
+    this.#menuEl.style.display = 'none'
+    this.#backdropEl.style.display = 'none'
+    this.#lpFired = false
+  }
+
+  #toast(msg) {
+    const el = document.getElementById('dbg-panel')
+    const was = el.textContent
+    el.textContent = msg
+    setTimeout(() => { el.textContent = was }, 2000)
+  }
+
+  #handleAction(action) {
+    const article = this.#ctxTarget?.closest?.('.message')
+    switch (action) {
+      case 'reply-thread': {
+        const h = article?.querySelector('.message-handle')?.textContent.trim() ?? ''
+        const t = article?.querySelector('.message-text p')?.textContent.trim() ?? ''
+        this.#model.openThread(h, t); break
+      }
+      case 'reply-inline': {
+        if (article) {
+          const h = article.querySelector('.message-handle')?.textContent.trim() ?? ''
+          const t = article.querySelector('.message-text p')?.textContent.trim() ?? ''
+          this.#model.setReplyingTo(h, t)
+        }
+        break
+      }
+      case 'react-thumbs': if (article) this.#chat.addReaction(article, '👍'); break
+      case 'react-heart':  if (article) this.#chat.addReaction(article, '❤️'); break
+      case 'copy-text': {
+        const t = article?.querySelector('.message-text p')?.textContent.trim() ?? ''
+        this.#toast(`⎘ "${t.slice(0,32)}${t.length>32?'…':''}"`)
+        break
+      }
+      case 'delete-msg': article?.remove(); this.#toast('message deleted'); break
+      case 'mark-read': {
+        const li = this.#ctxTarget?.closest?.('.channel-item')
+        if (li) this.#model.markChannelRead(li.dataset.channelId)
+        this.#toast('✓ marked as read'); break
+      }
+      default: this.#toast(`ctx: ${action}`)
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SHEET VIEWS  (each composes SheetController for swipe-dismiss)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class OverflowSheet {
+  #model; #sc; #listEl
+
+  constructor(model, { sheetEl, backdropEl, listEl }) {
+    this.#model = model; this.#listEl = listEl
+    // Allow drag anywhere on the sheet UNLESS the list is scrolled
+    this.#sc = new SheetController(sheetEl, backdropEl, {
+      isDragTarget: el => !(el.closest('.mob-overflow-list') && listEl.scrollTop > 0)
+    })
+    listEl.addEventListener('click', e => {
+      const item = e.target.closest('[data-hub-id]'); if (!item) return
+      this.hide(); model.selectHub(item.dataset.hubId)
+    })
+  }
+
+  get isOpen() { return this.#sc.isOpen() }
+  show() {
+    const overflow = this.#model.hubs.length > this.#model.maxTabs
+      ? this.#model.hubs.slice(this.#model.maxTabs - 1) : []
+    this.#listEl.innerHTML = overflow.map(hub => `
+      <li class="mob-overflow-item${hub.id === this.#model.activeHubId ? ' active' : ''}" data-hub-id="${hub.id}">
+        <span class="mob-tab-icon" style="background:${hub.color};color:white;width:38px;height:38px;border-radius:11px;font-size:12px">${escHtml(hub.initials)}</span>
+        <span class="mob-overflow-item-name">${escHtml(hub.name)}</span>
+        <span class="mob-overflow-checkmark">${hub.id === this.#model.activeHubId ? '✓' : ''}</span>
+      </li>`).join('')
+    this.#sc.show()
+  }
+  hide() { this.#sc.hide() }
+}
+
+class HubEditSheet {
+  #model; #sc; #nameInput; #visInput; #descInput; #titleEl
+
+  constructor(model, { sheetEl, backdropEl }) {
+    this.#model = model
+    this.#sc = new SheetController(sheetEl, backdropEl)
+    this.#nameInput = document.getElementById('mob-edit-hub-name')
+    this.#visInput  = document.getElementById('mob-edit-hub-visibility')
+    this.#descInput = document.getElementById('mob-edit-hub-desc')
+    this.#titleEl   = document.getElementById('mob-edit-sheet-title')
+    document.getElementById('mob-edit-cancel').addEventListener('click', () => this.#sc.hide())
+    document.getElementById('mob-edit-done').addEventListener('click',   () => this.#save())
+    document.getElementById('mob-edit-backdrop').addEventListener('click', () => this.#sc.hide())
+  }
+
+  open(hub) {
+    if (!hub) return
+    this.#titleEl.textContent = hub.name
+    this.#nameInput.value     = hub.name
+    this.#visInput.value      = hub.visibility  ?? 'public'
+    this.#descInput.value     = hub.description ?? ''
+    this.#sc.show()
+    setTimeout(() => this.#nameInput.focus(), 340)
+  }
+
+  #save() {
+    const name = this.#nameInput.value.trim()
+    if (!name) { this.#nameInput.focus(); return }
+    this.#model.updateHub(this.#model.activeHubId, {
+      name, visibility: this.#visInput.value, description: this.#descInput.value.trim(),
+    })
+    this.#sc.hide()
+  }
+}
+
+class HubCreateSheet {
+  #model; #sc; #nameInput; #visInput; #colorRow; #selectedColor = HUB_COLORS[0]
+
+  constructor(model, { sheetEl, backdropEl }) {
+    this.#model = model
+    this.#sc = new SheetController(sheetEl, backdropEl)
+    this.#nameInput = document.getElementById('mob-hub-create-name')
+    this.#visInput  = document.getElementById('mob-hub-create-vis')
+    this.#colorRow  = document.getElementById('mob-hub-color-row')
+    document.getElementById('mob-hub-create-cancel').addEventListener('click', () => this.#sc.hide())
+    document.getElementById('mob-hub-create-done').addEventListener('click',   () => this.#create())
+    this.#colorRow.addEventListener('click', e => {
+      const sw = e.target.closest('.mob-hub-color-swatch'); if (!sw) return
+      this.#selectedColor = sw.dataset.color; this.#renderColors()
+    })
+    this.#nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.#create()
+      if (e.key === 'Escape') this.#sc.hide()
+    })
+  }
+
+  show() {
+    this.#nameInput.value = ''; this.#visInput.value = 'public'
+    const used = new Set(this.#model.hubs.map(h => h.color))
+    this.#selectedColor = HUB_COLORS.find(c => !used.has(c)) ?? HUB_COLORS[this.#model.hubs.length % HUB_COLORS.length]
+    this.#renderColors(); this.#sc.show()
+    setTimeout(() => this.#nameInput.focus(), 340)
+  }
+
+  #renderColors() {
+    this.#colorRow.innerHTML = HUB_COLORS.map(c => `
+      <button class="mob-hub-color-swatch${c === this.#selectedColor ? ' selected' : ''}"
+              data-color="${c}" type="button" style="background:${c}"></button>`).join('')
+  }
+
+  #create() {
+    const name = this.#nameInput.value.trim(); if (!name) { this.#nameInput.focus(); return }
+    this.#sc.hide()
+    this.#sc.el.addEventListener('transitionend', () =>
+      this.#model.createHub({ name, visibility: this.#visInput.value, color: this.#selectedColor })
+    , { once: true })
+  }
+}
+
+class ChannelCreateSheet {
+  #model; #sc; #nameInput; #visInput; #descInput
+
+  constructor(model, { sheetEl, backdropEl }) {
+    this.#model = model
+    this.#sc = new SheetController(sheetEl, backdropEl)
+    this.#nameInput = document.getElementById('mob-ch-name')
+    this.#visInput  = document.getElementById('mob-ch-visibility')
+    this.#descInput = document.getElementById('mob-ch-desc')
+    document.getElementById('mob-ch-cancel').addEventListener('click', () => this.#sc.hide())
+    document.getElementById('mob-ch-create').addEventListener('click', () => this.#create())
+    this.#nameInput.addEventListener('input', () => {
+      const pos = this.#nameInput.selectionStart
+      this.#nameInput.value = this.#nameInput.value.replace(/ /g, '-')
+      this.#nameInput.setSelectionRange(pos, pos)
+    })
+    this.#nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.#create()
+      if (e.key === 'Escape') this.#sc.hide()
+    })
+  }
+
+  show() {
+    this.#nameInput.value = ''; this.#visInput.value = 'public'; this.#descInput.value = ''
+    this.#sc.show()
+    setTimeout(() => this.#nameInput.focus(), 340)
+  }
+
+  #create() {
+    const name = this.#nameInput.value.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!name) { this.#nameInput.focus(); return }
+    const hub = this.#model.activeHub; if (!hub) return
+    const ch = this.#model.createChannel(hub.id, {
+      name, visibility: this.#visInput.value, description: this.#descInput.value.trim(),
+    })
+    if (!ch) return
+    this.#sc.hide()
+    document.getElementById('mob-chat-title').textContent = `#${name}`
+    document.querySelector('#mob-panel-main .mob-composer-input').placeholder = `Message #${name}…`
+  }
+}
+
+class UserPrefsSheet {
+  #sc; #avatarBtn
+
+  constructor({ sheetEl, backdropEl, avatarBtn }) {
+    this.#avatarBtn = avatarBtn
+    this.#sc = new SheetController(sheetEl, backdropEl)
+    avatarBtn.addEventListener('click', () => this.#sc.show())
+    document.getElementById('mob-prefs-cancel').addEventListener('click', () => this.#sc.hide())
+    document.getElementById('mob-prefs-status-row').addEventListener('click', e => {
+      const btn = e.target.closest('.mob-prefs-status'); if (!btn) return
+      document.querySelectorAll('.mob-prefs-status').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      const color = btn.querySelector('.mob-prefs-dot')?.style.background ?? ''
+      avatarBtn.style.boxShadow = color ? `0 0 0 2px var(--bg-sidebar), 0 0 0 4px ${color}` : ''
+    })
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOTSTRAP  — wire everything together
+// ══════════════════════════════════════════════════════════════════════════════
+const model = new AppModel(HUBS_DATA, 'h1', 'c1', MAX_TABS)
+
+const nav = new NavigationView(model, {
+  viewport:      document.getElementById('mob-viewport'),
+  track:         document.getElementById('mob-track'),
+  backBtn:       document.getElementById('mob-back-btn'),
+  threadBackBtn: document.getElementById('mob-thread-back-btn'),
+  config,
+  dbg: {
+    panel: document.getElementById('dbg-panel'),
+    dir:   document.getElementById('dbg-dir'),
+    dx:    document.getElementById('dbg-dx'),
+    vel:   document.getElementById('dbg-vel'),
+  },
+})
+
+const overflowSheet = new OverflowSheet(model, {
+  sheetEl:    document.getElementById('mob-overflow-sheet'),
+  backdropEl: document.getElementById('mob-overflow-backdrop'),
+  listEl:     document.getElementById('mob-overflow-list'),
+})
+
+const hubEditSheet = new HubEditSheet(model, {
+  sheetEl:    document.getElementById('mob-edit-sheet'),
+  backdropEl: document.getElementById('mob-edit-backdrop'),
+})
+
+const hubCreateSheet = new HubCreateSheet(model, {
+  sheetEl:    document.getElementById('mob-hub-create-sheet'),
+  backdropEl: document.getElementById('mob-hub-create-backdrop'),
+})
+
+const channelCreateSheet = new ChannelCreateSheet(model, {
+  sheetEl:    document.getElementById('mob-ch-sheet'),
+  backdropEl: document.getElementById('mob-ch-backdrop'),
+})
+
+new UserPrefsSheet({
+  sheetEl:    document.getElementById('mob-prefs-sheet'),
+  backdropEl: document.getElementById('mob-prefs-backdrop'),
+  avatarBtn:  document.querySelector('.mob-avatar'),
+})
+
+const chat   = new ChatView(model)
+const thread = new ThreadView(model)
+
+const ctx = new ContextMenuController(model, {
+  chat, nav,
+  viewport:   document.getElementById('mob-viewport'),
+  menuEl:     document.getElementById('mob-ctx-menu'),
+  backdropEl: document.getElementById('mob-ctx-backdrop'),
+})
+
+nav.setCtx(ctx)
+
+const tabBar = new TabBarView(model, document.getElementById('mob-tab-bar'), {
+  nav, overflow: overflowSheet, hubCreateSheet, ctx,
+})
+
+new SidebarView(model, { nav, channelCreateSheet, hubEditSheet, ctx })
+
+const callView = new CallView(model)
+new IncomingCallView(model)
+
+// Demo: simulate an incoming call after 2 s (remove in real app)
+setTimeout(() => model.simulateIncomingCall(), 2000)
+
+// ── Keyboard avoidance for all sheets ────────────────────────────────────────
+document.querySelectorAll('.mob-edit-body').forEach(body => {
+  body.addEventListener('focusin', e => {
+    const input = e.target.closest('input, textarea, select'); if (!input) return
+    setTimeout(() => input.scrollIntoView({ behavior:'smooth', block:'nearest' }), 120)
+  })
+})
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    const kbH = Math.max(0, window.innerHeight - window.visualViewport.height)
+    document.querySelectorAll('.mob-edit-body').forEach(b => {
+      b.style.paddingBottom = kbH > 50 ? `${kbH + 16}px` : ''
+    })
+    if (kbH > 50 && document.activeElement?.matches('input, textarea, select'))
+      setTimeout(() => document.activeElement.scrollIntoView({ behavior:'smooth', block:'nearest' }), 60)
+  })
+}
+
+// ── Initial render ────────────────────────────────────────────────────────────
+tabBar.render()
+</script>
