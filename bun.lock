@@ -5,11 +5,11 @@
     "": {
       "name": "@devchitchat/chat",
       "dependencies": {
-        "@devchitchat/index97": "^3.3.0",
+        "@devchitchat/index97": "^3.3.1",
       },
     },
   },
   "packages": {
-    "@devchitchat/index97": ["@devchitchat/index97@3.3.0", "", { "peerDependencies": { "typescript": "^5" }, "optionalPeers": ["typescript"], "bin": { "index97": "cli.js" } }, "sha512-8tvtFTKBMOjA57DQmYYuqfm4BoMXGvTw65Zpc5A7Jt+C9Twh6JrxOC/e/C+Rtu+vYtYPsHyTTAW9NVqWyZMPkg=="],
+    "@devchitchat/index97": ["@devchitchat/index97@3.3.1", "", { "peerDependencies": { "typescript": "^5" }, "optionalPeers": ["typescript"], "bin": { "index97": "cli.js" } }, "sha512-m6SDGybbM9HiCRgzzxU8Qs+lq53qQ9EMfWib1yqAxYWvMaTH0jkBmBMvW/HYs6dIU/PrgIU/2pCCc14DSVzk3A=="],
   }
 }

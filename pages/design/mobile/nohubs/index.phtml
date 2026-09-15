@@ -445,6 +445,19 @@
         <div class="mob-edit-body" style="padding:0;gap:0" id="mob-nh-activity-list"></div>
       </div>
 
+      <!-- New DM sheet -->
+      <div class="mob-edit-backdrop" id="mob-nh-dm-backdrop"></div>
+      <div class="mob-edit-sheet" id="mob-nh-dm-sheet" role="dialog" aria-label="New Message">
+        <div class="mob-edit-handle"></div>
+        <div class="mob-edit-toolbar">
+          <button class="mob-edit-btn-cancel" id="mob-nh-dm-cancel" type="button">Cancel</button>
+          <span class="mob-edit-title">New Message</span>
+          <span style="min-width:64px"></span>
+        </div>
+        <input class="mob-dm-search" id="mob-nh-dm-search" type="search" placeholder="Search people…" autocomplete="off">
+        <div class="mob-edit-body" style="padding:0;gap:0;margin-top:12px" id="mob-nh-dm-list"></div>
+      </div>
+
       <!-- Debug bar -->
       <div class="mob-debug" id="mob-nh-debug">
         <span id="mob-nh-dbg-panel">panel: sidebar</span>
@@ -1492,6 +1505,44 @@
   font-size: 11px; color: var(--text-muted);
   flex-shrink: 0; margin-top: 2px;
 }
+/* ── DM people picker ────────────────────────────────────────────────────── */
+.mob-dm-search {
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  width: calc(100% - 32px);
+  outline: none;
+}
+.mob-dm-search:focus { border-color: var(--accent); }
+.mob-dm-person-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.mob-dm-person-row:last-child { border-bottom: none; }
+.mob-dm-person-row:hover { background: var(--bg-hover); }
+.mob-dm-person-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: white; flex-shrink: 0;
+  position: relative;
+}
+.mob-dm-person-avatar::after {
+  content: '';
+  position: absolute; bottom: 1px; right: 1px;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--bg-elevated);
+  background: var(--color-success);
+}
+.mob-dm-person-avatar.away::after { background: var(--color-warning); }
+.mob-dm-person-info { flex: 1; min-width: 0; }
+.mob-dm-person-name { font-size: 15px; color: var(--text-primary); font-weight: 500; }
+.mob-dm-person-status { font-size: 12px; color: var(--text-muted); }
+
 /* ── Global search overlay ───────────────────────────────────────────────── */
 .mob-search-overlay {
   position: absolute;
@@ -3338,6 +3389,52 @@ class SessionCreateSheet {
   }
 }
 
+class NewDMSheet {
+  #model; #sc; #searchEl; #listEl
+
+  static #MEMBERS = [
+    { id:'dm1', name:'Alice', initials:'AL', color:'#5865f2', status:'online' },
+    { id:'dm2', name:'Bob',   initials:'BO', color:'#22c55e', status:'away'   },
+    { id:'dm3', name:'Carol', initials:'CA', color:'#f59e0b', status:'online' },
+  ]
+
+  constructor(model, { sheetEl, backdropEl }) {
+    this.#model = model
+    this.#sc = new SheetController(sheetEl, backdropEl)
+    this.#searchEl = document.getElementById('mob-nh-dm-search')
+    this.#listEl   = document.getElementById('mob-nh-dm-list')
+    document.getElementById('mob-nh-dm-cancel').addEventListener('click', () => this.#sc.hide())
+    this.#searchEl.addEventListener('input', () => this.#render(this.#searchEl.value))
+    this.#listEl.addEventListener('click', e => {
+      const row = e.target.closest('.mob-dm-person-row')
+      if (!row) return
+      const { id, section } = row.dataset
+      this.#model.selectChannel(id, section)
+      this.#sc.hide()
+    })
+  }
+
+  show() {
+    this.#searchEl.value = ''
+    this.#render('')
+    this.#sc.show()
+    setTimeout(() => this.#searchEl.focus(), 340)
+  }
+
+  #render(q) {
+    const term = q.toLowerCase()
+    const filtered = NewDMSheet.#MEMBERS.filter(m => m.name.toLowerCase().includes(term))
+    this.#listEl.innerHTML = filtered.map(m => `
+      <div class="mob-dm-person-row" data-id="${m.id}" data-section="dms">
+        <div class="mob-dm-person-avatar${m.status === 'away' ? ' away' : ''}" style="background:${m.color}">${m.initials}</div>
+        <div class="mob-dm-person-info">
+          <div class="mob-dm-person-name">${escHtml(m.name)}</div>
+          <div class="mob-dm-person-status">${m.status === 'away' ? 'Away' : 'Online'}</div>
+        </div>
+      </div>`).join('')
+  }
+}
+
 // ============================================================================
 // BOOTSTRAP
 // ============================================================================
@@ -3374,6 +3471,11 @@ const channelCreateSheet = new ChannelCreateSheet(model, {
 const sessionCreateSheet = new SessionCreateSheet(model, {
   sheetEl:    document.getElementById('mob-nh-ses-sheet'),
   backdropEl: document.getElementById('mob-nh-ses-backdrop'),
+})
+
+const newDMSheet = new NewDMSheet(model, {
+  sheetEl:    document.getElementById('mob-nh-dm-sheet'),
+  backdropEl: document.getElementById('mob-nh-dm-backdrop'),
 })
 
 const chat = new ChatView(model)
@@ -3421,6 +3523,7 @@ document.getElementById('mob-nh-sidebar-scroll').addEventListener('click', e => 
   const id = addBtn.id
   if (id === 'mob-nh-add-public' || id === 'mob-nh-add-private') channelCreateSheet.show()
   else if (id === 'mob-nh-add-session') sessionCreateSheet.show()
+  else if (id === 'mob-nh-add-dm') newDMSheet.show()
 })
 
 // Simulate incoming call after 3s

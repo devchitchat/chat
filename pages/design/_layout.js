@@ -9,6 +9,7 @@ export async function data(req) {
     activePrinciples: pathname === '/design/principles',
     activeTokens:     pathname === '/design/tokens',
     activeComponents: pathname === '/design/components',
-    activeNoHubs: pathname === '/design/mobile/nohubs',
+    activeNoHubs:     pathname === '/design/mobile/nohubs',
+    activeIPadNoHubs: pathname === '/design/ipad/nohubs',
   }
 }
