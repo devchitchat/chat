@@ -2043,6 +2043,22 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 }
 .thread-panel.active { display: flex; }
 
+/* ── Desktop tiling: thread panel displaces the message area ──────────────── */
+/* On large screens the thread panel is a persistent side column, not an overlay.
+   margin-right tracks --thread-panel-width so resizing the panel is instant.   */
+@media (min-width: 1025px) {
+  .main-content {
+    transition: margin-right 160ms ease;
+  }
+  /* Suppress transition during drag so the content tracks the handle in real time */
+  body[style*="col-resize"] .main-content {
+    transition: none;
+  }
+  body:has(#thread-panel.active) .main-content {
+    margin-right: var(--thread-panel-width);
+  }
+}
+
 .thread-panel-header {
   display: flex;
   align-items: center;
