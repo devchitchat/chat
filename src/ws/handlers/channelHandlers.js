@@ -77,7 +77,7 @@ export function handleSessionEnd(ws, msg, ctx) {
 }
 
 export function handleChannelUpdate(ws, msg, ctx) {
-  const { auth, channelService, botService, sendWs, publishChannel, subscribeUserToChannel } = ctx
+  const { auth, channelService, botService, sendWs, publishChannel, subscribeUserToChannel, unsubscribeUserFromChannel } = ctx
   const user = auth.getUser(ws.data.userId)
   const { channel_id, name, topic, visibility } = msg.body || {}
 
@@ -90,7 +90,15 @@ export function handleChannelUpdate(ws, msg, ctx) {
       const botIds = botService.addBotsToPublicChannel({ channelId: channel_id })
       for (const botUserId of botIds) subscribeUserToChannel(botUserId, channel_id)
     } else if (before?.visibility === 'public') {
-      botService.removeBotsFromChannel({ channelId: channel_id })
+      const botIds = botService.removeBotsFromChannel({ channelId: channel_id })
+      for (const botUserId of botIds) {
+        unsubscribeUserFromChannel(botUserId, channel_id)
+        for (const [, conn] of ctx.connections) {
+          if (conn.data.userId === botUserId) {
+            sendWs(conn, { t: 'bot.channels_updated', body: { user_id: botUserId } })
+          }
+        }
+      }
     }
   }
 
@@ -172,12 +180,23 @@ export function handleChannelAddMember(ws, msg, ctx) {
 }
 
 export function handleChannelRemoveMember(ws, msg, ctx) {
-  const { auth, channelService, sendWs, publishChannel } = ctx
+  const { auth, channelService, sendWs, publishChannel, unsubscribeUserFromChannel } = ctx
   const { channel_id, user_id } = msg.body || {}
   const user = auth.getUser(ws.data.userId)
   const result = channelService.removeMember({ channelId: channel_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [], targetUserId: user_id })
   sendWs(ws, { t: 'channel.member_removed', reply_to: msg.id, ok: true, body: result })
   publishChannel(channel_id, { t: 'channel.member_removed', ok: true, body: result })
+
+  // If the removed member is a bot, unsubscribe its connections and notify it.
+  const targetUser = auth.getUser(user_id)
+  if (targetUser?.roles?.includes('bot')) {
+    unsubscribeUserFromChannel(user_id, channel_id)
+    for (const [, conn] of ctx.connections) {
+      if (conn.data.userId === user_id) {
+        sendWs(conn, { t: 'bot.channels_updated', body: { user_id } })
+      }
+    }
+  }
 }
 
 export function handleChannelListMembers(ws, msg, ctx) {

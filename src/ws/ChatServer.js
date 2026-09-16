@@ -267,6 +267,7 @@ export class ChatServer {
       broadcastToChannelAudience:(chId, p, ex)      => this.#broadcastToChannelAudience(chId, p, ex),
       collectChannelAudience:    (chId, ex)         => this.#collectChannelAudience(chId, ex),
       subscribeUserToChannel:    (userId, chId)     => this.#subscribeUserToChannel(userId, chId),
+      unsubscribeUserFromChannel:(userId, chId)     => this.#unsubscribeUserFromChannel(userId, chId),
       sendDigest:                (ws, uid, ts)      => this.#sendDigest(ws, uid, ts),
       dispatchMentions:          (args)             => this.#dispatchMentions(args),
       getIceServers:             ()                 => this.#getIceServers(),
@@ -399,6 +400,13 @@ export class ChatServer {
     const topic = `channel:${channelId}`
     for (const [, conn] of this.connections) {
       if (conn.data.userId === userId) conn.subscribe(topic)
+    }
+  }
+
+  #unsubscribeUserFromChannel(userId, channelId) {
+    const topic = `channel:${channelId}`
+    for (const [, conn] of this.connections) {
+      if (conn.data.userId === userId) conn.unsubscribe(topic)
     }
   }
 

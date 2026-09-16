@@ -152,6 +152,7 @@ export class BotService {
   /**
    * Remove all bots from a channel.
    * Called when a channel's visibility changes away from public.
+   * Returns the list of bot user IDs that were removed.
    */
   removeBotsFromChannel({ channelId }) {
     const now = this.nowFn()
@@ -159,6 +160,7 @@ export class BotService {
     for (const userId of botIds) {
       this.channelRepo.setMemberLeft({ channelId, userId, now })
     }
+    return botIds
   }
 
   _getBotChannels(userId) {
