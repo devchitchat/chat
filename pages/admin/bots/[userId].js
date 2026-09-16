@@ -1,11 +1,8 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
-import { botService, channelService, hubService } from '../../../src/context.js'
+import { botService, channelService } from '../../../src/context.js'
 import { randomToken } from '../../../src/util/crypto.js'
 import { p } from '../../../src/config.js'
-
-// In-memory flash store: flashId → plaintext token. Consumed once on GET.
-// Lost on restart, which is fine — the token was already shown or is gone.
-const tokenFlashes = new Map()
+import { storeTokenFlash, consumeTokenFlash } from '../../../src/util/tokenFlash.js'
 
 function getBotUserId(req) {
   return new URL(req.url).pathname.split('/').pop()
@@ -21,37 +18,23 @@ export function GET(req) {
   const url = new URL(req.url)
   // Consume the flash token once — removes it from the map so it can't be replayed
   const flashId = url.searchParams.get('flash_id') ?? null
-  const createdToken = flashId ? (tokenFlashes.get(flashId) ?? null) : null
-  if (flashId) tokenFlashes.delete(flashId)
+  const createdToken = consumeTokenFlash(flashId)
   const flash = url.searchParams.get('flash') ?? null
 
   const allChannels = channelService.listChannels(session.user.user_id, session.user.roles)
-  const allHubs     = hubService.listHubs(session.user.user_id, session.user.roles)
   const botChannelIds = new Set(bot.channels.map(c => c.channel_id))
 
-  // Group channels by hub, preserving hub order; collect channels with no hub separately
-  const hubMap = new Map(allHubs.map(h => [h.hub_id, { ...h, channels: [] }]))
-  const noHubChannels = []
-  for (const ch of allChannels) {
-    const entry = { ...ch, checked: botChannelIds.has(ch.channel_id) }
-    if (ch.hub_id && hubMap.has(ch.hub_id)) {
-      hubMap.get(ch.hub_id).channels.push(entry)
-    } else {
-      noHubChannels.push(entry)
-    }
+  // Public channels are auto-granted to all bots — display-only
+  const _entry = ch => ({
+    ...ch,
+    checked: botChannelIds.has(ch.channel_id),
+    autoGranted: ch.visibility === 'public',
+  })
+  const channelSections = {
+    public:   allChannels.filter(c => c.kind !== 'session' && c.visibility === 'public').map(_entry),
+    private:  allChannels.filter(c => c.kind !== 'session' && c.visibility === 'private').map(_entry),
+    sessions: allChannels.filter(c => c.kind === 'session').map(_entry),
   }
-
-  // Compute hub-level checked/indeterminate state for UI rendering
-  const hubGroups = [...hubMap.values()]
-    .filter(h => h.channels.length > 0)
-    .map(h => {
-      const checkedCount = h.channels.filter(c => c.checked).length
-      return {
-        ...h,
-        hubChecked:       checkedCount === h.channels.length,
-        hubIndeterminate: checkedCount > 0 && checkedCount < h.channels.length,
-      }
-    })
 
   return {
     user: session.user,
@@ -67,8 +50,7 @@ export function GET(req) {
       revoked:  !!t.revoked_at,
       expired:  !t.revoked_at && t.expires_at != null && t.expires_at <= Date.now(),
     })),
-    hubGroups,
-    noHubChannels,
+    channelSections,
   }
 }
 
@@ -87,7 +69,7 @@ export async function POST(req) {
     const result = botService.createToken({ userId: botUserId, label, ttlMs, requestingUserId: session.user.user_id })
     // Store the token in the server-side flash map — never put it in the URL
     const flashId = randomToken(8)
-    tokenFlashes.set(flashId, result.token)
+    storeTokenFlash(flashId, result.token)
     return Response.redirect(p(`/admin/bots/${botUserId}?flash_id=${encodeURIComponent(flashId)}`), 303)
   }
 

@@ -1,11 +1,16 @@
 /**
- * swipe-nav.js — horizontal swipe to switch between sidebar and message panel.
+ * swipe-nav.js — horizontal swipe between sidebar, message panel, and thread panel.
  *
- * Swipe right on the message panel  → sidebar slides in, message panel slides out.
- * Swipe left  on the sidebar        → message panel slides in, sidebar slides out.
+ * Three panels, left to right:
+ *   Sidebar  ←→  Messages  ←→  Thread (when open)
+ *
+ * Swipe right on messages   → sidebar (unless thread is open — swipe right closes thread first)
+ * Swipe left  on sidebar    → messages
+ * Swipe left  on messages   → thread (only when thread panel has .active)
+ * Swipe right on thread     → messages
  *
  * Direction is locked after LOCK_PX of movement so vertical scrolling inside
- * either panel is never interrupted.
+ * any panel is never interrupted.
  */
 
 const SWIPE_PX = 50   // minimum horizontal distance to commit a swipe
@@ -15,8 +20,6 @@ function attachSwipe(el, { onLeft, onRight }) {
   let startX, startY, dir
   let suppressSwipe = false
 
-  // Set suppressSwipe = true if selection changes during a touch gesture.
-  // This catches long-press → extend-selection-by-dragging in one gesture.
   function onSelectionChange() {
     suppressSwipe = true
   }
@@ -25,11 +28,7 @@ function attachSwipe(el, { onLeft, onRight }) {
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
     dir = null
-    // Case 1: a Range selection already exists — user is likely dragging a handle.
-    // (Vertical scroll within .messages is guarded by touch-action: pan-y on the element
-    // and direction locking via LOCK_PX, so we no longer suppress swipes from there.)
     suppressSwipe = window.getSelection()?.type === 'Range'
-    // Case 3: selection might be created during this touch (long-press → drag).
     if (!suppressSwipe) {
       document.addEventListener('selectionchange', onSelectionChange)
     }
@@ -42,7 +41,6 @@ function attachSwipe(el, { onLeft, onRight }) {
     const dx = e.touches[0].clientX - startX
     const dy = e.touches[0].clientY - startY
 
-    // Lock direction once we know which way the user is moving
     if (!dir) {
       if (Math.abs(dx) < LOCK_PX && Math.abs(dy) < LOCK_PX) return
       dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
@@ -50,7 +48,6 @@ function attachSwipe(el, { onLeft, onRight }) {
 
     if (dir !== 'h') return
 
-    // Only follow the finger in the valid direction for this panel
     const valid = (dx > 0 && onRight) || (dx < 0 && onLeft)
     if (!valid) return
 
@@ -61,7 +58,6 @@ function attachSwipe(el, { onLeft, onRight }) {
   el.addEventListener('touchend', e => {
     document.removeEventListener('selectionchange', onSelectionChange)
 
-    // Reset inline styles — CSS transition takes over from here
     el.style.transition = ''
     el.style.transform = ''
 
@@ -72,11 +68,23 @@ function attachSwipe(el, { onLeft, onRight }) {
     if (dx >= SWIPE_PX && onRight) onRight()
     else if (dx <= -SWIPE_PX && onLeft) onLeft()
   }, { passive: true })
+
+  // If the OS interrupts the gesture (notification, call, etc.), reset state cleanly
+  el.addEventListener('touchcancel', () => {
+    document.removeEventListener('selectionchange', onSelectionChange)
+    el.style.transition = ''
+    el.style.transform = ''
+    dir = null
+    suppressSwipe = false
+  }, { passive: true })
 }
 
+const threadIsOpen = () => document.getElementById('thread-panel')?.classList.contains('active') ?? false
+
 export function initSwipeNav() {
-  const mainContent = document.querySelector('.main-content')
-  const sidebar     = document.querySelector('.sidebar')
+  const mainContent  = document.querySelector('.main-content')
+  const sidebar      = document.querySelector('.sidebar')
+  const threadPanel  = document.getElementById('thread-panel')
   if (!mainContent || !sidebar) return
 
   import('./settings-sync.js').then(({ patchSettings }) => {
@@ -88,11 +96,35 @@ export function initSwipeNav() {
       document.body.classList.remove('sidebar-open')
       patchSettings({ mobile_chat_open: true })
     }
+    const showThread = () => {
+      threadPanel?.classList.add('swipe-open')
+    }
+    const hideThread = () => {
+      threadPanel?.classList.remove('swipe-open')
+    }
 
-    // Message panel: swipe right → show sidebar
-    attachSwipe(mainContent, { onRight: showSidebar })
+    // Message panel:
+    //   swipe right → sidebar (if thread not open) or close thread
+    //   swipe left  → thread panel (if thread .active)
+    attachSwipe(mainContent, {
+      onRight: () => {
+        if (threadIsOpen() && threadPanel?.classList.contains('swipe-open')) {
+          hideThread()
+        } else {
+          showSidebar()
+        }
+      },
+      onLeft: () => {
+        if (threadIsOpen()) showThread()
+      },
+    })
 
-    // Sidebar: swipe left → show message panel
+    // Sidebar: swipe left → message panel
     attachSwipe(sidebar, { onLeft: showMessages })
+
+    // Thread panel: swipe right → message panel
+    if (threadPanel) {
+      attachSwipe(threadPanel, { onRight: hideThread })
+    }
   })
 }

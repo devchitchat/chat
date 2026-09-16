@@ -2,15 +2,14 @@ import { test, expect, describe, beforeEach } from 'bun:test'
 import { createTestContext } from './helpers.js'
 
 describe('MessageService', () => {
-  let ctx, user, hub, channel
+  let ctx, user, channel
 
   beforeEach(async () => {
     ctx = createTestContext()
     user = await ctx.insertUser({ handle: 'alice' })
-    hub = ctx.hubService.createHub({ name: 'Test Hub', createdByUserId: user.user_id })
     channel = ctx.channelService.createChannel({
-      hubId: hub.hub_id, kind: 'text', name: 'general',
-      createdByUserId: user.user_id, userRoles: user.roles,
+      kind: 'text', name: 'general',
+      createdByUserId: user.user_id,
     })
   })
 

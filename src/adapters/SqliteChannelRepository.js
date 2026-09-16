@@ -5,74 +5,64 @@ export class SqliteChannelRepository {
     this.db = db
   }
 
-  insertChannelWithOwner({ channelId, hubId, kind, name, topic, visibility, createdByUserId, now }) {
+  insertChannelWithOwner({ channelId, kind, name, topic, visibility, sessionEndsAt = null, createdByUserId, now }) {
     runTransaction(this.db, () => {
       const nextOrder = (this.db.prepare(
-        `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM channels WHERE hub_id = ? AND deleted_at IS NULL`
-      ).get(hubId)?.next ?? 0)
+        `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM channels WHERE deleted_at IS NULL`
+      ).get()?.next ?? 0)
       this.db.prepare(
-        `INSERT INTO channels (channel_id, hub_id, kind, name, topic, visibility, sort_order, created_by_user_id, created_at)
+        `INSERT INTO channels (channel_id, kind, name, topic, visibility, sort_order, session_ends_at, created_by_user_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(channelId, hubId, kind, name, topic, visibility, nextOrder, createdByUserId, now)
+      ).run(channelId, kind, name, topic, visibility, nextOrder, sessionEndsAt, createdByUserId, now)
       this.db.prepare(
         `INSERT INTO channel_members (channel_id, user_id, role, joined_at) VALUES (?, ?, 'owner', ?)`
       ).run(channelId, createdByUserId, now)
     })
   }
 
-  listInHub({ hubId }) {
-    return this.db.prepare(
-      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order
-       FROM channels c WHERE c.hub_id = ? AND c.deleted_at IS NULL
-       ORDER BY c.sort_order ASC, c.created_at ASC`
-    ).all(hubId)
-  }
-
-  listAccessibleInHub({ hubId, userId, isGuest = false }) {
-    return this.db.prepare(
-      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order
-       FROM channels c WHERE c.hub_id = ? AND c.deleted_at IS NULL
-       AND (EXISTS (
-         SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.channel_id
-         AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL
-       ) OR (? = 0 AND c.visibility = 'public'))
-       ORDER BY c.sort_order ASC, c.created_at ASC`
-    ).all(hubId, userId, isGuest ? 1 : 0)
-  }
-
   listAll() {
     return this.db.prepare(
-      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name
-       FROM channels c JOIN hubs h ON c.hub_id = h.hub_id
-       WHERE c.deleted_at IS NULL AND h.deleted_at IS NULL
-       ORDER BY h.name, c.sort_order ASC, c.created_at ASC`
+      `SELECT c.channel_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, c.session_ends_at
+       FROM channels c
+       WHERE c.deleted_at IS NULL AND c.kind != 'dm'
+       ORDER BY c.kind, c.sort_order ASC, c.created_at ASC`
+    ).all()
+  }
+
+  listPublicNonDm() {
+    return this.db.prepare(
+      `SELECT channel_id, name, kind, visibility, topic, sort_order, session_ends_at
+       FROM channels WHERE deleted_at IS NULL AND kind != 'dm' AND visibility = 'public'`
     ).all()
   }
 
   listMemberships({ userId }) {
     return this.db.prepare(
-      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name
+      `SELECT c.channel_id, c.name, c.kind, c.visibility, c.topic, c.sort_order
        FROM channels c
-       JOIN hubs h ON c.hub_id = h.hub_id
        JOIN channel_members cm ON cm.channel_id = c.channel_id
-       WHERE c.deleted_at IS NULL AND h.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL
          AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL
-       ORDER BY h.name, c.sort_order ASC, c.created_at ASC`
+       ORDER BY c.sort_order ASC, c.created_at ASC`
     ).all(userId)
   }
 
   listAccessible({ userId, isGuest = false }) {
     return this.db.prepare(
-      `SELECT c.channel_id, c.hub_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, h.name AS hub_name
-       FROM channels c JOIN hubs h ON c.hub_id = h.hub_id
-       WHERE c.deleted_at IS NULL AND h.deleted_at IS NULL
-       AND (EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.channel_id AND cm.user_id = ? AND cm.left_at IS NULL AND cm.banned_at IS NULL)
-         OR (? = 0 AND (
-           (h.visibility = 'public' AND c.visibility = 'public')
-           OR (c.visibility = 'public' AND EXISTS (SELECT 1 FROM hub_members hm WHERE hm.hub_id = h.hub_id AND hm.user_id = ? AND hm.left_at IS NULL))
-         )))
-       ORDER BY h.name, c.sort_order ASC, c.created_at ASC`
-    ).all(userId, isGuest ? 1 : 0, userId)
+      `SELECT c.channel_id, c.name, c.kind, c.visibility, c.topic, c.sort_order, c.session_ends_at
+       FROM channels c
+       WHERE c.deleted_at IS NULL
+         AND c.kind != 'dm'
+         AND (
+           EXISTS (
+             SELECT 1 FROM channel_members cm
+             WHERE cm.channel_id = c.channel_id AND cm.user_id = ?
+               AND cm.left_at IS NULL AND cm.banned_at IS NULL
+           )
+           OR (? = 0 AND c.visibility = 'public')
+         )
+       ORDER BY c.kind, c.sort_order ASC, c.created_at ASC`
+    ).all(userId, isGuest ? 1 : 0)
   }
 
   findById({ channelId }) {
@@ -83,8 +73,8 @@ export class SqliteChannelRepository {
     return this.db.prepare('SELECT * FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, userId) ?? null
   }
 
-  findByHubAndName({ hubId, name }) {
-    return this.db.prepare('SELECT * FROM channels WHERE hub_id = ? AND name = ? AND deleted_at IS NULL').get(hubId, name) ?? null
+  findByName({ name }) {
+    return this.db.prepare('SELECT * FROM channels WHERE name = ? AND deleted_at IS NULL').get(name) ?? null
   }
 
   findDmByName({ name }) {
@@ -94,8 +84,8 @@ export class SqliteChannelRepository {
   insertDmChannel({ channelId, name, userIdA, userIdB, now }) {
     runTransaction(this.db, () => {
       this.db.prepare(
-        `INSERT INTO channels (channel_id, hub_id, kind, name, topic, visibility, sort_order, created_by_user_id, created_at)
-         VALUES (?, NULL, 'dm', ?, NULL, 'private', 0, ?, ?)`
+        `INSERT INTO channels (channel_id, kind, name, topic, visibility, sort_order, created_by_user_id, created_at)
+         VALUES (?, 'dm', ?, NULL, 'private', 0, ?, ?)`
       ).run(channelId, name, userIdA, now)
       this.db.prepare(
         `INSERT INTO channel_members (channel_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)`
@@ -135,12 +125,14 @@ export class SqliteChannelRepository {
     ).all(channelId)
   }
 
-  patchChannel({ channelId, name, topic, visibility }) {
+  patchChannel({ channelId, name, topic, visibility, session_ends_at }) {
     const updates = []
     const params = []
     if (name !== undefined) { updates.push('name = ?'); params.push(name) }
     if (topic !== undefined) { updates.push('topic = ?'); params.push(topic) }
     if (visibility !== undefined) { updates.push('visibility = ?'); params.push(visibility) }
+    if (session_ends_at !== undefined) { updates.push('session_ends_at = ?'); params.push(session_ends_at) }
+    if (!updates.length) return
     params.push(channelId)
     this.db.prepare(`UPDATE channels SET ${updates.join(', ')} WHERE channel_id = ?`).run(...params)
   }
@@ -149,13 +141,42 @@ export class SqliteChannelRepository {
     this.db.prepare('UPDATE channels SET deleted_at = ? WHERE channel_id = ?').run(now, channelId)
   }
 
-  reorderChannels({ hubId, channelIds }) {
+  reorderChannels({ channelIds }) {
     runTransaction(this.db, () => {
       const stmt = this.db.prepare(
-        `UPDATE channels SET sort_order = ? WHERE channel_id = ? AND hub_id = ? AND deleted_at IS NULL`
+        `UPDATE channels SET sort_order = ? WHERE channel_id = ? AND deleted_at IS NULL`
       )
-      channelIds.forEach((channelId, index) => stmt.run(index, channelId, hubId))
+      channelIds.forEach((channelId, index) => stmt.run(index, channelId))
     })
-    return this.listInHub({ hubId })
+    return channelIds
+      .map(id => this.db.prepare('SELECT channel_id, name, kind, visibility, topic, sort_order, session_ends_at FROM channels WHERE channel_id = ?').get(id))
+      .filter(Boolean)
+  }
+
+  searchFtsGlobal({ channelIds, query, limit = 20 }) {
+    if (!channelIds.length) return []
+    const placeholders = channelIds.map(() => '?').join(', ')
+    return this.db.prepare(
+      `SELECT m.msg_id, m.channel_id, m.seq, m.user_id, m.ts,
+              snippet(fts_messages, 0, '<mark>', '</mark>', '…', 24) AS snippet
+       FROM fts_messages fts
+       JOIN messages m ON fts.msg_id = m.msg_id
+       WHERE fts_messages MATCH ? AND m.channel_id IN (${placeholders})
+         AND m.deleted_at IS NULL
+       ORDER BY fts.rank
+       LIMIT ?`
+    ).all(query, ...channelIds, limit)
+  }
+
+  searchLikeGlobal({ channelIds, query, limit = 20 }) {
+    if (!channelIds.length) return []
+    const placeholders = channelIds.map(() => '?').join(', ')
+    return this.db.prepare(
+      `SELECT msg_id, channel_id, seq, user_id, ts, text AS snippet
+       FROM messages
+       WHERE channel_id IN (${placeholders}) AND text LIKE ? AND deleted_at IS NULL
+       ORDER BY ts DESC
+       LIMIT ?`
+    ).all(...channelIds, `%${query}%`, limit)
   }
 }

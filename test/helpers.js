@@ -1,13 +1,11 @@
 import { Database } from 'bun:sqlite'
 import { initDb } from '../src/db/initDb.js'
 import { AuthService } from '../src/services/AuthService.js'
-import { HubService } from '../src/services/HubService.js'
 import { ChannelService } from '../src/services/ChannelService.js'
 import { MessageService } from '../src/services/MessageService.js'
 import { DeliveryService } from '../src/services/DeliveryService.js'
 import { SearchService } from '../src/services/SearchService.js'
 import { SqliteAuthRepository } from '../src/adapters/SqliteAuthRepository.js'
-import { SqliteHubRepository } from '../src/adapters/SqliteHubRepository.js'
 import { SqliteChannelRepository } from '../src/adapters/SqliteChannelRepository.js'
 import { SqliteMessageRepository } from '../src/adapters/SqliteMessageRepository.js'
 import { SqliteDeliveryRepository } from '../src/adapters/SqliteDeliveryRepository.js'
@@ -21,18 +19,16 @@ export function createTestContext() {
   const nowFn = () => now
   const advanceTime = (ms) => { now += ms }
 
-  const authRepo = new SqliteAuthRepository({ db })
-  const hubRepo = new SqliteHubRepository({ db })
-  const channelRepo = new SqliteChannelRepository({ db })
-  const searchRepo = new SqliteSearchRepository({ db })
-  const messageRepo = new SqliteMessageRepository({ db })
+  const authRepo     = new SqliteAuthRepository({ db })
+  const channelRepo  = new SqliteChannelRepository({ db })
+  const searchRepo   = new SqliteSearchRepository({ db })
+  const messageRepo  = new SqliteMessageRepository({ db })
   const deliveryRepo = new SqliteDeliveryRepository({ db })
 
-  const auth = new AuthService({ authRepo, nowFn, bootstrapToken: 'test-bootstrap' })
-  const hubService = new HubService({ hubRepo, nowFn })
-  const channelService = new ChannelService({ channelRepo, hubService, nowFn })
-  const searchService = new SearchService({ searchRepo })
-  const messageService = new MessageService({ messageRepo, nowFn, channelService, searchService })
+  const auth            = new AuthService({ authRepo, nowFn, bootstrapToken: 'test-bootstrap' })
+  const channelService  = new ChannelService({ channelRepo, nowFn })
+  const searchService   = new SearchService({ searchRepo })
+  const messageService  = new MessageService({ messageRepo, nowFn, channelService, searchService })
   const deliveryService = new DeliveryService({ deliveryRepo, nowFn })
 
   async function insertUser({ handle = 'testuser', displayName = 'Test User', roles = ['user'], password = 'secret' } = {}) {
@@ -44,5 +40,5 @@ export function createTestContext() {
     return result.user
   }
 
-  return { db, auth, hubService, channelService, messageService, deliveryService, searchService, nowFn, advanceTime, insertUser }
+  return { db, auth, channelService, messageService, deliveryService, searchService, nowFn, advanceTime, insertUser }
 }

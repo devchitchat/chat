@@ -2,7 +2,6 @@ import { ServiceError } from '../util/errors.js'
 import { newId } from '../util/ids.js'
 import { randomToken } from '../util/crypto.js'
 import { AuthService } from '../services/AuthService.js'
-import { HubService } from '../services/HubService.js'
 import { ChannelService } from '../services/ChannelService.js'
 import { MessageService } from '../services/MessageService.js'
 import { DeliveryService } from '../services/DeliveryService.js'
@@ -13,16 +12,14 @@ import { SignalingService } from '../services/SignalingService.js'
 import { BotService } from '../services/BotService.js'
 import { parseMentions } from '../core/mentions.js'
 import { SqliteAuthRepository } from '../adapters/SqliteAuthRepository.js'
-import { SqliteHubRepository } from '../adapters/SqliteHubRepository.js'
 import { SqliteChannelRepository } from '../adapters/SqliteChannelRepository.js'
 import { SqliteMessageRepository } from '../adapters/SqliteMessageRepository.js'
 import { SqliteDeliveryRepository } from '../adapters/SqliteDeliveryRepository.js'
 import { SqliteSearchRepository } from '../adapters/SqliteSearchRepository.js'
 import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository.js'
 import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
-import { handleHubList, handleHubCreate, handleHubUpdate, handleHubDelete, handleHubAddMember, handleHubRemoveMember, handleHubListMembers, handleHubReorder } from './handlers/hubHandlers.js'
-import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList } from './handlers/channelHandlers.js'
-import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThreadList, handleSearchQuery, handlePresenceSubscribe } from './handlers/messageHandlers.js'
+import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList, handleSessionEnd } from './handlers/channelHandlers.js'
+import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThreadList, handleThreadChannelList, handleSearchQuery, handleSearchGlobal, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcStreamRemoved, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
 import { handleReactionAdd, handleReactionRemove } from './handlers/reactionHandlers.js'
@@ -58,7 +55,6 @@ export class ChatServer {
 
     // ── Repositories ───────────────────────────────────────────────────────────
     const authRepo      = new SqliteAuthRepository({ db })
-    const hubRepo       = new SqliteHubRepository({ db })
     const channelRepo   = new SqliteChannelRepository({ db })
     const searchRepo    = new SqliteSearchRepository({ db })
     const messageRepo   = new SqliteMessageRepository({ db })
@@ -68,8 +64,7 @@ export class ChatServer {
 
     // ── Services ───────────────────────────────────────────────────────────────
     this.auth             = new AuthService({ authRepo, sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) })
-    this.hubService       = new HubService({ hubRepo })
-    this.channelService   = new ChannelService({ channelRepo, hubService: this.hubService })
+    this.channelService   = new ChannelService({ channelRepo })
     this.searchService    = new SearchService({ searchRepo })
     this.reactionService  = new ReactionService({ reactionRepo, channelService: this.channelService })
     this.messageService   = new MessageService({ messageRepo, channelService: this.channelService, searchService: this.searchService, reactionService: this.reactionService })
@@ -77,7 +72,7 @@ export class ChatServer {
     this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
     this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
-    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo, hubService: this.hubService })
+    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
     this.pushService      = new WebPushService({
       vapidPublicKey:  process.env.VAPID_PUBLIC_KEY  ?? null,
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
@@ -194,15 +189,6 @@ export class ChatServer {
       case 'admin.bot_token_create':     return handleAdminBotTokenCreate(ws, msg, ctx)
       case 'admin.bot_token_revoke':     return handleAdminBotTokenRevoke(ws, msg, ctx)
       case 'admin.bot_set_channels':     return handleAdminBotSetChannels(ws, msg, ctx)
-      // Hubs
-      case 'hub.list':                   return handleHubList(ws, msg, ctx)
-      case 'hub.create':                 return handleHubCreate(ws, msg, ctx)
-      case 'hub.update':                 return handleHubUpdate(ws, msg, ctx)
-      case 'hub.delete':                 return handleHubDelete(ws, msg, ctx)
-      case 'hub.add_member':             return handleHubAddMember(ws, msg, ctx)
-      case 'hub.remove_member':          return handleHubRemoveMember(ws, msg, ctx)
-      case 'hub.list_members':           return handleHubListMembers(ws, msg, ctx)
-      case 'hub.reorder':                return handleHubReorder(ws, msg, ctx)
       // Channels
       case 'channel.list':               return handleChannelList(ws, msg, ctx)
       case 'channel.create':             return handleChannelCreate(ws, msg, ctx)
@@ -214,6 +200,7 @@ export class ChatServer {
       case 'channel.add_member':         return handleChannelAddMember(ws, msg, ctx)
       case 'channel.remove_member':      return handleChannelRemoveMember(ws, msg, ctx)
       case 'channel.list_members':       return handleChannelListMembers(ws, msg, ctx)
+      case 'session.end':                return handleSessionEnd(ws, msg, ctx)
       // Users & DMs
       case 'user.list':                  return handleUserList(ws, msg, ctx)
       case 'bot.list':                   return handleBotList(ws, msg, ctx)
@@ -225,7 +212,9 @@ export class ChatServer {
       case 'msg.delete':                 return handleMsgDelete(ws, msg, ctx)
       case 'msg.list':                   return handleMsgList(ws, msg, ctx)
       case 'thread.list':                return handleThreadList(ws, msg, ctx)
+      case 'thread.channel_list':        return handleThreadChannelList(ws, msg, ctx)
       case 'search.query':               return handleSearchQuery(ws, msg, ctx)
+      case 'search.global_query':        return handleSearchGlobal(ws, msg, ctx)
       case 'presence.subscribe':         return handlePresenceSubscribe(ws, msg, ctx)
       // RTC
       case 'rtc.call_create':            return handleRtcCallCreate(ws, msg, ctx)
@@ -255,7 +244,6 @@ export class ChatServer {
     return {
       // Services
       auth:                this.auth,
-      hubService:          this.hubService,
       channelService:      this.channelService,
       messageService:      this.messageService,
       deliveryService:     this.deliveryService,
@@ -276,9 +264,7 @@ export class ChatServer {
       publishChannel:            (channelId, p)     => this.#publishChannel(channelId, p),
       publishCall:               (callId, p)        => this.#publishCall(callId, p),
       publishCallState:          (chId, callId, ps) => this.#publishCallState(chId, callId, ps),
-      broadcastToHubAudience:    (hubId, p, ex)     => this.#broadcastToHubAudience(hubId, p, ex),
       broadcastToChannelAudience:(chId, p, ex)      => this.#broadcastToChannelAudience(chId, p, ex),
-      collectHubAudience:        (hubId, ex)        => this.#collectHubAudience(hubId, ex),
       collectChannelAudience:    (chId, ex)         => this.#collectChannelAudience(chId, ex),
       subscribeUserToChannel:    (userId, chId)     => this.#subscribeUserToChannel(userId, chId),
       sendDigest:                (ws, uid, ts)      => this.#sendDigest(ws, uid, ts),
@@ -310,7 +296,7 @@ export class ChatServer {
     } catch { /* digest is best-effort */ }
   }
 
-  #dispatchMentions({ channelId, senderId, text, seq, priority = 'normal' }) {
+  #dispatchMentions({ channelId, senderId, text, msgId, seq, priority = 'normal' }) {
     // For public channels any user on the instance is mentionable (they can see the channel).
     // For private channels only explicit members can be mentioned.
     const channel = this.channelService.getChannel(channelId)
@@ -334,15 +320,25 @@ export class ChatServer {
         .map(u => ({ user_id: u.user_id, handle: u.handle }))
     }
 
+    const sender = this.auth.getUser(senderId)
     const mentioned = parseMentions(text, candidates)
     for (const { user_id } of mentioned) {
       this.deliveryService.advanceMention({ channelId, userId: user_id, mentionSeq: seq, priority })
+      const ts = Date.now()
       this.server?.publish(`user:${user_id}`, JSON.stringify({
-        v: 1, server_ts: Date.now(), t: 'notification.mention', ok: true,
-        body: { channel_id: channelId, seq, from_user_id: senderId, priority }
+        v: 1, server_ts: ts, t: 'notification.mention', ok: true,
+        body: {
+          channel_id: channelId,
+          channel_name: channel?.name ?? channelId,
+          msg_id: msgId,
+          seq,
+          from_user_id: senderId,
+          from_user: sender ? { user_id: sender.user_id, handle: sender.handle, display_name: sender.display_name } : null,
+          ts,
+          priority,
+        }
       }))
-      if (priority === 'now' && this.pushService.isConfigured()) {
-        const sender   = this.auth.getUser(senderId)
+      if (this.pushService.isConfigured()) {
         this.pushService.sendToUser({
           userId:    user_id,
           title:     `@${sender?.handle ?? 'someone'} mentioned you`,
@@ -371,23 +367,6 @@ export class ChatServer {
     })
   }
 
-  #collectHubAudience(hubId, excludeWs = null) {
-    const audience = []
-    const hub = this.hubService.getHub(hubId)
-    if (!hub || hub.deleted_at) return audience
-    const rolesCache = new Map()
-    for (const [, ws] of this.connections) {
-      if (!ws.data.userId || ws === excludeWs) continue
-      if (!rolesCache.has(ws.data.userId)) {
-        rolesCache.set(ws.data.userId, this.auth.getUser(ws.data.userId)?.roles || [])
-      }
-      if (this.hubService.canAccessHub(hubId, ws.data.userId, rolesCache.get(ws.data.userId))) {
-        audience.push(ws)
-      }
-    }
-    return audience
-  }
-
   #collectChannelAudience(channelId, excludeWs = null) {
     const audience = []
     const rolesCache = new Map()
@@ -401,21 +380,6 @@ export class ChatServer {
       }
     }
     return audience
-  }
-
-  #broadcastToHubAudience(hubId, payload, excludeWs = null) {
-    const hub = this.hubService.getHub(hubId)
-    if (!hub || hub.deleted_at) return
-    const rolesCache = new Map()
-    for (const [, ws] of this.connections) {
-      if (!ws.data.userId || ws === excludeWs) continue
-      if (!rolesCache.has(ws.data.userId)) {
-        rolesCache.set(ws.data.userId, this.auth.getUser(ws.data.userId)?.roles || [])
-      }
-      if (this.hubService.canAccessHub(hubId, ws.data.userId, rolesCache.get(ws.data.userId))) {
-        this.#sendWs(ws, payload)
-      }
-    }
   }
 
   #broadcastToChannelAudience(channelId, payload, excludeWs = null) {

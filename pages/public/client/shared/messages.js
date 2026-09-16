@@ -144,7 +144,9 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   const replyBtn = isThreadReply ? '' : '<button class="btn-reply btn-icon" type="button" title="Reply in thread" aria-label="Reply in thread">&#x21A9;</button>'
   const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span>${replyBtn}<button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
   const textHtml = rendered_text ?? (text ? renderText(text, { userHandle, knownHandles }) : '')
+  const initials = (user_display_name ?? user_id ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
   article.innerHTML = `
+      <div class="msg-avatar" aria-hidden="true">${escHtml(initials)}</div>
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
       ${textHtml ? `<div class="message-text">${textHtml}</div>` : ''}

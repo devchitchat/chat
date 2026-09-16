@@ -82,6 +82,12 @@ export class SqliteAuthRepository {
     ).all()
   }
 
+  listBotUserIds() {
+    return this.db.prepare(
+      `SELECT user_id FROM users WHERE roles_json LIKE '%"bot"%'`
+    ).all().map(r => r.user_id)
+  }
+
   updateUserRoles({ userId, rolesJson }) {
     this.db.prepare('UPDATE users SET roles_json = ? WHERE user_id = ?').run(rolesJson, userId)
   }

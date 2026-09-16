@@ -1,4 +1,4 @@
-import { sessionFromRequest, channelService, hubService, userSettingsService } from '../src/context.js'
+import { sessionFromRequest, channelService, userSettingsService } from '../src/context.js'
 import { p } from '../src/config.js'
 
 export async function GET(req) {
@@ -25,9 +25,8 @@ export async function GET(req) {
     return Response.redirect(p(`/channels/${channels[0].channel_id}`), 302)
   }
 
-  // No channels yet — bootstrap defaults and redirect
-  const hub = hubService.ensureDefaultHub(user.user_id)
-  const channel = channelService.ensureDefaultChannel(hub.hub_id, user.user_id)
-  channelService.joinChannel({ channelId: channel.channel_id, userId: user.user_id, userRoles: user.roles })
+  // No channels yet — bootstrap a default channel
+  const channel = channelService.ensureDefaultChannel(user.user_id)
+  channelService.joinChannel({ channelId: channel.channel_id, userId: user.user_id })
   return Response.redirect(p(`/channels/${channel.channel_id}`), 302)
 }

@@ -2,7 +2,7 @@
  * AppModel.js — single source of truth for all client-side state.
  *
  * Extends EventTarget so any object can call:
- *   model.addEventListener('message-added', handler)
+ *   model.addEventListener('channel-selected', handler)
  *
  * Rules:
  *   - No DOM imports. No ws.send(). Pure state + events.
@@ -19,23 +19,27 @@ export class AppModel extends EventTarget {
   #userHandle  = null
 
   // ── Sidebar state ───────────────────────────────────────────────────────────
-  #hubs     = []   // [{ hub_id, name, visibility, channels:[] }]
-  #dms      = []   // [{ channel_id, name, user_id, handle, online }]
+  //   Flat channel buckets — each entry is a channel object:
+  //     public/private/sessions: { channel_id, name, kind, visibility, unread, threadCount }
+  //     dms: { channel_id, name, handle, user_id, online, unread }
+  #channels = { public: [], private: [], sessions: [], dms: [] }
+
   #presence = new Map()  // userId → 'online'|'away'|'offline'
 
   // ── Members (for @mention picker) ──────────────────────────────────────────
-  #members = []  // [{ user_id, handle, display_name }] — all users + bots
+  #members = []  // [{ user_id, handle, display_name }]
   #bots    = []
 
   // ── Navigation ─────────────────────────────────────────────────────────────
-  #currentChannelId = null
+  #currentChannelId   = null
   #currentChannelMeta = {}  // { name, topic, kind, visibility }
 
   // ── Messages (cached per channel) ──────────────────────────────────────────
   //   channelId → Message[]  (chronological, oldest first)
-  #messages   = new Map()
-  #oldestSeq  = new Map()   // channelId → number (lowest seq seen)
-  #hasMore    = new Map()   // channelId → bool
+  #messages    = new Map()
+  #oldestSeq   = new Map()   // channelId → number (lowest seq seen)
+  #newestSeq   = new Map()   // channelId → number (highest seq from SSR seed; overridden by cache)
+  #hasMore     = new Map()   // channelId → bool
   #loadingMore = false
 
   // ── Thread panel ───────────────────────────────────────────────────────────
@@ -45,6 +49,15 @@ export class AppModel extends EventTarget {
 
   // ── Call ────────────────────────────────────────────────────────────────────
   #call = null  // null = no active call; otherwise opaque object from WebSocketController
+
+  // ── Inline reply ─────────────────────────────────────────────────────────────
+  #replyTo = null  // null | { msgId, handle, text }
+
+  // ── Channel thread lists (sidebar) ────────────────────────────────────────────
+  #channelThreads = new Map()  // channelId → Thread[]
+
+  // ── Activity feed ────────────────────────────────────────────────────────────
+  #activityItems = []  // [{ type, text, sub, time, unread, initials }]
 
   // ─────────────────────────────────────────────────────────────────────────
   // Identity
@@ -59,62 +72,74 @@ export class AppModel extends EventTarget {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Hubs & DMs
+  // Channels & DMs
   // ─────────────────────────────────────────────────────────────────────────
 
-  get hubs() { return this.#hubs }
-  get dms()  { return this.#dms }
+  get channels() { return this.#channels }
 
-  setHubs(hubs) {
-    this.#hubs = hubs
-    this.#dispatch(Ev.HUBS_CHANGED, { hubs })
+  /** Backwards-compat getter — DMs are stored in channels.dms */
+  get dms() { return this.#channels.dms }
+
+  /**
+   * Replace the full channel set. `channels` must be shaped as:
+   *   { public: [], private: [], sessions: [], dms: [] }
+   */
+  setChannels(channels) {
+    this.#channels = {
+      public:   channels.public   ?? [],
+      private:  channels.private  ?? [],
+      sessions: channels.sessions ?? [],
+      dms:      channels.dms      ?? [],
+    }
+    this.#dispatch(Ev.CHANNELS_CHANGED, { channels: this.#channels })
   }
 
+  /**
+   * Replace only the DMs list.
+   * Fires CHANNELS_CHANGED (sidebar re-renders) and DMS_CHANGED (for focused DM listeners).
+   */
   setDms(dms) {
-    this.#dms = dms
+    this.#channels = { ...this.#channels, dms }
+    this.#dispatch(Ev.CHANNELS_CHANGED, { channels: this.#channels })
     this.#dispatch(Ev.DMS_CHANGED, { dms })
   }
 
-  /** Add or update a single hub */
-  upsertHub(hub) {
-    const idx = this.#hubs.findIndex(h => h.hub_id === hub.hub_id)
-    if (idx === -1) {
-      this.#hubs = [...this.#hubs, { ...hub, channels: hub.channels ?? [] }]
-    } else {
-      const existing = this.#hubs[idx]
-      this.#hubs = [
-        ...this.#hubs.slice(0, idx),
-        { ...existing, ...hub, channels: hub.channels ?? existing.channels },
-        ...this.#hubs.slice(idx + 1),
-      ]
-    }
-    this.#dispatch(Ev.HUBS_CHANGED, { hubs: this.#hubs })
-  }
-
-  removeHub(hubId) {
-    this.#hubs = this.#hubs.filter(h => h.hub_id !== hubId)
-    this.#dispatch(Ev.HUBS_CHANGED, { hubs: this.#hubs })
-  }
-
-  /** Add or update a channel inside its hub */
+  /**
+   * Add or update a single channel in the correct section.
+   * Section is derived from kind + visibility:
+   *   kind='dm'      → dms
+   *   kind='session' → sessions
+   *   visibility='private' → private
+   *   default        → public
+   */
   upsertChannel(channel) {
-    const hubIdx = this.#hubs.findIndex(h => h.hub_id === channel.hub_id)
-    if (hubIdx === -1) return
-    const hub = this.#hubs[hubIdx]
-    const chIdx = hub.channels.findIndex(c => c.channel_id === channel.channel_id)
-    const channels = chIdx === -1
-      ? [...hub.channels, channel]
-      : hub.channels.map((c, i) => i === chIdx ? { ...c, ...channel } : c)
-    this.#hubs = this.#hubs.map((h, i) => i === hubIdx ? { ...h, channels } : h)
-    this.#dispatch(Ev.HUBS_CHANGED, { hubs: this.#hubs })
+    // Find the existing entry across all sections so partial updates (e.g. only
+    // channel_id + session_ends_at) still route to the correct section.
+    let existingSection = null
+    let existingChannel = null
+    for (const [sec, list] of Object.entries(this.#channels)) {
+      const found = list.find(c => c.channel_id === channel.channel_id)
+      if (found) { existingSection = sec; existingChannel = found; break }
+    }
+
+    const merged  = existingChannel ? { ...existingChannel, ...channel } : channel
+    const section = existingSection ?? this.#sectionFor(merged)
+    const list    = this.#channels[section] ?? []
+    const idx     = list.findIndex(c => c.channel_id === channel.channel_id)
+    const updated = idx === -1
+      ? [...list, merged]
+      : list.map((c, i) => i === idx ? merged : c)
+    this.#channels = { ...this.#channels, [section]: updated }
+    this.#dispatch(Ev.CHANNELS_CHANGED, { channels: this.#channels })
   }
 
   removeChannel(channelId) {
-    this.#hubs = this.#hubs.map(h => ({
-      ...h,
-      channels: h.channels.filter(c => c.channel_id !== channelId),
-    }))
-    this.#dispatch(Ev.HUBS_CHANGED, { hubs: this.#hubs })
+    const updated = {}
+    for (const [key, list] of Object.entries(this.#channels)) {
+      updated[key] = list.filter(c => c.channel_id !== channelId)
+    }
+    this.#channels = updated
+    this.#dispatch(Ev.CHANNELS_CHANGED, { channels: this.#channels })
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -194,9 +219,7 @@ export class AppModel extends EventTarget {
   }
 
   newestSeqFor(channelId) {
-    const msgs = this.#messages.get(channelId) ?? []
-    if (msgs.length === 0) return 0
-    return Math.max(...msgs.map(m => m.seq ?? 0))
+    return this.#newestSeq.get(channelId) ?? 0
   }
 
   hasMoreFor(channelId) {
@@ -209,9 +232,10 @@ export class AppModel extends EventTarget {
    * Called on first load: seed messages from SSR are already in the DOM.
    * We just record the sequence bookmarks; the view does not re-render them.
    */
-  seedMessages(channelId, { oldestSeq, hasMore }) {
+  seedMessages(channelId, { oldestSeq, newestSeq, hasMore }) {
     if (!this.#messages.has(channelId)) this.#messages.set(channelId, [])
     this.#oldestSeq.set(channelId, oldestSeq)
+    if (newestSeq) this.#newestSeq.set(channelId, newestSeq)
     this.#hasMore.set(channelId, hasMore)
   }
 
@@ -220,6 +244,8 @@ export class AppModel extends EventTarget {
     // Deduplicate by msg_id
     if (msgs.some(m => m.msg_id === message.msg_id)) return
     this.#messages.set(channelId, [...msgs, message])
+    // Keep #newestSeq authoritative
+    this.#newestSeq.set(channelId, Math.max(this.#newestSeq.get(channelId) ?? 0, message.seq ?? 0))
     this.#dispatch(Ev.MESSAGE_ADDED, { channelId, message })
   }
 
@@ -257,6 +283,9 @@ export class AppModel extends EventTarget {
       const minSeq = Math.min(...msgs.map(m => m.seq ?? Infinity))
       const prev = this.#oldestSeq.get(channelId) ?? Infinity
       if (minSeq < prev) this.#oldestSeq.set(channelId, minSeq)
+      // Keep #newestSeq authoritative
+      const maxSeq = Math.max(...msgs.map(m => m.seq ?? 0))
+      this.#newestSeq.set(channelId, Math.max(this.#newestSeq.get(channelId) ?? 0, maxSeq))
     }
     this.#hasMore.set(channelId, hasMore)
     this.setLoadingMore(false)
@@ -266,6 +295,19 @@ export class AppModel extends EventTarget {
   setLoadingMore(loading) {
     this.#loadingMore = loading
     this.#dispatch(Ev.LOADING_MORE_CHANGED, { loading })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Channel thread lists (sidebar)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  channelThreadsFor(channelId) {
+    return this.#channelThreads.get(channelId) ?? []
+  }
+
+  setChannelThreads(channelId, threads) {
+    this.#channelThreads.set(channelId, threads)
+    this.#dispatch(Ev.CHANNEL_THREADS_UPDATED, { channelId, threads })
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -342,8 +384,85 @@ export class AppModel extends EventTarget {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Inline reply
+  // ─────────────────────────────────────────────────────────────────────────
+
+  get replyTo() { return this.#replyTo }
+
+  setReplyTo({ msgId, handle, text }) {
+    this.#replyTo = { msgId, handle, text }
+    this.#dispatch('reply-changed', { replyTo: this.#replyTo })
+  }
+
+  clearReply() {
+    this.#replyTo = null
+    this.#dispatch('reply-changed', { replyTo: null })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Activity feed
+  // ─────────────────────────────────────────────────────────────────────────
+
+  get activityItems() { return this.#activityItems }
+
+  addActivityItem(item) {
+    this.#activityItems = [item, ...this.#activityItems].slice(0, 100)
+    this.#dispatch('activity-item-added', { item, items: this.#activityItems })
+  }
+
+  markActivityRead() {
+    this.#activityItems = this.#activityItems.map(i => ({ ...i, unread: false }))
+    this.#dispatch('activity-read', {})
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mention / DM unread indicators (sidebar dots)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  #mentionedChannels = new Set()  // channel_ids with @mention
+  #urgentChannels    = new Set()  // channel_ids with urgent mention
+  #dmUnread          = new Set()  // channel_ids with unread DM
+
+  get mentionedChannels() { return this.#mentionedChannels }
+  get urgentChannels()    { return this.#urgentChannels }
+  get dmUnread()          { return this.#dmUnread }
+
+  addMention(channelId, urgent = false) {
+    if (urgent) this.#urgentChannels.add(channelId)
+    else this.#mentionedChannels.add(channelId)
+    this.#dispatch(Ev.MENTIONS_UPDATED, { mentionedChannels: this.#mentionedChannels, urgentChannels: this.#urgentChannels })
+  }
+
+  addDmUnread(channelId) {
+    this.#dmUnread.add(channelId)
+    this.#dispatch(Ev.DMS_UPDATED, { dmUnread: this.#dmUnread })
+  }
+
+  clearChannelUnread(channelId) {
+    this.#mentionedChannels.delete(channelId)
+    this.#urgentChannels.delete(channelId)
+    this.#dmUnread.delete(channelId)
+    this.#dispatch(Ev.MENTIONS_UPDATED, { mentionedChannels: this.#mentionedChannels, urgentChannels: this.#urgentChannels })
+    this.#dispatch(Ev.DMS_UPDATED, { dmUnread: this.#dmUnread })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Determine which section of #channels a channel belongs to.
+   *   kind='dm'            → 'dms'
+   *   kind='session'       → 'sessions'
+   *   visibility='private' → 'private'
+   *   default              → 'public'
+   */
+  #sectionFor(channel) {
+    if (channel.kind === 'dm')           return 'dms'
+    if (channel.kind === 'session')      return 'sessions'
+    if (channel.visibility === 'private') return 'private'
+    return 'public'
+  }
 
   #dispatch(name, detail) {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: false }))

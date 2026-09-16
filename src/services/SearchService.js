@@ -18,4 +18,12 @@ export class SearchService {
     }
     return this.searchRepo.searchLike({ channelId, query, limit })
   }
+
+  searchGlobal({ channelIds, query, limit = 20 }) {
+    if (!channelIds?.length) return []
+    if (this.useFts) {
+      return this.searchRepo.searchFtsGlobal({ channelIds, query, limit })
+    }
+    return this.searchRepo.searchLikeGlobal({ channelIds, query, limit })
+  }
 }

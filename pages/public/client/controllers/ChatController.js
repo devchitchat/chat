@@ -15,13 +15,14 @@
  *   'close-thread'       {}
  *   'load-more'          { channelId, beforeSeq }
  *   'open-dm'            { targetUserId }
- *   'task-toggle'        { msgId, channelId, checkboxIndex, checked }
+ *   'task-toggle'              { msgId, channelId, checkboxIndex, checked }
+ *   'search:message-selected'  { channel_id, parent_msg_id, msg_id, ... }
  *
  * Each of these is dispatched on `document` so any view can trigger them
  * without needing a direct reference to the controller.
  */
 
-import * as Ev from '../model/events.js'
+
 
 export class ChatController {
   #ws
@@ -58,6 +59,11 @@ export class ChatController {
     listen('select-channel',    d => this.#selectChannel(d))
     listen('task-toggle',       d => this.#taskToggle(d))
     listen('preview-text',      d => this.#previewText(d))
+    listen('set-reply',         d => this.#model.setReplyTo(d))
+    listen('clear-reply',       () => this.#model.clearReply())
+    listen('join-channel',           d => this.#joinChannel(d))
+    listen('session-end',            d => this.#sessionEnd(d))
+    listen('search:message-selected', d => this.#onSearchMessageSelected(d))
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -66,14 +72,21 @@ export class ChatController {
 
   #sendMessage({ channelId, text, attachments = [], priority = 'normal' }) {
     if (!text?.trim() && attachments.length === 0) return
+    const replyTo = this.#model.replyTo
+    let finalText = text?.trim() ?? ''
+    if (replyTo?.text) {
+      const MAX = 120
+      const excerpt = replyTo.text.length > MAX ? replyTo.text.slice(0, MAX) + '…' : replyTo.text
+      finalText = `> **${replyTo.handle}**: ${excerpt}\n\n${finalText}`
+    }
     this.#ws.send({
       t: 'msg.send',
       body: {
-        channel_id: channelId,
-        text: text?.trim() ?? '',
+        channel_id:    channelId,
+        text:          finalText,
         client_msg_id: `local_${Date.now()}`,
         priority,
-        attachments: attachments.map(a => ({
+        attachments:   attachments.map(a => ({
           upload_id:  a.upload_id,
           url:        a.url,
           filename:   a.original_name,
@@ -82,6 +95,7 @@ export class ChatController {
         })),
       },
     })
+    if (replyTo) this.#model.clearReply()
   }
 
   #sendThreadReply({ channelId, parentMsgId, text, attachments = [] }) {
@@ -134,6 +148,25 @@ export class ChatController {
     this.#model.closeThread()
   }
 
+  #onSearchMessageSelected({ channel_id, parent_msg_id, msg_id }) {
+    // Dismiss sidebar on mobile so the messages panel comes into view
+    document.body.classList.remove('sidebar-open')
+    // Import is dynamic to avoid circular dep; patchSettings is a settings concern
+    import('../settings-sync.js').then(({ patchSettings }) => patchSettings({ mobile_chat_open: true }))
+
+    if (channel_id === this.#model.currentChannelId) {
+      // Same channel — open thread panel if this is a thread reply
+      if (parent_msg_id) {
+        this.#openThread({ msgId: parent_msg_id, channelId: channel_id })
+      }
+      // else: message is already visible in the current channel
+    } else {
+      // Different channel — full navigation (SPA router or hard load)
+      const base = window.__BASE_PATH__ ?? ''
+      window.location.href = `${base}/channels/${channel_id}`
+    }
+  }
+
   #loadMore({ channelId, beforeSeq }) {
     if (this.#model.loadingMore) return
     this.#model.setLoadingMore(true)
@@ -166,6 +199,15 @@ export class ChatController {
       this.#ws.send({ t: 'user.list', body: {} })
       this.#ws.send({ t: 'bot.list',  body: {} })
     }
+
+  }
+
+  #joinChannel({ channelId }) {
+    this.#ws.send({ t: 'channel.join', body: { channel_id: channelId } })
+  }
+
+  #sessionEnd({ channelId }) {
+    this.#ws.send({ t: 'session.end', body: { channel_id: channelId } })
   }
 
   #taskToggle({ msgId, channelId, text }) {

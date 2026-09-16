@@ -35,35 +35,14 @@ export const createSchema = (db) => {
       FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
     );
 
-    CREATE TABLE IF NOT EXISTS hubs (
-      hub_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      visibility TEXT NOT NULL,
-      created_by_user_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS hub_members (
-      hub_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      joined_at INTEGER NOT NULL,
-      left_at INTEGER,
-      PRIMARY KEY (hub_id, user_id),
-      FOREIGN KEY(hub_id) REFERENCES hubs(hub_id),
-      FOREIGN KEY(user_id) REFERENCES users(user_id)
-    );
-
     CREATE TABLE IF NOT EXISTS channels (
       channel_id TEXT PRIMARY KEY,
-      hub_id TEXT,
       kind TEXT NOT NULL,
       name TEXT NOT NULL,
       topic TEXT,
       visibility TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      session_ends_at INTEGER,
       created_by_user_id TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER,
@@ -166,7 +145,6 @@ export const createSchema = (db) => {
 
   // Add sort_order to existing databases that pre-date this column
   try { db.exec(`ALTER TABLE channels ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
-  try { db.exec(`ALTER TABLE hubs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   // Add mention_seq to existing deliveries tables that pre-date this column
   try { db.exec(`ALTER TABLE deliveries ADD COLUMN mention_seq INTEGER NOT NULL DEFAULT 0`) } catch { /* already exists */ }
   // Add mention_priority to existing deliveries tables
@@ -176,6 +154,20 @@ export const createSchema = (db) => {
   try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN parent_msg_id TEXT REFERENCES messages(msg_id)`) } catch { /* already exists */ }
+
+  // Message reactions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_reactions (
+      reaction_id TEXT    NOT NULL PRIMARY KEY,
+      msg_id      TEXT    NOT NULL REFERENCES messages(msg_id) ON DELETE CASCADE,
+      channel_id  TEXT    NOT NULL REFERENCES channels(channel_id) ON DELETE CASCADE,
+      user_id     TEXT    NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+      emoji       TEXT    NOT NULL,
+      ts          INTEGER NOT NULL,
+      UNIQUE (msg_id, user_id, emoji)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(msg_id);
+  `)
 
   // Bot tokens — added after initial schema
   db.exec(`

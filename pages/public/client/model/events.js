@@ -10,9 +10,9 @@
 // ── Navigation ────────────────────────────────────────────────────────────────
 export const CHANNEL_SELECTED      = 'channel-selected'       // { channelId, prev }
 
-// ── Hub / channel list (sidebar) ──────────────────────────────────────────────
-export const HUBS_CHANGED          = 'hubs-changed'           // { hubs }
-export const DMS_CHANGED           = 'dms-changed'            // { dms }
+// ── Channel list (sidebar) ───────────────────────────────────────────────────
+export const CHANNELS_CHANGED      = 'channels-changed'       // { channels: { public, private, sessions, dms } }
+export const DMS_CHANGED           = 'dms-changed'            // { dms } — fired when a new DM conversation is opened
 export const PRESENCE_UPDATED      = 'presence-updated'       // { userId, status }
 export const MEMBERS_UPDATED       = 'members-updated'        // { channelId, members, bots }
 
@@ -22,6 +22,9 @@ export const MESSAGE_UPDATED       = 'message-updated'        // { channelId, me
 export const MESSAGE_DELETED       = 'message-deleted'        // { channelId, msgId }
 export const MESSAGES_PREPENDED    = 'messages-prepended'     // { channelId, messages, hasMore }
 export const REACTIONS_UPDATED     = 'reactions-updated'      // { msgId, channelId, reactions }
+
+// ── Thread sidebar ────────────────────────────────────────────────────────────
+export const CHANNEL_THREADS_UPDATED = 'channel-threads-updated' // { channelId, threads }
 
 // ── Thread panel ──────────────────────────────────────────────────────────────
 export const THREAD_OPENED         = 'thread-opened'          // { parentMsgId, parentMsg }
@@ -36,6 +39,10 @@ export const LOADING_MORE_CHANGED  = 'loading-more-changed'   // { loading }
 
 // ── Channel metadata ──────────────────────────────────────────────────────────
 export const CHANNEL_META_UPDATED  = 'channel-meta-updated'   // { channelId, name, topic }
+
+// ── Unread / mentions ─────────────────────────────────────────────────────────
+export const MENTIONS_UPDATED      = 'mentions-updated'       // { mentionedChannels, urgentChannels }
+export const DMS_UPDATED           = 'dms-updated'            // { dmUnread }
 
 // ── Call ──────────────────────────────────────────────────────────────────────
 export const CALL_CHANGED          = 'call-changed'           // { call }

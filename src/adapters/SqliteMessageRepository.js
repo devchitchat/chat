@@ -101,6 +101,23 @@ export class SqliteMessageRepository {
     }))
   }
 
+  listThreads({ channelId, limit = 20 }) {
+    const rows = this.db.prepare(
+      `SELECT m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name,
+              m.ts, m.text,
+              COUNT(r.msg_id) AS reply_count,
+              MAX(r.ts)       AS last_reply_ts
+       FROM messages m
+       LEFT JOIN users u ON m.user_id = u.user_id
+       JOIN messages r ON r.parent_msg_id = m.msg_id AND r.deleted_at IS NULL
+       WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.parent_msg_id IS NULL
+       GROUP BY m.msg_id
+       ORDER BY MAX(r.ts) DESC
+       LIMIT ?`
+    ).all(channelId, limit)
+    return rows
+  }
+
   getReplyCountsForMessages({ msgIds }) {
     if (!msgIds.length) return {}
     const placeholders = msgIds.map(() => '?').join(',')

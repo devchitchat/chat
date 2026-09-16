@@ -19,7 +19,7 @@ async function startServer() {
 
   initContext({
     db, logger,
-    auth: chat.auth, hubService: chat.hubService, channelService: chat.channelService,
+    auth: chat.auth, channelService: chat.channelService,
     messageService: chat.messageService, deliveryService: chat.deliveryService,
     searchService: chat.searchService, presenceService: chat.presenceService,
     signalingService: chat.signalingService,

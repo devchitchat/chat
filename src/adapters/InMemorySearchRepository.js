@@ -34,4 +34,17 @@ export class InMemorySearchRepository {
       .slice(0, limit)
       .map(r => ({ ...r, snippet: r.text }))
   }
+
+  searchFtsGlobal({ channelIds, query, limit }) {
+    const set = new Set(channelIds)
+    const q = query.toLowerCase()
+    return this._index
+      .filter(r => set.has(r.channel_id) && r.text.toLowerCase().includes(q))
+      .slice(0, limit)
+      .map(r => ({ ...r, snippet: r.text }))
+  }
+
+  searchLikeGlobal({ channelIds, query, limit }) {
+    return this.searchFtsGlobal({ channelIds, query, limit })
+  }
 }

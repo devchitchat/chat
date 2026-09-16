@@ -10,20 +10,19 @@ import { getPref, setPref } from './settings-sync.js'
 const THEMES = ['dark', 'light', 'ocean', 'forest', 'rose']
 const BASE_PATH = window.__BASE_PATH__ ?? ''
 const stylesheet = document.getElementById('theme-stylesheet')
-const picker = document.getElementById('theme-picker')
 
 function applyTheme(name) {
   const theme = THEMES.includes(name) ? name : 'dark'
   document.documentElement.dataset.theme = theme
   if (stylesheet) stylesheet.href = `${BASE_PATH}/themes/${theme}.css`
-  if (picker) picker.value = theme
+  document.querySelectorAll('[data-theme-picker]').forEach(el => { el.value = theme })
   setPref('theme', theme)
 }
 
 // Restore saved theme immediately (before paint)
 applyTheme(getPref('theme', 'dark'))
 
-// Wire picker
-if (picker) {
-  picker.addEventListener('change', e => applyTheme(e.target.value))
-}
+// Wire all pickers (sidebar footer + You sheet)
+document.addEventListener('change', e => {
+  if (e.target.matches('[data-theme-picker]')) applyTheme(e.target.value)
+})

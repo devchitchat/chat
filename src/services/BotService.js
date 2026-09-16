@@ -11,11 +11,10 @@ import { randomToken, hashToken } from '../util/crypto.js'
 import { ServiceError } from '../util/errors.js'
 
 export class BotService {
-  constructor({ authService, authRepo, channelRepo, hubService, nowFn = () => Date.now() }) {
+  constructor({ authService, authRepo, channelRepo, nowFn = () => Date.now() }) {
     this.authService = authService
     this.authRepo = authRepo
     this.channelRepo = channelRepo
-    this.hubService = hubService
     this.nowFn = nowFn
   }
 
@@ -31,6 +30,12 @@ export class BotService {
     const userId = newId('u')
     const now = this.nowFn()
     this.authRepo.insertBotUser({ userId, handle: h, displayName: name, now })
+
+    // Auto-join all existing public channels
+    const publicChannels = this.channelRepo.listPublicNonDm()
+    for (const ch of publicChannels) {
+      this.channelRepo.upsertMembership({ channelId: ch.channel_id, userId, role: 'member', now })
+    }
 
     const { tokenId, token } = this._insertToken({ userId, label: tokenLabel, now })
     return { userId, handle: h, displayName: name, roles: ['bot'], tokenId, token }
@@ -103,13 +108,22 @@ export class BotService {
 
   // ── Bot channel membership ─────────────────────────────────────────────────
 
+  /**
+   * Set the private/session channel memberships for a bot.
+   * Public channels are auto-managed and excluded from this delta — they are
+   * never removed by this method even if absent from channelIds.
+   */
   setBotChannels({ userId, channelIds, requestingUserId }) {
     this._requireAdmin(requestingUserId)
     const now = this.nowFn()
 
-    // Current active memberships
-    const current = this._getBotChannels(userId).map(c => c.channel_id)
-    const next = Array.isArray(channelIds) ? channelIds : []
+    const publicIds = new Set(this.channelRepo.listPublicNonDm().map(c => c.channel_id))
+
+    // Only consider non-public channels for add/remove
+    const current = this._getBotChannels(userId)
+      .filter(c => !publicIds.has(c.channel_id))
+      .map(c => c.channel_id)
+    const next = (Array.isArray(channelIds) ? channelIds : []).filter(id => !publicIds.has(id))
 
     const toJoin  = next.filter(id => !current.includes(id))
     const toLeave = current.filter(id => !next.includes(id))
@@ -120,17 +134,30 @@ export class BotService {
     for (const channelId of toLeave) {
       this.channelRepo.setMemberLeft({ channelId, userId, now })
     }
+  }
 
-    // Ensure hub membership for every channel in the final set.
-    // Done after the membership loop so it covers both new and pre-existing
-    // channel memberships (upsert is idempotent so re-running is safe).
-    const hubIds = new Set()
-    for (const channelId of next) {
-      const channel = this.channelRepo.findById({ channelId })
-      if (channel?.hub_id) hubIds.add(channel.hub_id)
+  /**
+   * Add all existing bot users to a newly-created public channel.
+   * Called by the channel create handler — no admin check, internal operation.
+   */
+  addBotsToPublicChannel({ channelId }) {
+    const now = this.nowFn()
+    const botIds = this.authRepo.listBotUserIds()
+    for (const userId of botIds) {
+      this.channelRepo.upsertMembership({ channelId, userId, role: 'member', now })
     }
-    for (const hubId of hubIds) {
-      this.hubService.joinHub(hubId, userId)
+    return botIds
+  }
+
+  /**
+   * Remove all bots from a channel.
+   * Called when a channel's visibility changes away from public.
+   */
+  removeBotsFromChannel({ channelId }) {
+    const now = this.nowFn()
+    const botIds = this.authRepo.listBotUserIds()
+    for (const userId of botIds) {
+      this.channelRepo.setMemberLeft({ channelId, userId, now })
     }
   }
 

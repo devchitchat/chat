@@ -3,9 +3,37 @@
  */
 import { renderMarkdown } from '@devchitchat/index97/markdown'
 
+/**
+ * Auto-join a public channel on first message send if the user is not yet a member.
+ * This is transport-layer orchestration: the service checks membership, and the
+ * handler publishes the join event.
+ */
+function _autoJoinIfPublic(ws, channelId, ctx) {
+  const { channelService, publishChannel } = ctx
+  const channel = channelService?.getChannel(channelId)
+  if (channelService && channel && channel.visibility === 'public' && channel.kind !== 'dm' && !channelService.isMember(channelId, ws.data.userId)) {
+    channelService.joinChannel({ channelId, userId: ws.data.userId })
+    publishChannel(channelId, {
+      t: 'channel.joined', ok: true,
+      body: { channel_id: channelId, user_id: ws.data.userId, display_name: ws.data.displayName, auto_joined: true }
+    })
+  }
+}
+
 export function handleMsgSend(ws, msg, ctx) {
-  const { messageService, deliveryService, sendWs, publishChannel, dispatchMentions } = ctx
+  const { channelService, messageService, deliveryService, sendWs, publishChannel, dispatchMentions } = ctx
   const { channel_id, text, client_msg_id, priority, attachments, parent_msg_id } = msg.body || {}
+
+  const channel = channelService?.getChannel(channel_id)
+
+  // Reject messages in ended sessions
+  if (channel?.kind === 'session' && channel.session_ends_at != null && channel.session_ends_at <= Date.now()) {
+    return sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'SESSION_ENDED', message: 'This session has ended' } })
+  }
+
+  // Auto-join public channels on first message send
+  _autoJoinIfPublic(ws, channel_id, ctx)
+
   const result = messageService.sendMessage({
     channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id, priority,
     attachments: Array.isArray(attachments) ? attachments : [],
@@ -33,7 +61,7 @@ export function handleMsgSend(ws, msg, ctx) {
   }
 
   deliveryService.advance({ channelId: channel_id, userId: ws.data.userId, afterSeq: result.seq })
-  dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, seq: result.seq, priority: result.priority })
+  dispatchMentions({ channelId: channel_id, senderId: ws.data.userId, text, msgId: result.msg_id, seq: result.seq, priority: result.priority })
 }
 
 export function handleMsgEdit(ws, msg, ctx) {
@@ -78,6 +106,13 @@ export function handleMsgDelete(ws, msg, ctx) {
   })
 }
 
+export function handleThreadChannelList(ws, msg, ctx) {
+  const { messageService, sendWs } = ctx
+  const { channel_id, limit } = msg.body || {}
+  const threads = messageService.listChannelThreads({ channelId: channel_id, userId: ws.data.userId, limit: limit ?? 20 })
+  sendWs(ws, { t: 'thread.channel_list_result', reply_to: msg.id, ok: true, body: { channel_id, threads } })
+}
+
 export function handleThreadList(ws, msg, ctx) {
   const { messageService, sendWs } = ctx
   const { parent_msg_id, channel_id } = msg.body || {}
@@ -95,6 +130,18 @@ export function handleSearchQuery(ws, msg, ctx) {
   }
   const hits = searchService.searchMessages({ channelId: channel_id, query: q, limit })
   sendWs(ws, { t: 'search.result', reply_to: msg.id, ok: true, body: { hits } })
+}
+
+export function handleSearchGlobal(ws, msg, ctx) {
+  const { auth, channelService, searchService, sendWs } = ctx
+  const { q, limit } = msg.body || {}
+  if (!q?.trim()) return sendWs(ws, { t: 'search.global_result', reply_to: msg.id, ok: true, body: { q: q ?? '', hits: [] } })
+  const roles = auth.getUser(ws.data.userId)?.roles || []
+  const accessibleChannels = channelService.listChannels(ws.data.userId, roles)
+  const channelMap = new Map(accessibleChannels.map(c => [c.channel_id, c.name]))
+  const hits = searchService.searchGlobal({ channelIds: [...channelMap.keys()], query: q.trim(), limit })
+  const enriched = hits.map(h => ({ ...h, channel_name: channelMap.get(h.channel_id) ?? '' }))
+  sendWs(ws, { t: 'search.global_result', reply_to: msg.id, ok: true, body: { q, hits: enriched } })
 }
 
 export function handlePresenceSubscribe(ws, msg, ctx) {

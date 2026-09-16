@@ -1,6 +1,8 @@
 import { requireAdminSession } from '../../../src/adminAuth.js'
 import { botService } from '../../../src/context.js'
+import { randomToken } from '../../../src/util/crypto.js'
 import { p } from '../../../src/config.js'
+import { storeTokenFlash } from '../../../src/util/tokenFlash.js'
 
 export function GET(req) {
   const session = requireAdminSession(req)
@@ -34,5 +36,7 @@ export async function POST(req) {
     requestingUserId: session.user.user_id,
   })
 
-  return Response.redirect(p(`/admin/bots/${result.userId}?created_token=${encodeURIComponent(result.token)}`), 303)
+  const flashId = randomToken(8)
+  storeTokenFlash(flashId, result.token)
+  return Response.redirect(p(`/admin/bots/${result.userId}?flash_id=${encodeURIComponent(flashId)}`), 303)
 }

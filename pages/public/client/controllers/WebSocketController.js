@@ -65,6 +65,17 @@ export class WebSocketController {
           ws.send({ t: 'msg.list', body: { channel_id: cid, after_seq: afterSeq } })
         }
       }
+
+      // Fetch thread list for the sidebar subtree whenever we join the current channel.
+      if (cid === model.currentChannelId) {
+        ws.send({ t: 'thread.channel_list', body: { channel_id: cid } })
+      }
+
+      // Hide the join banner whenever we receive channel.joined for the current channel.
+      // This covers both explicit join (join button) and auto-join (first message sent).
+      if (cid === model.currentChannelId) {
+        document.dispatchEvent(new CustomEvent('channel:auto-joined', { detail: { channelId: cid } }))
+      }
     })
 
     // ── Member lists ───────────────────────────────────────────────────────
@@ -98,6 +109,23 @@ export class WebSocketController {
       // Thread replies come via thread.reply_event; skip them here
       if (body.parent_msg_id) return
       model.addMessage(channelId, body)
+
+      // Show activity badge for incoming DM messages not from the current user
+      // and not in the channel the user is currently looking at.
+      const isDm = model.dms?.some(d => d.channel_id === channelId)
+      if (isDm && body.user_id !== model.userId && channelId !== model.currentChannelId) {
+        model.addDmUnread(channelId)
+        model.addActivityItem({
+          type:       'dm',
+          text:       `<strong>${body.user_display_name ?? 'Someone'}</strong> sent you a message`,
+          sub:        'Direct message',
+          time:       _relTime(body.ts),
+          unread:     true,
+          initials:   _initials(body.user_display_name ?? '?'),
+          channel_id: channelId,
+          msg_id:     body.msg_id,
+        })
+      }
     })
 
     ws.on('msg.edited', ({ msg_id, channel_id, text, edited_at, rendered_text }) => {
@@ -133,38 +161,20 @@ export class WebSocketController {
         name:  channel.name,
         topic: channel.topic ?? '',
       })
-      // Keep sidebar channel list in sync
-      if (channel.hub_id) model.upsertChannel(channel)
+      model.upsertChannel(channel)
     })
 
     ws.on('channel.created', ({ channel }) => {
-      if (channel?.hub_id) model.upsertChannel(channel)
+      if (channel?.channel_id) model.upsertChannel(channel)
     })
 
     ws.on('channel.deleted', ({ channel_id }) => {
       model.removeChannel(channel_id)
     })
 
-    // ── Hub events ─────────────────────────────────────────────────────────
-    ws.on('hub.created', ({ hub }) => {
-      model.upsertHub(hub)
-    })
-
-    ws.on('hub.updated', ({ hub }) => {
-      model.upsertHub(hub)
-    })
-
-    ws.on('hub.deleted', ({ hub_id }) => {
-      model.removeHub(hub_id)
-    })
-
     // ── Thread ─────────────────────────────────────────────────────────────
     ws.on('thread.list_result', ({ parent_msg_id, replies }) => {
       model.loadThreadReplies(parent_msg_id, replies ?? [])
-    })
-
-    ws.on('thread.reply_event', ({ parent_msg_id, channel_id, reply }) => {
-      model.addThreadReply(parent_msg_id, reply)
     })
 
     // ── Presence ───────────────────────────────────────────────────────────
@@ -176,16 +186,157 @@ export class WebSocketController {
       model.setBulkPresence(entries ?? [])
     })
 
+    // ── Sidebar channel/DM lists ─────────────────────────────────────────
+    ws.on('channel.list_result', ({ channels }) => {
+      model.setChannels(_bucketsFromServer(channels ?? []))
+    })
+
+    ws.on('dm.list_result', ({ dms: list }) => {
+      model.setDms(list ?? [])
+    })
+
     // ── DMs ────────────────────────────────────────────────────────────────
-    ws.on('dm.opened', ({ channel }) => {
-      if (!channel) return
+    ws.on('dm.opened', ({ channel, channel_id, with_user, notify_only }) => {
+      // Handle both payload shapes (full channel object or inline fields)
+      const ch = channel ?? (channel_id ? { channel_id, with_user } : null)
+      if (!ch) return
       const dms = model.dms
-      const already = dms.some(d => d.channel_id === channel.channel_id)
-      if (!already) model.setDms([...dms, channel])
+      const already = dms.some(d => d.channel_id === ch.channel_id)
+      if (!already) model.setDms([...dms, ch])
+
+      // Mark DM as unread when notify_only, or navigate for active open
+      if (notify_only) {
+        model.addDmUnread(ch.channel_id)
+      } else if (!channel) {
+        // SidebarView handles navigation for non-notify_only dm.opened
+      }
+    })
+
+    // ── Search ─────────────────────────────────────────────────────────────
+    ws.on('search.global_result', ({ q, hits }) => {
+      document.dispatchEvent(new CustomEvent('search:global_result', { detail: { q, hits: hits ?? [] } }))
+    })
+
+    // ── Session ────────────────────────────────────────────────────────────
+    ws.on('session.ended', ({ channel_id, session_ends_at }) => {
+      model.upsertChannel({ channel_id, session_ends_at })
+      document.dispatchEvent(new CustomEvent('session:ended', { detail: { channelId: channel_id, sessionEndsAt: session_ends_at } }))
+    })
+
+    // ── Notifications → Activity feed ──────────────────────────────────────
+    ws.on('notification.mention', ({ msg_id, channel_id, channel_name, from_user, ts, priority }) => {
+      model.addActivityItem({
+        type: 'mention',
+        text: `<strong>${from_user?.display_name ?? from_user?.handle ?? 'Someone'}</strong> mentioned you`,
+        sub: `#${channel_name ?? channel_id}`,
+        time: _relTime(ts),
+        unread: true,
+        initials: _initials(from_user?.display_name ?? '?'),
+        channel_id,
+        msg_id,
+      })
+      // Update sidebar mention dots (only for channels not currently viewed)
+      if (channel_id !== model.currentChannelId) {
+        model.addMention(channel_id, priority === 'now')
+      }
+    })
+
+    ws.on('notification.digest', ({ channels }) => {
+      for (const c of (channels ?? [])) {
+        if (c.urgent) model.addMention(c.channel_id, true)
+        else if (c.mentions > 0) model.addMention(c.channel_id, false)
+      }
+    })
+
+    ws.on('channel.reordered', ({ channels, section }) => {
+      const BASE = () => window.__BASE_PATH__ ?? ''
+      const buckets    = model.channels
+      const targetKey  = section ?? 'public'
+      const existing   = buckets[targetKey] ?? []
+      const channelMap = new Map(existing.map(c => [c.channel_id, c]))
+      const reordered  = (channels ?? []).map(c => ({
+        ...channelMap.get(c.channel_id),
+        ...c,
+        url: `${BASE()}/channels/${c.channel_id}`,
+      }))
+      model.setChannels({ ...buckets, [targetKey]: reordered })
+    })
+
+    ws.on('thread.channel_list_result', ({ channel_id, threads }) => {
+      model.setChannelThreads(channel_id, threads ?? [])
+    })
+
+    ws.on('thread.reply_event', ({ parent_msg_id, channel_id, reply }) => {
+      // Update open thread panel if this reply belongs to it
+      model.addThreadReply(parent_msg_id, reply)
+      // Keep channel thread list fresh: update reply_count + last_reply_ts for this thread
+      const existing = model.channelThreadsFor(channel_id)
+      if (existing.length > 0) {
+        const updated = existing.map(t =>
+          t.msg_id === parent_msg_id
+            ? { ...t, reply_count: (t.reply_count ?? 0) + 1, last_reply_ts: reply.ts }
+            : t
+        )
+        // If the parent wasn't in the list yet (first reply), request a fresh list
+        if (!updated.some(t => t.msg_id === parent_msg_id)) {
+          ws.send({ t: 'thread.channel_list', body: { channel_id } })
+        } else {
+          model.setChannelThreads(channel_id, updated)
+        }
+      } else if (channel_id === model.currentChannelId) {
+        // First thread in this channel — fetch it
+        ws.send({ t: 'thread.channel_list', body: { channel_id } })
+      }
+      // If this is a reply to one of our messages, add to activity
+      const parentMsg = model.messagesFor(channel_id ?? model.currentChannelId)?.find(m => m.msg_id === parent_msg_id)
+      if (parentMsg && parentMsg.user_id === model.userId && reply?.user_id !== model.userId) {
+        const channelEntry = [...Object.values(model.channels)].flat().find(c => c.channel_id === channel_id)
+        model.addActivityItem({
+          type: 'thread_reply',
+          text: `<strong>${reply.user_display_name ?? 'Someone'}</strong> replied to your message`,
+          sub: channelEntry ? `#${channelEntry.name}` : '',
+          time: _relTime(reply.ts),
+          unread: true,
+          initials: _initials(reply.user_display_name ?? '?'),
+          channel_id,
+          msg_id: parent_msg_id,
+        })
+      }
     })
 
     // ── Call events are forwarded as-is to the current call state object ───
     // CallView registers its own ws.on() handlers; we don't touch call state
     // here to keep call logic isolated in CallView / ChatController.
   }
+}
+
+// ── Module-level helpers ───────────────────────────────────────────────────────
+
+/**
+ * Convert a flat server channel array into the { public, private, sessions, dms } shape.
+ */
+function _bucketsFromServer(channels) {
+  const BASE = () => window.__BASE_PATH__ ?? ''
+  const buckets = { public: [], private: [], sessions: [], dms: [] }
+  for (const ch of channels) {
+    const key = ch.kind === 'dm'      ? 'dms'
+              : ch.kind === 'session' ? 'sessions'
+              : ch.visibility === 'private' ? 'private'
+              : 'public'
+    buckets[key].push({ ...ch, url: `${BASE()}/channels/${ch.channel_id}` })
+  }
+  return buckets
+}
+
+function _relTime(ts) {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  if (diff < 60_000)  return 'just now'
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+  return `${Math.floor(diff / 86400_000)}d ago`
+}
+
+function _initials(name) {
+  return name.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
 }

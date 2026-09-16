@@ -1,20 +1,17 @@
 /**
- * SidebarView.js — hub/channel/DM sidebar.
- *
- * Replaces islands/sidebar.js. No rdbljs; pure EventTarget + CustomEvent.
+ * SidebarView.js — flat channel/DM sidebar (no hubs).
  *
  * Model events handled:
- *   hubs-changed     → re-render hub/channel list (preserve <details> open state)
- *   dms-changed      → re-render DM list
- *   channel-selected → mark active channel, clear mention dots
- *   presence-updated → update online dot for a specific user
+ *   channels-changed  → re-render all four channel sections
+ *   channel-selected  → mark active channel, clear mention dots
+ *   presence-updated  → update online dot for a specific user
  *
- * User actions dispatched as document CustomEvents → ChatController:
- *   'select-channel'  { channelId, meta }
- *
- * Admin actions (hub/channel CRUD, drag-reorder, file-drop) call ws.send()
- * directly because they are one-off form interactions that don't need to go
- * through the model — the server response events keep the model in sync.
+ * WS events handled directly (sidebar-local concerns):
+ *   channel.list_result → populate flat channel buckets
+ *   dm.list_result      → update DM list
+ *   dm.opened         → prepend new DM conversation
+ *   notification.*    → mention / urgent dots
+ *   channel.reordered → reorder channels in model
  */
 
 import * as Ev from '../model/events.js'
@@ -23,139 +20,53 @@ import { showActionSheet, dismiss as dismissSheet, getItemsContainer } from '../
 import { showModal, dismiss as dismissModal } from '../modal.js'
 import { addLongPress } from '../long-press.js'
 
-const BASE = () => window.__BASE_PATH__ ?? ''
+const BASE    = () => window.__BASE_PATH__ ?? ''
 const isTouch = () => window.matchMedia('(pointer: coarse)').matches
 
 export class SidebarView {
   #model
   #ws
   #root               // <aside>
-  #dmListEl           // #dm-list
   #canManage = false  // false for Guests
-  #mentionedChannels  = new Set()  // channelId → mentioned
-  #urgentChannels     = new Set()  // channelId → urgent
-  #dmUnread           = new Set()  // channelId → unread DM
 
   /**
-   * @param {AppModel}  model
-   * @param {WsClient}  ws       — for admin CRUD operations
-   * @param {HTMLElement} rootEl — <aside>
+   * @param {AppModel}    model
+   * @param {WsClient}    ws       — for CRUD operations
+   * @param {HTMLElement} rootEl   — <aside>
    */
   constructor(model, ws, rootEl) {
     this.#model  = model
     this.#ws     = ws
     this.#root   = rootEl
-    this.#dmListEl = rootEl.querySelector('#dm-list')
 
     const roles = document.querySelector('.chat-panel')?.dataset.userRoles ?? ''
     this.#canManage = !roles.toLowerCase().includes('guest')
 
-    // Stamp data-channel-id / data-hub-id onto SSR-rendered <li> elements
-    // so drag-and-drop and context-menu handlers can read them before #renderHubs runs.
-    for (const li of rootEl.querySelectorAll('li.channel-item')) {
-      if (!li.dataset.channelId) {
-        const link = li.querySelector('[data-channel-id]')
-        if (link?.dataset.channelId) li.dataset.channelId = link.dataset.channelId
-      }
-      if (!li.dataset.hubId) {
-        const details = li.closest('details[data-hub-id]')
-        if (details?.dataset.hubId) li.dataset.hubId = details.dataset.hubId
-      }
-    }
-
-    // Seed model from DOM on first load
-    const hubs = _populateHubsFromDom(rootEl)
-    const dms  = _populateDmsFromDom(rootEl)
-    if (hubs.length > 0) model.setHubs(hubs)
-    if (dms.length > 0)  model.setDms(dms)
+    // Seed model from SSR DOM on first load (DMs are always client-populated)
+    const seeded = _channelsFromDom(rootEl)
+    if (_hasAny(seeded)) model.setChannels(seeded)
 
     this.#bindModelEvents()
     this.#bindInteractions()
     this.#bindAdminHandlers()
     this.#bindPushSubscription()
 
-    // Fetch DM list on open — session cookie already authenticates the socket
-    ws.on('open', () => ws.send({ t: 'dm.list', body: {} }))
+    // ── WS handlers (sidebar-local transport concerns only) ───────────────
+    // Note: channel.list_result, dm.list_result, dm.opened (model update),
+    // notification.mention, notification.digest, channel.reordered, and
+    // msg.event DM unread are all handled by WebSocketController now.
 
-    ws.on('dm.list_result', ({ dms: list }) => {
-      model.setDms(list ?? [])
+    ws.on('open', () => {
+      ws.send({ t: 'channel.list', body: {} })
+      ws.send({ t: 'dm.list',      body: {} })
     })
 
-    ws.on('dm.opened', ({ channel_id, with_user, notify_only }) => {
-      const dms = model.dms
-      if (!dms.some(d => d.channel_id === channel_id)) {
-        model.setDms([{ channel_id, with_user }, ...dms])
-      }
-      if (notify_only) {
-        this.#dmUnread.add(channel_id)
-        this.#renderDms()
-      } else {
+    // dm.opened navigation: WebSocketController updates the model, but the
+    // hard-navigation for non-notify_only DMs is a sidebar-local concern.
+    ws.on('dm.opened', ({ notify_only, channel_id }) => {
+      if (!notify_only && channel_id) {
         window.location.href = `${BASE()}/channels/${channel_id}`
       }
-    })
-
-    ws.on('msg.event', ({ channel_id }) => {
-      if (channel_id === model.currentChannelId) return
-      if (!model.dms.some(d => d.channel_id === channel_id)) return
-      this.#dmUnread.add(channel_id)
-      this.#renderDms()
-    })
-
-    ws.on('notification.mention', ({ channel_id, priority }) => {
-      if (channel_id === model.currentChannelId) return
-      if (priority === 'now') {
-        this.#urgentChannels.add(channel_id)
-      } else {
-        this.#mentionedChannels.add(channel_id)
-      }
-      this.#updateMentionDots()
-    })
-
-    ws.on('notification.digest', ({ channels }) => {
-      for (const c of channels ?? []) {
-        if (c.urgent) this.#urgentChannels.add(c.channel_id)
-        else if (c.mentions > 0) this.#mentionedChannels.add(c.channel_id)
-      }
-      this.#updateMentionDots()
-    })
-
-    ws.on('hub.member_added', ({ hub_id, user_id }) => {
-      if (user_id !== model.userId) return
-      ws.once('hub.list_result', ({ hubs: serverHubs }) => {
-        const existing = new Set(model.hubs.map(h => h.hub_id))
-        const newHubs  = (serverHubs ?? []).filter(h => !existing.has(h.hub_id))
-        if (newHubs.length > 0) {
-          model.setHubs([...model.hubs, ...newHubs.map(h => ({ ...h, channels: [] }))])
-        }
-      })
-      ws.send({ t: 'hub.list', body: {} })
-    })
-
-    ws.on('hub.member_removed', ({ hub_id, user_id }) => {
-      if (user_id !== model.userId) return
-      const removedHub = model.hubs.find(h => h.hub_id === hub_id)
-      const affectsCurrent = (removedHub?.channels ?? []).some(c => c.channel_id === model.currentChannelId)
-      model.removeHub(hub_id)
-      if (affectsCurrent) _navigateAfterDeletion(model.hubs)
-    })
-
-    ws.on('hub.reordered', ({ hubs: updated }) => {
-      const channelMap = new Map(model.hubs.map(h => [h.hub_id, h.channels]))
-      model.setHubs((updated ?? []).map(h => ({ ...h, channels: channelMap.get(h.hub_id) ?? [] })))
-    })
-
-    ws.on('channel.reordered', ({ hub_id, channels }) => {
-      const hub = model.hubs.find(h => h.hub_id === hub_id)
-      if (!hub) return
-      const channelMap = new Map((hub.channels ?? []).map(c => [c.channel_id, c]))
-      const reordered = (channels ?? []).map(c => ({
-        ...channelMap.get(c.channel_id),
-        ...c,
-        url: `${BASE()}/channels/${c.channel_id}`,
-      }))
-      model.setHubs(model.hubs.map(h =>
-        h.hub_id === hub_id ? { ...h, channels: reordered } : h
-      ))
     })
   }
 
@@ -165,113 +76,159 @@ export class SidebarView {
 
   #bindModelEvents() {
     const m = this.#model
+    m.addEventListener(Ev.CHANNELS_CHANGED,        e => this.#renderChannels(e.detail.channels))
+    m.addEventListener(Ev.CHANNEL_SELECTED,        e => this.#onChannelSelected(e.detail))
+    m.addEventListener(Ev.PRESENCE_UPDATED,        e => this.#onPresenceUpdated(e.detail))
+    m.addEventListener(Ev.CHANNEL_THREADS_UPDATED, e => this.#onChannelThreadsUpdated(e.detail))
+    m.addEventListener(Ev.THREAD_OPENED,  e => this.#onThreadOpened(e.detail))
+    m.addEventListener(Ev.THREAD_CLOSED,  () => this.#onThreadClosed())
+    m.addEventListener(Ev.MENTIONS_UPDATED, () => this.#updateMentionDots())
+    m.addEventListener(Ev.DMS_UPDATED,      () => this.#renderChannels(m.channels))
+  }
 
-    m.addEventListener(Ev.HUBS_CHANGED,    e => this.#renderHubs(e.detail.hubs))
-    m.addEventListener(Ev.DMS_CHANGED,     () => this.#renderDms())
-    m.addEventListener(Ev.CHANNEL_SELECTED, e => this.#onChannelSelected(e.detail))
-    m.addEventListener(Ev.PRESENCE_UPDATED, e => this.#onPresenceUpdated(e.detail))
+  #onThreadOpened({ parentMsgId }) {
+    this.#root.querySelectorAll('.ch-thread-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.threadMsgId === parentMsgId)
+    })
+  }
+
+  #onThreadClosed() {
+    this.#root.querySelectorAll('.ch-thread-item.active').forEach(el => el.classList.remove('active'))
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Rendering
   // ─────────────────────────────────────────────────────────────────────────
 
-  #renderHubs(hubs) {
-    // Preserve open/closed state of each <details> by hub_id.
-    // Initial DOM uses data-key on <details>; re-renders use data-hub-id.
-    const openHubIds = new Set(
-      [...this.#root.querySelectorAll('details.hub-header[open]')]
-        .map(d => d.dataset.hubId ?? d.querySelector('summary[data-hub-id]')?.dataset.hubId ?? d.dataset.key)
-        .filter(Boolean)
-    )
+  #renderChannels(channels) {
+    const sectionEl = this.#root.querySelector('.channel-group') ?? this.#root.querySelector('section')
+    if (!sectionEl) return
 
-    // Replace hub list HTML — hub details live inside .hub-group section
-    const hubListEl = this.#root.querySelector('.hub-group') ?? this.#root.querySelector('section')
-    if (!hubListEl) return
+    const pub      = channels.public   ?? []
+    const prv      = channels.private  ?? []
+    const sessions = channels.sessions ?? []
+    const dms      = channels.dms      ?? []
 
-    const currentChannelId = this.#model.currentChannelId
-    hubListEl.innerHTML = hubs.map(hub => {
-      const open = openHubIds.has(hub.hub_id) || openHubIds.size === 0 ? 'open' : ''
-      const channels = (hub.channels ?? []).map(ch => {
-        const isActive = ch.channel_id === currentChannelId
-        const hasMention = this.#mentionedChannels.has(ch.channel_id)
-        const hasUrgent  = this.#urgentChannels.has(ch.channel_id)
-        const mentionAttr = hasUrgent ? ' data-urgent=""' : hasMention ? ' data-mention=""' : ''
-        return `
-          <li class="channel-item${isActive ? ' active' : ''}"
-              data-channel-id="${escHtml(ch.channel_id)}"
-              data-hub-id="${escHtml(hub.hub_id)}"
-              draggable="true"
-              ${mentionAttr}>
-            <a class="channel-link"
-               href="${escHtml(ch.url ?? `${BASE()}/channels/${ch.channel_id}`)}"
-               data-channel-id="${escHtml(ch.channel_id)}"
-               data-channel-name="${escHtml(ch.name)}"
-               data-channel-topic="${escHtml(ch.topic ?? '')}"
-               data-channel-visibility="${escHtml(ch.visibility ?? 'public')}"
-               data-hub-id="${escHtml(hub.hub_id)}">
-              ${escHtml(ch.name)}
-            </a>
-          </li>`
-      }).join('')
-      const addBtn = this.#canManage
-        ? `<button class="btn-hub-add btn-icon" type="button" title="Add channel" aria-label="Add channel">+</button>`
-        : ''
-      return `
-        <details class="hub-header" data-hub-id="${escHtml(hub.hub_id)}" ${open}>
-          <summary class="hub-name" data-hub-id="${escHtml(hub.hub_id)}">
-            <span>${escHtml(hub.name)}</span>
-            ${addBtn}
-          </summary>
-          <ul class="channel-list">${channels}</ul>
-        </details>`
-    }).join('')
+    sectionEl.innerHTML = [
+      this.#renderSection('PUBLIC',          pub,      'public',   this.#canManage),
+      this.#renderSection('PRIVATE',         prv,      'private',  this.#canManage && prv.length > 0),
+      this.#renderSection('SESSIONS',        sessions, 'sessions', this.#canManage),
+      this.#renderSection('DIRECT MESSAGES', dms,      'dms',      true),
+    ].join('')
 
     this.#attachDragHandlers()
     this.#attachFileDropHandlers()
   }
 
-  #renderDms() {
-    const dmListEl = this.#dmListEl
-    if (!dmListEl) return
-    const list    = this.#model.dms
+  #renderSection(label, channels, section, showAdd) {
+    if (channels.length === 0 && section === 'private') return ''
+
     const current = this.#model.currentChannelId
 
-    if (list.length === 0) {
-      dmListEl.innerHTML = '<li class="dm-empty">No messages yet.</li>'
-      return
-    }
-    dmListEl.innerHTML = list.map(d => {
-      const name     = escHtml(d.with_user?.display_name ?? d.channel_id)
-      const selected = d.channel_id === current ? ' dm-selected' : ''
-      const unread   = this.#dmUnread.has(d.channel_id) ? ' data-mention=""' : ''
+    const items = channels.map(ch => {
+      const isActive   = ch.channel_id === current
+      const hasMention = this.#model.mentionedChannels.has(ch.channel_id)
+      const hasUrgent  = this.#model.urgentChannels.has(ch.channel_id)
+      const dotAttr    = hasUrgent ? ' data-urgent=""' : hasMention ? ' data-mention=""' : ''
+      const isDM       = section === 'dms'
+      const isUnread   = isDM && this.#model.dmUnread.has(ch.channel_id)
+      const name       = isDM
+        ? (ch.with_user?.display_name ?? ch.name ?? ch.channel_id)
+        : ch.name
+      const prefix     = section === 'public'   ? '<span class="ch-prefix">#</span> '
+                       : section === 'private'  ? '<span class="ch-prefix ch-prefix--private">🔒</span> '
+                       : section === 'sessions' ? '<span class="ch-prefix ch-prefix--session">&#x25C8;</span> '
+                       : ''
+
+      // Session status badge
+      const isEnded = ch.kind === 'session' && ch.session_ends_at != null && ch.session_ends_at <= Date.now()
+      const statusBadge = section === 'sessions'
+        ? `<span class="ch-status ${isEnded ? 'ch-status--ended' : 'ch-status--active'}">${isEnded ? 'Ended' : 'Active'}</span>`
+        : ''
+
+      // Join pill for unjoined public channels
+      const isMember = ch.isMember !== false
+      const joinPill = (section === 'public' && !isMember && !isActive)
+        ? `<span class="ch-join-pill" data-join-channel-id="${escHtml(ch.channel_id)}">Join</span>`
+        : ''
+
       return `
-        <li class="dm-item${selected}" data-channel-id="${escHtml(d.channel_id)}"${unread}>
-          <a class="dm-link channel-link"
-             href="${BASE()}/channels/${escHtml(d.channel_id)}"
-             data-channel-id="${escHtml(d.channel_id)}">
-            <span class="dm-name">${name}</span>
+        <li class="channel-item${isActive ? ' active' : ''}${isUnread ? ' dm-unread' : ''}${isEnded ? ' session-ended' : ''}"
+            data-channel-id="${escHtml(ch.channel_id)}"
+            data-section="${section}"
+            draggable="true"
+            ${dotAttr}>
+          <a class="channel-link"
+             href="${escHtml(ch.url ?? `${BASE()}/channels/${ch.channel_id}`)}"
+             data-channel-id="${escHtml(ch.channel_id)}"
+             data-channel-name="${escHtml(name)}"
+             data-channel-topic="${escHtml(ch.topic ?? '')}"
+             data-channel-visibility="${escHtml(ch.visibility ?? 'public')}"
+             data-is-member="${isMember}">
+            ${prefix}${escHtml(name)}
           </a>
+          ${statusBadge}${joinPill}
         </li>`
     }).join('')
+
+    const addBtn = showAdd
+      ? `<button class="btn-section-add btn-icon" type="button"
+                 data-add-section="${section}"
+                 title="New ${label === 'Channels' ? 'channel' : label === 'Direct Messages' ? 'message' : label.toLowerCase()}"
+                 aria-label="Add">+</button>`
+      : ''
+
+    return `
+      <div class="channel-section" data-section="${section}">
+        <div class="channel-section-header">
+          <span class="channel-section-label">${escHtml(label)}</span>
+          ${addBtn}
+        </div>
+        <ul class="channel-list">${items}</ul>
+      </div>`
   }
 
-  #onChannelSelected({ channelId, prev }) {
-    // Update active channel in hub list
+  #onChannelSelected({ channelId }) {
     this.#root.querySelectorAll('.channel-item').forEach(li => {
-      li.classList.toggle('active', li.dataset.channelId === channelId)
+      const isActive = li.dataset.channelId === channelId
+      li.classList.toggle('active', isActive)
+      // Collapse thread subtrees for all channels except the newly selected one
+      if (!isActive) li.querySelector('.ch-thread-subtree')?.remove()
     })
-    // Update active DM
-    this.#root.querySelectorAll('.dm-item').forEach(li => {
-      li.classList.toggle('dm-selected', li.dataset.channelId === channelId)
-    })
-    // Clear mention/urgent dots for newly selected channel
     if (channelId) {
-      this.#mentionedChannels.delete(channelId)
-      this.#urgentChannels.delete(channelId)
-      this.#dmUnread.delete(channelId)
-      this.#updateMentionDots()
+      this.#model.clearChannelUnread(channelId)
     }
+  }
+
+  #onChannelThreadsUpdated({ channelId, threads }) {
+    // Re-render the subtree for the channel item that just got thread data
+    const li = this.#root.querySelector(`.channel-item[data-channel-id="${channelId}"]`)
+    if (!li) return
+    // Remove any existing subtree
+    li.querySelector('.ch-thread-subtree')?.remove()
+    if (!threads.length) return
+    const subtreeEl = document.createElement('div')
+    subtreeEl.innerHTML = this.#renderThreadSubtree(channelId, threads)
+    const child = subtreeEl.firstElementChild
+    if (child) li.appendChild(child)
+  }
+
+  #renderThreadSubtree(channelId, threads) {
+    const MAX = 5
+    const visible = threads.slice(0, MAX)
+    const items = visible.map(t => {
+      const excerpt = (t.text ?? '').replace(/\s+/g, ' ').slice(0, 30)
+      const meta = `${t.reply_count}r · ${_relTime(t.last_reply_ts)}`
+      return `<div class="ch-thread-item" data-thread-msg-id="${escHtml(t.msg_id)}" data-thread-channel-id="${escHtml(channelId)}" role="button" tabindex="0">
+        <span class="ch-thread-connector">↳</span>
+        <span class="ch-thread-preview">${escHtml(excerpt)}</span>
+        <span class="ch-thread-meta">${escHtml(meta)}</span>
+      </div>`
+    }).join('')
+    const viewAll = threads.length > MAX
+      ? `<button class="ch-view-all-threads" data-threads-channel-id="${escHtml(channelId)}" type="button">view all ${threads.length} threads</button>`
+      : ''
+    return `<div class="ch-thread-subtree">${items}${viewAll}</div>`
   }
 
   #onPresenceUpdated({ userId, status, bulk }) {
@@ -284,13 +241,15 @@ export class SidebarView {
   }
 
   #updateMentionDots() {
+    const mentioned = this.#model.mentionedChannels
+    const urgent    = this.#model.urgentChannels
     this.#root.querySelectorAll('.channel-item').forEach(li => {
       const channelId = li.dataset.channelId
       if (!channelId) return
-      if (this.#urgentChannels.has(channelId)) {
+      if (urgent.has(channelId)) {
         li.dataset.urgent = ''
         delete li.dataset.mention
-      } else if (this.#mentionedChannels.has(channelId)) {
+      } else if (mentioned.has(channelId)) {
         li.dataset.mention = ''
         delete li.dataset.urgent
       } else {
@@ -301,43 +260,79 @@ export class SidebarView {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Interaction (navigation + DM)
+  // Interaction (navigation)
   // ─────────────────────────────────────────────────────────────────────────
 
   #bindInteractions() {
     this.#root.addEventListener('click', e => {
-      // Channel or DM link
+      // Join pill — join a public channel without navigating
+      const joinPill = e.target.closest('[data-join-channel-id]')
+      if (joinPill) {
+        e.preventDefault()
+        e.stopPropagation()
+        const channelId = joinPill.dataset.joinChannelId
+        if (channelId) {
+          document.dispatchEvent(new CustomEvent('join-channel', { detail: { channelId } }))
+          joinPill.remove()
+        }
+        return
+      }
+
+      // Thread subtree item — open thread panel for that thread
+      const threadItem = e.target.closest('.ch-thread-item')
+      if (threadItem) {
+        e.preventDefault()
+        e.stopPropagation()
+        const msgId     = threadItem.dataset.threadMsgId
+        const channelId = threadItem.dataset.threadChannelId
+        if (msgId && channelId) {
+          document.dispatchEvent(new CustomEvent('open-thread-from-sidebar', { detail: { msgId, channelId } }))
+        }
+        return
+      }
+
+      // "View all threads" button — open threads sheet
+      const viewAll = e.target.closest('.ch-view-all-threads')
+      if (viewAll) {
+        e.preventDefault()
+        e.stopPropagation()
+        const channelId = viewAll.dataset.threadsChannelId
+        if (channelId) {
+          document.dispatchEvent(new CustomEvent('open-threads-sheet', { detail: { channelId } }))
+        }
+        return
+      }
+
       const link = e.target.closest('.channel-link')
       if (!link) return
 
       const channelId = link.dataset.channelId
       if (!channelId) return
 
-      // Clear dots
-      this.#mentionedChannels.delete(channelId)
-      this.#urgentChannels.delete(channelId)
-      this.#dmUnread.delete(channelId)
-      this.#updateMentionDots()
+      // DM channels: force full page navigation so messages always load correctly.
+      // The SPA router's innerHTML swap doesn't reliably trigger msg.list catch-up for DMs.
+      if (this.#model.dms?.some(d => d.channel_id === channelId)) {
+        e.preventDefault()
+        document.body.classList.remove('sidebar-open')
+        window.location.href = link.href
+        return
+      }
 
-      // Mobile: close sidebar
+      this.#model.clearChannelUnread(channelId)
+
       if (window.matchMedia('(max-width: 700px)').matches) {
         document.body.classList.remove('sidebar-open')
       }
     })
 
-    // Handle navigation event fired by router.js (SPA navigation)
     document.addEventListener('chatpanel:navigated', e => {
       const { channelId } = e.detail
       this.#onChannelSelected({ channelId })
-      if (this.#dmUnread.has(channelId)) {
-        this.#dmUnread.delete(channelId)
-        this.#renderDms()
-      }
     })
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Admin CRUD (delegated, wired once)
+  // Admin CRUD
   // ─────────────────────────────────────────────────────────────────────────
 
   #bindAdminHandlers() {
@@ -345,89 +340,65 @@ export class SidebarView {
     const ws    = this.#ws
     const model = this.#model
 
-    // New hub button (always visible — creating a hub is not a management action)
-    root.querySelector('#btn-new-hub')?.addEventListener('click', () => {
-      isTouch() ? _openCreateHubSheet(ws) : _openCreateHubModal(ws)
-    })
+    if (!this.#canManage) {
+      // Even guests can open DMs
+      root.addEventListener('click', e => {
+        if (e.target.closest('[data-add-section="dms"]')) _openNewDmSheet(ws, model)
+      })
+      return
+    }
 
-    if (!this.#canManage) return
-
-    // Add-channel button (delegated — rendered only for non-guests)
+    // Section + buttons (delegated)
     root.addEventListener('click', e => {
-      const btn = e.target.closest('.btn-hub-add')
+      const btn = e.target.closest('[data-add-section]')
       if (!btn) return
       e.stopPropagation()
-      const hubId = btn.closest('.hub-name')?.dataset.hubId
-      if (!hubId) return
-      const hub = model.hubs.find(h => h.hub_id === hubId)
-      isTouch()
-        ? (() => { showActionSheet({ label: `New channel in ${hub?.name ?? ''}`, items: [] }); _buildCreateChannelForm(getItemsContainer(), { hubId, ws, dismiss: dismissSheet }) })()
-        : _openCreateChannelModal(hubId, hub?.name ?? '', ws)
+      const section = btn.dataset.addSection
+      if (section === 'public' || section === 'private') {
+        isTouch()
+          ? (() => { showActionSheet({ label: 'New channel', items: [] }); _buildCreateChannelForm(getItemsContainer(), { visibility: section, ws, dismiss: dismissSheet }) })()
+          : _openCreateChannelModal(section, ws)
+      } else if (section === 'sessions') {
+        isTouch()
+          ? document.dispatchEvent(new CustomEvent('open-session-create'))
+          : _openCreateSessionModal(ws)
+      } else if (section === 'dms') {
+        _openNewDmSheet(ws, model)
+      }
     })
 
-    // Desktop: right-click context menus
+    // Desktop: right-click context menu on channel items
     if (!isTouch()) {
       root.addEventListener('contextmenu', e => {
-        const summary = e.target.closest('.hub-name')
-        if (summary) {
-          e.preventDefault()
-          const hubId = summary.dataset.hubId
-          if (!hubId) return
-          const hub = model.hubs.find(h => h.hub_id === hubId)
-          _showSidebarPopover(e, [
-            { label: 'Edit hub', action: () => _openHubModal(hubId, hub?.name ?? '', hub?.description ?? null, hub?.visibility ?? 'public', ws) },
-            { label: 'New channel', action: () => _openCreateChannelModal(hubId, hub?.name ?? '', ws) },
-            { label: 'Delete hub', danger: true, action: () => { ws.send({ t: 'hub.delete', body: { hub_id: hubId } }) } },
-          ])
-          return
-        }
         const li = e.target.closest('.channel-item')
-        if (li) {
-          e.preventDefault()
-          const channelId = li.dataset.channelId
-          if (!channelId) return
-          let ch = null
-          for (const hub of model.hubs) {
-            ch = (hub.channels ?? []).find(c => c.channel_id === channelId)
-            if (ch) break
-          }
-          _showSidebarPopover(e, [
-            { label: 'Edit channel', action: () => _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws) },
-            { label: 'Delete channel', danger: true, action: () => { ws.send({ t: 'channel.delete', body: { channel_id: channelId } }) } },
-          ])
-        }
+        if (!li) return
+        e.preventDefault()
+        const channelId = li.dataset.channelId
+        if (!channelId) return
+        const ch = _findChannel(model.channels, channelId)
+        _showSidebarPopover(e, [
+          { label: 'Edit channel', action: () => _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws) },
+          { label: 'Delete channel', danger: true, action: () => ws.send({ t: 'channel.delete', body: { channel_id: channelId } }) },
+        ])
       })
     }
 
     // Mobile: long-press → action sheet
     if (isTouch()) {
       addLongPress(root, e => {
-        const target  = e.target ?? e.touches?.[0]?.target
-        const summary = target?.closest?.('.hub-name')
-        if (summary) {
-          const hubId = summary.dataset.hubId
-          if (!hubId) return
-          const hub = model.hubs.find(h => h.hub_id === hubId)
-          _openHubSheet(hubId, hub?.name ?? '', hub?.description ?? null, hub?.visibility ?? 'public', ws)
-          return
-        }
-        const link = target?.closest?.('.channel-link')
-        if (link) {
-          const channelId = link.dataset.channelId
-          if (!channelId) return
-          let ch = null
-          for (const hub of model.hubs) {
-            ch = (hub.channels ?? []).find(c => c.channel_id === channelId)
-            if (ch) break
-          }
-          _openChannelSheet(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws)
-        }
+        const target = e.target ?? e.touches?.[0]?.target
+        const link   = target?.closest?.('.channel-link')
+        if (!link) return
+        const channelId = link.dataset.channelId
+        if (!channelId) return
+        const ch = _findChannel(model.channels, channelId)
+        _openChannelSheet(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws)
       })
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Drag-and-drop reordering
+  // Drag-and-drop reordering (within section)
   // ─────────────────────────────────────────────────────────────────────────
 
   #attachDragHandlers() {
@@ -436,8 +407,7 @@ export class SidebarView {
     const model = this.#model
 
     let dragSrcChannelId = null
-    let dragSrcHubId     = null
-    let dragSrcHubHub    = null  // hub-level drag
+    let dragSrcSection   = null
 
     const clearIndicators = () => {
       root.querySelectorAll('.drop-before, .drop-after, .dragging').forEach(el => {
@@ -448,24 +418,10 @@ export class SidebarView {
     const before = (e, el) => e.clientY < el.getBoundingClientRect().top + el.offsetHeight / 2
 
     root.addEventListener('dragstart', e => {
-      // Hub drag (from summary)
-      const hubSummary = e.target.closest('.hub-header > summary')
-      if (hubSummary && !e.target.closest('.channel-item')) {
-        const details = hubSummary.closest('.hub-header')
-        dragSrcHubHub = details?.dataset.hubId ?? null
-        dragSrcChannelId = null
-        if (!dragSrcHubHub) return
-        details.classList.add('dragging')
-        e.dataTransfer.effectAllowed = 'move'
-        e.stopPropagation()
-        return
-      }
-      // Channel drag
       const li = e.target.closest('.channel-item')
       if (!li) return
       dragSrcChannelId = li.dataset.channelId
-      dragSrcHubId     = li.dataset.hubId
-      dragSrcHubHub    = null
+      dragSrcSection   = li.dataset.section
       if (!dragSrcChannelId) return
       li.classList.add('dragging')
       e.dataTransfer.effectAllowed = 'move'
@@ -474,77 +430,40 @@ export class SidebarView {
     root.addEventListener('dragend', () => {
       clearIndicators()
       dragSrcChannelId = null
-      dragSrcHubId     = null
-      dragSrcHubHub    = null
+      dragSrcSection   = null
     })
 
     root.addEventListener('dragover', e => {
-      if (dragSrcHubHub) {
-        // Hub-level drag
-        if (e.target.closest('.channel-item')) return
-        const targetDetails = e.target.closest('.hub-header')
-        if (!targetDetails) return
-        const targetHubId = targetDetails.dataset.hubId
-        if (!targetHubId || targetHubId === dragSrcHubHub) return
-        e.preventDefault()
-        clearIndicators()
-        targetDetails.querySelector('summary')?.classList.add(before(e, targetDetails) ? 'drop-before' : 'drop-after')
-        return
-      }
-      if (dragSrcChannelId) {
-        const targetLi = e.target.closest('.channel-item')
-        if (!targetLi || targetLi.dataset.channelId === dragSrcChannelId) return
-        if (targetLi.dataset.hubId !== dragSrcHubId) return
-        e.preventDefault()
-        clearIndicators()
-        targetLi.classList.add(before(e, targetLi) ? 'drop-before' : 'drop-after')
-      }
+      if (!dragSrcChannelId) return
+      const targetLi = e.target.closest('.channel-item')
+      if (!targetLi || targetLi.dataset.channelId === dragSrcChannelId) return
+      if (targetLi.dataset.section !== dragSrcSection) return
+      e.preventDefault()
+      clearIndicators()
+      targetLi.classList.add(before(e, targetLi) ? 'drop-before' : 'drop-after')
     })
 
     root.addEventListener('dragleave', e => {
-      const li = e.target.closest('.channel-item')
-      if (li) li.classList.remove('drop-before', 'drop-after')
-      const summary = e.target.closest('.hub-header > summary')
-      if (summary) summary.classList.remove('drop-before', 'drop-after')
+      e.target.closest('.channel-item')?.classList.remove('drop-before', 'drop-after')
     })
 
     root.addEventListener('drop', e => {
       clearIndicators()
-
-      if (dragSrcHubHub) {
-        if (e.target.closest('.channel-item')) return
-        const targetDetails = e.target.closest('.hub-header')
-        const targetHubId   = targetDetails?.dataset.hubId
-        if (!targetHubId || targetHubId === dragSrcHubHub) return
-        e.preventDefault()
-        const ids = model.hubs.map(h => h.hub_id)
-        const fromIdx = ids.indexOf(dragSrcHubHub)
-        const toIdx   = ids.indexOf(targetHubId)
-        if (fromIdx === -1 || toIdx === -1) return
-        const isBefore = before(e, targetDetails)
-        ids.splice(fromIdx, 1)
-        ids.splice(isBefore ? ids.indexOf(targetHubId) : ids.indexOf(targetHubId) + 1, 0, dragSrcHubHub)
-        ws.send({ t: 'hub.reorder', body: { hub_ids: ids } })
-        return
-      }
-
-      if (dragSrcChannelId) {
-        const targetLi       = e.target.closest('.channel-item')
-        const targetChannelId = targetLi?.dataset.channelId
-        if (!targetChannelId || targetChannelId === dragSrcChannelId) return
-        if (targetLi.dataset.hubId !== dragSrcHubId) return
-        e.preventDefault()
-        const hub = model.hubs.find(h => h.hub_id === dragSrcHubId)
-        if (!hub) return
-        const ids     = (hub.channels ?? []).map(c => c.channel_id)
-        const fromIdx = ids.indexOf(dragSrcChannelId)
-        const toIdx   = ids.indexOf(targetChannelId)
-        if (fromIdx === -1 || toIdx === -1) return
-        const isBefore = before(e, targetLi)
-        ids.splice(fromIdx, 1)
-        ids.splice(isBefore ? ids.indexOf(targetChannelId) : ids.indexOf(targetChannelId) + 1, 0, dragSrcChannelId)
-        ws.send({ t: 'channel.reorder', body: { hub_id: dragSrcHubId, channel_ids: ids } })
-      }
+      if (!dragSrcChannelId) return
+      const targetLi        = e.target.closest('.channel-item')
+      const targetChannelId = targetLi?.dataset.channelId
+      if (!targetChannelId || targetChannelId === dragSrcChannelId) return
+      if (targetLi.dataset.section !== dragSrcSection) return
+      e.preventDefault()
+      const list    = (model.channels[dragSrcSection] ?? [])
+      const ids     = list.map(c => c.channel_id)
+      const fromIdx = ids.indexOf(dragSrcChannelId)
+      const toIdx   = ids.indexOf(targetChannelId)
+      if (fromIdx === -1 || toIdx === -1) return
+      const isBefore = before(e, targetLi)
+      ids.splice(fromIdx, 1)
+      ids.splice(isBefore ? ids.indexOf(targetChannelId) : ids.indexOf(targetChannelId) + 1, 0, dragSrcChannelId)
+      ws.send({ t: 'channel.reorder', body: { channel_ids: ids, section: dragSrcSection } })
     })
   }
 
@@ -638,8 +557,8 @@ export class SidebarView {
   // ─────────────────────────────────────────────────────────────────────────
 
   #bindPushSubscription() {
-    const root    = this.#root
-    const ws      = this.#ws
+    const root     = this.#root
+    const ws       = this.#ws
     const vapidKey = root.dataset.vapidKey ?? ''
     if (!vapidKey || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
 
@@ -655,35 +574,12 @@ export class SidebarView {
       } catch { /* user blocked — ignore */ }
     }
 
-    let swReg = null
-    let enableBtn = null
-
-    const showEnableButton = () => {
-      if (enableBtn || Notification.permission === 'granted') return
-      const footer = root.querySelector('.sidebar-footer') ?? root
-      enableBtn = document.createElement('button')
-      enableBtn.className = 'btn-enable-notifications'
-      enableBtn.textContent = '🔔 Enable notifications'
-      footer.appendChild(enableBtn)
-      enableBtn.addEventListener('click', async () => {
-        const perm = await Notification.requestPermission()
-        if (perm === 'granted' && swReg) {
-          await subscribe(swReg)
-          enableBtn?.remove()
-          enableBtn = null
-        } else if (perm === 'denied') {
-          if (enableBtn) enableBtn.textContent = '🔕 Notifications blocked in browser settings'
-        }
-      })
-    }
-
     navigator.serviceWorker
       .register(`${BASE()}/sw.js`, { scope: `${BASE()}/` })
       .then(async reg => {
-        swReg = reg
         try { await reg.pushManager.getSubscription() } catch { return }
         if (Notification.permission === 'granted') subscribe(reg)
-        else showEnableButton()
+        // No longer show an enable button — auto-subscribe if permission was already granted
       })
       .catch(() => {})
   }
@@ -693,61 +589,50 @@ export class SidebarView {
 // DOM → model seed helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _populateHubsFromDom(root) {
-  return Array.from(root.querySelectorAll('details.hub-header')).map(el => {
-    // Initial SSR uses data-key; re-renders use data-hub-id; summary has data-hub-id
-    const hub_id = el.dataset.hubId
-      ?? el.querySelector('summary[data-hub-id]')?.dataset.hubId
-      ?? el.dataset.key
-    return {
-      hub_id,
-      name:        el.querySelector('.hub-name span')?.textContent.trim() ?? '',
-      visibility:  el.dataset.visibility ?? 'public',
-      description: el.dataset.description ?? null,
-      channels: Array.from(el.querySelectorAll('li.channel-item, li[data-key]')).map(li => {
-        const link = li.querySelector('a.channel-link, a[data-channel-id], a')
-        return {
-          channel_id: li.dataset.channelId ?? link?.dataset.channelId ?? li.dataset.key,
-          hub_id,
-          name:       (link?.textContent.trim() ?? '').replace(/^#\s*/, ''),
-          url:        link?.href ?? '',
-          topic:      link?.dataset.channelTopic ?? null,
-          visibility: link?.dataset.channelVisibility ?? 'public',
-          selected:   li.dataset.selected === 'true' || li.classList.contains('active'),
-        }
-      }),
-    }
-  })
+/**
+ * Read SSR-rendered channel sections from the DOM.
+ * Flat format: <div class="channel-section" data-section="...">
+ */
+function _channelsFromDom(root) {
+  const buckets = { public: [], private: [], sessions: [], dms: [] }
+  for (const sec of root.querySelectorAll('.channel-section[data-section]')) {
+    const key = sec.dataset.section
+    if (!(key in buckets)) continue
+    buckets[key] = Array.from(sec.querySelectorAll('li.channel-item')).map(li => {
+      const link = li.querySelector('a.channel-link, a[data-channel-id]')
+      return {
+        channel_id: li.dataset.channelId ?? link?.dataset.channelId,
+        name:       (link?.textContent.trim() ?? '').replace(/^[#🔒⏱]\s*/, ''),
+        url:        link?.href ?? '',
+        topic:      link?.dataset.channelTopic ?? null,
+        visibility: link?.dataset.channelVisibility ?? (key === 'private' ? 'private' : 'public'),
+        kind:       key === 'sessions' ? 'session' : key === 'dms' ? 'dm' : 'text',
+      }
+    })
+  }
+  return buckets
 }
 
-function _populateDmsFromDom(root) {
-  return Array.from(root.querySelectorAll('.dm-item')).map(li => ({
-    channel_id: li.dataset.channelId,
-    with_user:  { display_name: li.querySelector('.dm-name')?.textContent.trim() ?? '' },
-  }))
+function _hasAny(buckets) {
+  return Object.values(buckets).some(arr => arr.length > 0)
 }
 
-function _navigateAfterDeletion(remainingHubs) {
-  const first = remainingHubs.flatMap(h => h.channels ?? []).find(Boolean)
-  window.location.href = first ? `${BASE()}/channels/${first.channel_id}` : `${BASE()}/`
+/**
+ * Search all channel buckets for a channel by id.
+ */
+function _findChannel(channels, channelId) {
+  for (const list of Object.values(channels)) {
+    const ch = list.find(c => c.channel_id === channelId)
+    if (ch) return ch
+  }
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Member management (shared by hub and channel forms)
+// Member management (shared by channel forms)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _loadMembers(membersEl, { kind, id, ws }) {
-  const listType   = kind === 'hub' ? 'hub.list_members'        : 'channel.list_members'
-  const resultType = kind === 'hub' ? 'hub.list_members_result' : 'channel.list_members_result'
-  const addType    = kind === 'hub' ? 'hub.add_member'          : 'channel.add_member'
-  const removeType = kind === 'hub' ? 'hub.remove_member'       : 'channel.remove_member'
-  const idKey      = kind === 'hub' ? 'hub_id'                  : 'channel_id'
-
-  let allUsers = null
-  let members  = null
-
-  // Build fixed DOM structure once — member list and search row are separate nodes
-  // so search input is never destroyed by list re-renders.
+function _loadMembers(membersEl, { channelId, ws }) {
   membersEl.innerHTML = `
     <div class="member-list-wrap"></div>
     <div class="member-add-row">
@@ -759,9 +644,10 @@ function _loadMembers(membersEl, { kind, id, ws }) {
   const addRow      = membersEl.querySelector('.member-add-row')
   const searchInput = addRow.querySelector('.member-add-search')
 
+  let allUsers = null
+  let members  = null
   let filtered       = []
   let selectedUserId = null
-  // available is a live reference updated by render() and read by event handlers
   let available      = []
 
   const updateDropdown = () => {
@@ -814,7 +700,7 @@ function _loadMembers(membersEl, { kind, id, ws }) {
       if (match) selectedUserId = match.user_id
     }
     if (!selectedUserId) return
-    ws.send({ t: addType, body: { [idKey]: id, user_id: selectedUserId } })
+    ws.send({ t: 'channel.add_member', body: { channel_id: channelId, user_id: selectedUserId } })
     const user = allUsers.find(u => u.user_id === selectedUserId)
     if (user) members = [...members, { user_id: selectedUserId, display_name: user.display_name, handle: user.handle }]
     selectedUserId = null
@@ -826,13 +712,11 @@ function _loadMembers(membersEl, { kind, id, ws }) {
 
   function render() {
     if (!allUsers || !members) return
-
     const humanIds  = new Set(allUsers.map(u => u.user_id))
     const humans    = members.filter(m => humanIds.has(m.user_id))
     const memberIds = new Set(humans.map(m => m.user_id))
     available = allUsers.filter(u => !memberIds.has(u.user_id))
 
-    // Update only the member list — search row is untouched
     listWrap.innerHTML = humans.length
       ? `<ul class="member-list">${humans.map(m => `
           <li class="member-item">
@@ -844,14 +728,12 @@ function _loadMembers(membersEl, { kind, id, ws }) {
     listWrap.querySelectorAll('[data-remove-user]').forEach(btn => {
       btn.addEventListener('click', () => {
         const userId = btn.dataset.removeUser
-        ws.send({ t: removeType, body: { [idKey]: id, user_id: userId } })
+        ws.send({ t: 'channel.remove_member', body: { channel_id: channelId, user_id: userId } })
         members = members.filter(m => m.user_id !== userId)
         render()
       })
     })
 
-    // Re-run the search filter against the updated available list so the
-    // dropdown stays accurate after a member is added or removed.
     const q = searchInput.value.trim().toLowerCase()
     if (q.length >= 1) {
       filtered = available.filter(u => {
@@ -864,80 +746,15 @@ function _loadMembers(membersEl, { kind, id, ws }) {
   }
 
   ws.once('user.list_result', ({ users }) => { allUsers = users; render() })
-  ws.once(resultType, body => { members = body.members ?? []; render() })
+  ws.once('channel.list_members_result', body => { members = body.members ?? []; render() })
 
   ws.send({ t: 'user.list', body: {} })
-  ws.send({ t: listType, body: { [idKey]: id } })
+  ws.send({ t: 'channel.list_members', body: { channel_id: channelId } })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Admin form builders (module-private, called by button handlers)
+// Admin form builders
 // ─────────────────────────────────────────────────────────────────────────────
-
-function _buildHubForm(container, { hubId, hubName, hubDescription, hubVisibility, ws, dismiss }) {
-  const currentVisibility = hubVisibility ?? 'public'
-  container.innerHTML = `
-    <div class="field">
-      <label for="hub-name-input">Hub name</label>
-      <input id="hub-name-input" type="text" value="${escHtml(hubName)}" maxlength="80" autocomplete="off">
-    </div>
-    <div class="field">
-      <label for="hub-desc-input">Description <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-      <input id="hub-desc-input" type="text" value="${escHtml(hubDescription ?? '')}" maxlength="240" autocomplete="off">
-    </div>
-    <div class="field">
-      <label for="hub-visibility-input">Visibility</label>
-      <select id="hub-visibility-input">
-        <option value="public" ${currentVisibility === 'public' ? 'selected' : ''}>Public</option>
-        <option value="private" ${currentVisibility === 'private' ? 'selected' : ''}>Private</option>
-      </select>
-    </div>
-    <div class="field" id="hub-members-field" style="${currentVisibility === 'public' ? 'display:none' : ''}">
-      <label>Members</label>
-      <div id="hub-members-container" style="min-height:32px;font-size:13px;color:var(--text-muted)">Loading…</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-ghost" id="hub-cancel-btn" type="button">Cancel</button>
-      <button class="btn-primary" id="hub-save-btn" type="button">Save</button>
-    </div>
-    <div class="modal-danger-zone">
-      <p>Deleting this hub removes it and all its channels permanently.</p>
-      <button class="btn-danger" id="hub-delete-btn" type="button">Delete hub</button>
-    </div>`
-
-  const visibilitySelect  = container.querySelector('#hub-visibility-input')
-  const membersField      = container.querySelector('#hub-members-field')
-  let membersLoaded       = currentVisibility === 'private'
-
-  visibilitySelect.addEventListener('change', () => {
-    const isPrivate = visibilitySelect.value === 'private'
-    membersField.style.display = isPrivate ? '' : 'none'
-    if (isPrivate && !membersLoaded) {
-      membersLoaded = true
-      _loadMembers(container.querySelector('#hub-members-container'), { kind: 'hub', id: hubId, ws })
-    }
-  })
-
-  container.querySelector('#hub-cancel-btn').addEventListener('click', dismiss)
-  container.querySelector('#hub-save-btn').addEventListener('click', () => {
-    const name = container.querySelector('#hub-name-input').value.trim()
-    if (!name) return
-    ws.send({ t: 'hub.update', body: {
-      hub_id: hubId, name,
-      description: container.querySelector('#hub-desc-input').value.trim() || null,
-      visibility:  visibilitySelect.value,
-    } })
-    dismiss()
-  })
-  container.querySelector('#hub-delete-btn').addEventListener('click', () => {
-    ws.send({ t: 'hub.delete', body: { hub_id: hubId } })
-    dismiss()
-  })
-  if (currentVisibility === 'private') {
-    _loadMembers(container.querySelector('#hub-members-container'), { kind: 'hub', id: hubId, ws })
-  }
-  requestAnimationFrame(() => container.querySelector('#hub-name-input')?.focus())
-}
 
 function _buildChannelForm(container, { channelId, channelName, channelTopic, channelVisibility, ws, dismiss }) {
   const currentVisibility = channelVisibility ?? 'public'
@@ -979,7 +796,7 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     chMembersField.style.display = isPrivate ? '' : 'none'
     if (isPrivate && !chMembersLoaded) {
       chMembersLoaded = true
-      _loadMembers(container.querySelector('#ch-members-container'), { kind: 'channel', id: channelId, ws })
+      _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws })
     }
   })
 
@@ -999,47 +816,13 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     dismiss()
   })
   if (currentVisibility === 'private') {
-    _loadMembers(container.querySelector('#ch-members-container'), { kind: 'channel', id: channelId, ws })
+    _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws })
   }
   requestAnimationFrame(() => container.querySelector('#ch-name-input')?.focus())
 }
 
-function _buildCreateHubForm(container, { ws, dismiss }) {
-  container.innerHTML = `
-    <div class="field">
-      <label for="new-hub-name">Hub name</label>
-      <input id="new-hub-name" type="text" placeholder="e.g. Engineering" maxlength="80" autocomplete="off">
-    </div>
-    <div class="field">
-      <label for="new-hub-desc">Description <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-      <input id="new-hub-desc" type="text" maxlength="240" autocomplete="off">
-    </div>
-    <div class="field">
-      <label for="new-hub-visibility">Visibility</label>
-      <select id="new-hub-visibility">
-        <option value="public">Public</option>
-        <option value="private">Private</option>
-      </select>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-ghost" id="new-hub-cancel" type="button">Cancel</button>
-      <button class="btn-primary" id="new-hub-save" type="button">Create</button>
-    </div>`
-  container.querySelector('#new-hub-cancel').addEventListener('click', dismiss)
-  container.querySelector('#new-hub-save').addEventListener('click', () => {
-    const name = container.querySelector('#new-hub-name').value.trim()
-    if (!name) return
-    ws.send({ t: 'hub.create', body: {
-      name,
-      description: container.querySelector('#new-hub-desc').value.trim() || null,
-      visibility:  container.querySelector('#new-hub-visibility').value,
-    } })
-    dismiss()
-  })
-  requestAnimationFrame(() => container.querySelector('#new-hub-name')?.focus())
-}
-
-function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
+function _buildCreateChannelForm(container, { visibility, ws, dismiss }) {
+  const currentVisibility = visibility ?? 'public'
   container.innerHTML = `
     <div class="field">
       <label for="new-ch-name">Channel name</label>
@@ -1052,8 +835,8 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
     <div class="field">
       <label for="new-ch-visibility">Visibility</label>
       <select id="new-ch-visibility">
-        <option value="public">Public</option>
-        <option value="private">Private</option>
+        <option value="public"  ${currentVisibility === 'public'  ? 'selected' : ''}>Public</option>
+        <option value="private" ${currentVisibility === 'private' ? 'selected' : ''}>Private</option>
       </select>
     </div>
     <div class="modal-footer">
@@ -1065,7 +848,8 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
     const name = container.querySelector('#new-ch-name').value.trim()
     if (!name) return
     ws.send({ t: 'channel.create', body: {
-      hub_id: hubId, kind: 'text', name,
+      kind:       'text',
+      name,
       topic:      container.querySelector('#new-ch-topic').value.trim() || null,
       visibility: container.querySelector('#new-ch-visibility').value,
     } })
@@ -1074,10 +858,100 @@ function _buildCreateChannelForm(container, { hubId, ws, dismiss }) {
   requestAnimationFrame(() => container.querySelector('#new-ch-name')?.focus())
 }
 
+function _buildCreateSessionForm(container, { ws, dismiss }) {
+  container.innerHTML = `
+    <div class="field">
+      <label for="new-ses-name">Session name</label>
+      <input id="new-ses-name" type="text" placeholder="e.g. incident-2026-09-14" maxlength="80" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="new-ses-topic">Purpose <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <input id="new-ses-topic" type="text" maxlength="240" autocomplete="off">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="new-ses-cancel" type="button">Cancel</button>
+      <button class="btn-primary" id="new-ses-save" type="button">Start session</button>
+    </div>`
+  container.querySelector('#new-ses-cancel').addEventListener('click', dismiss)
+  container.querySelector('#new-ses-save').addEventListener('click', () => {
+    const name = container.querySelector('#new-ses-name').value.trim()
+    if (!name) return
+    ws.send({ t: 'channel.create', body: {
+      kind:  'session',
+      name,
+      topic: container.querySelector('#new-ses-topic').value.trim() || null,
+      visibility: 'public',
+    } })
+    dismiss()
+  })
+  requestAnimationFrame(() => container.querySelector('#new-ses-name')?.focus())
+}
+
+function _openNewDmSheet(ws, model) {
+  const touch = isTouch()
+
+  if (touch) {
+    showActionSheet({ label: 'New Message', items: [] })
+    _buildDmPicker(getItemsContainer(), { ws, model, dismiss: dismissSheet })
+  } else {
+    showModal({ title: 'New Message', build: body => _buildDmPicker(body, { ws, model, dismiss: dismissModal }) })
+  }
+}
+
+function _buildDmPicker(container, { ws, model, dismiss }) {
+  const myId   = model.userId
+  const members = (model.members ?? []).filter(m => m.user_id !== myId)
+
+  container.innerHTML = `
+    <div class="dm-picker-search-row">
+      <input class="dm-picker-search" type="search" placeholder="Search people…"
+             autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search people">
+    </div>
+    <ul class="dm-picker-list" role="listbox" aria-label="People"></ul>
+    <p class="dm-picker-empty" hidden>No people found.</p>`
+
+  const input   = container.querySelector('.dm-picker-search')
+  const list    = container.querySelector('.dm-picker-list')
+  const emptyEl = container.querySelector('.dm-picker-empty')
+
+  function renderList(q) {
+    const ql = q.toLowerCase()
+    const filtered = q
+      ? members.filter(m =>
+          m.display_name?.toLowerCase().includes(ql) ||
+          m.handle?.toLowerCase().includes(ql))
+      : members
+
+    list.innerHTML = ''
+    emptyEl.hidden = filtered.length > 0
+
+    for (const m of filtered) {
+      const li = document.createElement('li')
+      li.className = 'dm-picker-person'
+      li.setAttribute('role', 'option')
+      li.innerHTML = `
+        <span class="dm-picker-avatar">${escHtml((m.display_name ?? m.handle ?? '?')[0].toUpperCase())}</span>
+        <span class="dm-picker-info">
+          <span class="dm-picker-name">${escHtml(m.display_name ?? m.handle ?? '')}</span>
+          <span class="dm-picker-handle">@${escHtml(m.handle ?? '')}</span>
+        </span>`
+      li.addEventListener('click', () => {
+        ws.send({ t: 'dm.open', body: { target_user_id: m.user_id } })
+        dismiss()
+      })
+      list.appendChild(li)
+    }
+  }
+
+  renderList('')
+  input.addEventListener('input', () => renderList(input.value.trim()))
+  requestAnimationFrame(() => input.focus())
+}
+
 // ─── Desktop context-menu popover ────────────────────────────────────────────
 
-let _popoverEl       = null
-let _popoverCleanup  = null
+let _popoverEl      = null
+let _popoverCleanup = null
 
 function _dismissSidebarPopover() {
   _popoverEl?.remove()
@@ -1104,12 +978,9 @@ function _showSidebarPopover(mouseEvent, items) {
   document.body.appendChild(el)
   _popoverEl = el
 
-  // Position at cursor, flip if needed
   const gap = 4
-  let top  = mouseEvent.clientY + gap
-  let left = mouseEvent.clientX + gap
-  el.style.left = `${left}px`
-  el.style.top  = `${top}px`
+  el.style.left = `${mouseEvent.clientX + gap}px`
+  el.style.top  = `${mouseEvent.clientY + gap}px`
 
   const rect = el.getBoundingClientRect()
   if (rect.right  > window.innerWidth  - 8) el.style.left = `${mouseEvent.clientX - rect.width  - gap}px`
@@ -1127,36 +998,11 @@ function _showSidebarPopover(mouseEvent, items) {
 
 // ─── Modal / sheet openers ────────────────────────────────────────────────────
 
-function _openCreateHubModal(ws) {
-  showModal({ title: 'New hub', build: body => _buildCreateHubForm(body, { ws, dismiss: dismissModal }) })
+function _openCreateChannelModal(visibility, ws) {
+  showModal({ title: 'New channel', build: body => _buildCreateChannelForm(body, { visibility, ws, dismiss: dismissModal }) })
 }
-function _openCreateHubSheet(ws) {
-  showActionSheet({ label: 'New hub', items: [] })
-  _buildCreateHubForm(getItemsContainer(), { ws, dismiss: dismissSheet })
-}
-function _openHubModal(hubId, hubName, hubDescription, hubVisibility, ws) {
-  showModal({ title: 'Hub settings', build: body => _buildHubForm(body, { hubId, hubName, hubDescription, hubVisibility, ws, dismiss: dismissModal }) })
-}
-function _openHubSheet(hubId, hubName, hubDescription, hubVisibility, ws) {
-  showActionSheet({ label: hubName, items: [
-    { label: 'Edit hub', action: () => {
-      showActionSheet({ label: 'Edit hub', items: [] })
-      _buildHubForm(getItemsContainer(), { hubId, hubName, hubDescription, hubVisibility, ws, dismiss: dismissSheet })
-    }},
-    { label: 'Create channel', action: () => {
-      showActionSheet({ label: `New channel in ${hubName}`, items: [] })
-      _buildCreateChannelForm(getItemsContainer(), { hubId, ws, dismiss: dismissSheet })
-    }},
-    { label: 'Delete hub', danger: true, action: () => {
-      showActionSheet({ label: `Delete "${hubName}"?`, items: [
-        { label: 'Cancel', action: () => {} },
-        { label: 'Delete hub', danger: true, action: () => { ws.send({ t: 'hub.delete', body: { hub_id: hubId } }); dismissSheet() } },
-      ]})
-    }},
-  ]})
-}
-function _openCreateChannelModal(hubId, hubName, ws) {
-  showModal({ title: `New channel in ${hubName}`, build: body => _buildCreateChannelForm(body, { hubId, ws, dismiss: dismissModal }) })
+function _openCreateSessionModal(ws) {
+  showModal({ title: 'New session', build: body => _buildCreateSessionForm(body, { ws, dismiss: dismissModal }) })
 }
 function _openChannelModal(channelId, channelName, channelTopic, channelVisibility, ws) {
   showModal({ title: 'Channel settings', build: body => _buildChannelForm(body, { channelId, channelName, channelTopic, channelVisibility, ws, dismiss: dismissModal }) })
@@ -1174,4 +1020,17 @@ function _openChannelSheet(channelId, channelName, channelTopic, channelVisibili
       ]})
     }},
   ]})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module-level helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _relTime(ts) {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  if (diff < 60_000)    return 'just now'
+  if (diff < 3600_000)  return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+  return `${Math.floor(diff / 86400_000)}d ago`
 }

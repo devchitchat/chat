@@ -41,9 +41,6 @@ export class ComposerView {
   // Attachments
   #pendingAttachments = []
 
-  // Urgent mode
-  #urgentMode = false
-
   /**
    * @param {AppModel}   model
    * @param {HTMLElement} composerEl  — the .composer wrapper element
@@ -86,11 +83,50 @@ export class ComposerView {
       // Clear pending state on navigation
       this.#pendingAttachments = []
       this.#renderChips()
+      document.dispatchEvent(new CustomEvent('clear-reply'))
+      const meta = e.detail?.meta ?? {}
       if (this.#textareaEl) {
         this.#textareaEl.value = ''
-        this.#textareaEl.placeholder = `Message in ${e.detail?.meta?.name ?? ''}`
+        this.#textareaEl.placeholder = `Message in ${meta.name ?? ''}`
+      }
+      // Enable/disable composer based on session state
+      this.#setDisabled(meta.isSessionEnded === true)
+    })
+
+    this.#model.addEventListener('reply-changed', e => {
+      this.#renderReplyQuote(e.detail.replyTo)
+    })
+
+    // Session ended: disable the composer
+    document.addEventListener('session:ended', e => {
+      if (e.detail.channelId === this.#model.currentChannelId) {
+        this.#setDisabled(true)
       }
     })
+  }
+
+  #renderReplyQuote(replyTo) {
+    const bar = document.getElementById('reply-quote')
+    if (!bar) return
+    if (!replyTo) {
+      bar.hidden = true
+      return
+    }
+    const nameEl = bar.querySelector('#reply-quote-name')
+    const textEl = bar.querySelector('#reply-quote-text')
+    if (nameEl) nameEl.textContent = replyTo.handle
+    if (textEl) textEl.textContent = replyTo.text?.slice(0, 80) ?? ''
+    bar.hidden = false
+  }
+
+  #setDisabled(disabled) {
+    const ta = this.#textareaEl
+    if (!ta) return
+    ta.disabled = disabled
+    ta.placeholder = disabled ? 'This session has ended.' : `Message in ${this.#model.currentChannelMeta?.name ?? ''}`
+    this.#composerEl.querySelector('.btn-send')?.toggleAttribute('disabled', disabled)
+    this.#composerEl.querySelector('.btn-compose-expand')?.toggleAttribute('disabled', disabled)
+    this.#composerEl.classList.toggle('composer--disabled', disabled)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -181,8 +217,7 @@ export class ComposerView {
       if (this.#mentionPicker?.isOpen) return
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        const priority = (e.ctrlKey || e.metaKey) ? 'now' : undefined
-        this.#submitMain({ priority })
+        this.#submitMain()
       }
     })
     ta.addEventListener('paste', e => this.#handlePaste(e))
@@ -192,14 +227,22 @@ export class ComposerView {
       this.#submitMain()
     })
 
-    // Urgent mode toggle button
-    this.#composerEl.querySelector('.btn-urgent-toggle')?.addEventListener('click', () => {
-      this.#toggleUrgent()
-    })
-
     // Compose-expand button
     this.#composerEl.querySelector('.btn-compose-expand')?.addEventListener('click', () => {
       this.#composeOpen ? this.#closeOverlay() : this.#openOverlay()
+    })
+
+    // Reply quote dismiss
+    document.getElementById('reply-quote-dismiss')?.addEventListener('click', () => {
+      dispatch('clear-reply')
+    })
+
+    // Escape in textarea also clears reply
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && this.#model.replyTo) {
+        e.preventDefault()
+        dispatch('clear-reply')
+      }
     })
   }
 
@@ -214,14 +257,12 @@ export class ComposerView {
     this.#composeChipsEl   = document.getElementById('compose-chips')
     const collapseBtn      = document.getElementById('btn-compose-collapse')
     const sendBtn          = document.getElementById('compose-send')
-    const urgentBtn        = document.getElementById('compose-urgent-toggle')
     const attachBtn        = document.getElementById('compose-attach')
 
     if (!this.#overlayEl) return
 
     collapseBtn?.addEventListener('click', () => this.#closeOverlay())
     sendBtn?.addEventListener('click', () => { this.#submitMain(); this.#closeOverlay() })
-    urgentBtn?.addEventListener('click', () => this.#toggleUrgent())
     attachBtn?.addEventListener('click', () => this.#fileInputEl.click())
 
     this.#overlayTaEl?.addEventListener('keydown', e => {
@@ -296,7 +337,7 @@ export class ComposerView {
   // Submit / send
   // ─────────────────────────────────────────────────────────────────────────
 
-  #submitMain({ priority } = {}) {
+  #submitMain() {
     const text = (this.#composeOpen
       ? this.#overlayTaEl?.value
       : this.#textareaEl?.value
@@ -308,7 +349,7 @@ export class ComposerView {
       channelId:   this.#model.currentChannelId,
       text,
       attachments: [...this.#pendingAttachments],
-      priority:    priority ?? (this.#urgentMode ? 'now' : 'normal'),
+      priority:    'normal',
     })
 
     if (this.#textareaEl) this.#textareaEl.value = ''
@@ -410,17 +451,6 @@ export class ComposerView {
     target.appendChild(chip)
     target.hidden = false
     setTimeout(() => chip.remove(), 5000)
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Urgent mode
-  // ─────────────────────────────────────────────────────────────────────────
-
-  #toggleUrgent() {
-    this.#urgentMode = !this.#urgentMode
-    this.#composerEl.classList.toggle('composer-urgent', this.#urgentMode)
-    this.#overlayEl?.classList.toggle('composer-urgent', this.#urgentMode)
-    document.getElementById('compose-urgent-toggle')?.classList.toggle('is-urgent', this.#urgentMode)
   }
 
   // ─────────────────────────────────────────────────────────────────────────

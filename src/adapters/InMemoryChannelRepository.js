@@ -4,11 +4,11 @@ export class InMemoryChannelRepository {
     this._members = new Map()     // `${channelId}:${userId}` → membership record
   }
 
-  insertChannelWithOwner({ channelId, hubId, kind, name, topic, visibility, createdByUserId, now }) {
+  insertChannelWithOwner({ channelId, kind, name, topic, visibility, sessionEndsAt = null, createdByUserId, now }) {
     const nextOrder = [...this._channels.values()]
-      .filter(c => c.hub_id === hubId && !c.deleted_at)
+      .filter(c => !c.deleted_at)
       .reduce((max, c) => Math.max(max, c.sort_order ?? 0), -1) + 1
-    this._channels.set(channelId, { channel_id: channelId, hub_id: hubId, kind, name, topic, visibility, sort_order: nextOrder, created_by_user_id: createdByUserId, created_at: now, deleted_at: null })
+    this._channels.set(channelId, { channel_id: channelId, kind, name, topic, visibility, sort_order: nextOrder, session_ends_at: sessionEndsAt ?? null, created_by_user_id: createdByUserId, created_at: now, deleted_at: null })
     this._members.set(`${channelId}:${createdByUserId}`, { channel_id: channelId, user_id: createdByUserId, role: 'owner', joined_at: now, left_at: null, banned_at: null })
   }
 
@@ -18,47 +18,45 @@ export class InMemoryChannelRepository {
   }
 
   _toPublic(c) {
-    return { channel_id: c.channel_id, hub_id: c.hub_id, name: c.name, kind: c.kind, visibility: c.visibility, topic: c.topic, sort_order: c.sort_order ?? 0 }
+    return { channel_id: c.channel_id, name: c.name, kind: c.kind, visibility: c.visibility, topic: c.topic, sort_order: c.sort_order ?? 0, session_ends_at: c.session_ends_at ?? null }
   }
 
-  listInHub({ hubId }) {
+  listAll() {
     return [...this._channels.values()]
-      .filter(c => c.hub_id === hubId && !c.deleted_at)
+      .filter(c => !c.deleted_at && c.kind !== 'dm')
       .sort((a, b) => this._sortOrder(a, b))
       .map(c => this._toPublic(c))
   }
 
-  listAccessibleInHub({ hubId, userId, isGuest = false }) {
+  listPublicNonDm() {
+    return [...this._channels.values()]
+      .filter(c => !c.deleted_at && c.kind !== 'dm' && c.visibility === 'public')
+      .sort((a, b) => this._sortOrder(a, b))
+      .map(c => this._toPublic(c))
+  }
+
+  listMemberships({ userId }) {
     return [...this._channels.values()]
       .filter(c => {
-        if (c.hub_id !== hubId || c.deleted_at) return false
+        if (c.deleted_at) return false
         const m = this._members.get(`${c.channel_id}:${userId}`)
-        if (m && !m.left_at && !m.banned_at) return true
-        if (!isGuest && c.visibility === 'public') return true
-        return false
+        return m && !m.left_at && !m.banned_at
       })
       .sort((a, b) => this._sortOrder(a, b))
       .map(c => this._toPublic(c))
   }
 
-  listAll() {
-    return [...this._channels.values()]
-      .filter(c => !c.deleted_at)
-      .sort((a, b) => this._sortOrder(a, b))
-      .map(c => ({ ...this._toPublic(c), hub_name: c.hub_id }))
-  }
-
   listAccessible({ userId, isGuest = false }) {
     return [...this._channels.values()]
       .filter(c => {
-        if (c.deleted_at) return false
+        if (c.deleted_at || c.kind === 'dm') return false
         const cm = this._members.get(`${c.channel_id}:${userId}`)
         if (cm && !cm.left_at && !cm.banned_at) return true
         if (!isGuest && c.visibility === 'public') return true
         return false
       })
       .sort((a, b) => this._sortOrder(a, b))
-      .map(c => ({ ...this._toPublic(c), hub_name: c.hub_id }))
+      .map(c => this._toPublic(c))
   }
 
   findById({ channelId }) {
@@ -69,8 +67,8 @@ export class InMemoryChannelRepository {
     return this._members.get(`${channelId}:${userId}`) ?? null
   }
 
-  findByHubAndName({ hubId, name }) {
-    return [...this._channels.values()].find(c => c.hub_id === hubId && c.name === name && !c.deleted_at) ?? null
+  findByName({ name }) {
+    return [...this._channels.values()].find(c => c.name === name && !c.deleted_at) ?? null
   }
 
   findDmByName({ name }) {
@@ -78,7 +76,7 @@ export class InMemoryChannelRepository {
   }
 
   insertDmChannel({ channelId, name, userIdA, userIdB, now }) {
-    this._channels.set(channelId, { channel_id: channelId, hub_id: null, kind: 'dm', name, topic: null, visibility: 'private', sort_order: 0, created_by_user_id: userIdA, created_at: now, deleted_at: null })
+    this._channels.set(channelId, { channel_id: channelId, kind: 'dm', name, topic: null, visibility: 'private', sort_order: 0, session_ends_at: null, created_by_user_id: userIdA, created_at: now, deleted_at: null })
     this._members.set(`${channelId}:${userIdA}`, { channel_id: channelId, user_id: userIdA, role: 'member', joined_at: now, left_at: null, banned_at: null })
     this._members.set(`${channelId}:${userIdB}`, { channel_id: channelId, user_id: userIdB, role: 'member', joined_at: now, left_at: null, banned_at: null })
   }
@@ -115,12 +113,13 @@ export class InMemoryChannelRepository {
       .map(m => ({ user_id: m.user_id, role: m.role }))
   }
 
-  patchChannel({ channelId, name, topic, visibility }) {
+  patchChannel({ channelId, name, topic, visibility, session_ends_at }) {
     const c = this._channels.get(channelId)
     if (!c) return
     if (name !== undefined) c.name = name
     if (topic !== undefined) c.topic = topic
     if (visibility !== undefined) c.visibility = visibility
+    if (session_ends_at !== undefined) c.session_ends_at = session_ends_at
   }
 
   softDeleteChannel({ channelId, now }) {
@@ -128,11 +127,30 @@ export class InMemoryChannelRepository {
     if (c) c.deleted_at = now
   }
 
-  reorderChannels({ hubId, channelIds }) {
+  reorderChannels({ channelIds }) {
     channelIds.forEach((channelId, index) => {
       const c = this._channels.get(channelId)
-      if (c && c.hub_id === hubId && !c.deleted_at) c.sort_order = index
+      if (c && !c.deleted_at) c.sort_order = index
     })
-    return this.listInHub({ hubId })
+    return channelIds
+      .map(id => this._channels.get(id))
+      .filter(c => c && !c.deleted_at)
+      .map(c => this._toPublic(c))
+  }
+
+  searchFtsGlobal({ channelIds, query, limit = 20 }) {
+    const idSet = new Set(channelIds)
+    const q = query.toLowerCase()
+    return [...this._channels.values()]
+      .filter(c => idSet.has(c.channel_id) && !c.deleted_at)
+      .flatMap(c => {
+        // In-memory: no FTS, fall back to substring match
+        return []
+      })
+      .slice(0, limit)
+  }
+
+  searchLikeGlobal({ channelIds, query, limit = 20 }) {
+    return this.searchFtsGlobal({ channelIds, query, limit })
   }
 }

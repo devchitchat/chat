@@ -134,11 +134,18 @@ export class ThreadPanelView {
     }
 
     this.#panelEl.classList.add('active')
+    // On mobile, immediately slide the thread panel into view.
+    // Also ensure the sidebar is dismissed so dismissing the thread always
+    // returns to the messages view (matching the sidebar→messages→thread flow).
+    if (window.matchMedia('(max-width: 700px)').matches) {
+      document.body.classList.remove('sidebar-open')
+      this.#panelEl.classList.add('swipe-open')
+    }
     setTimeout(() => this.#inputEl?.focus(), 50)
   }
 
   #onThreadClosed() {
-    this.#panelEl.classList.remove('active')
+    this.#panelEl.classList.remove('active', 'swipe-open')
     if (this.#anchorEl)  this.#anchorEl.innerHTML  = ''
     if (this.#repliesEl) this.#repliesEl.innerHTML = ''
   }

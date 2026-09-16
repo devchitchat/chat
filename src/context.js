@@ -10,7 +10,6 @@
  */
 
 export let auth = null
-export let hubService = null
 export let channelService = null
 export let messageService = null
 export let deliveryService = null
@@ -25,7 +24,6 @@ export let logger = null
 
 export function init(services) {
   auth = services.auth
-  hubService = services.hubService
   channelService = services.channelService
   messageService = services.messageService
   deliveryService = services.deliveryService

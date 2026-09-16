@@ -16,6 +16,15 @@ export class MessageService {
     this.uploadService = uploadService
   }
 
+  // Public channels are readable by any authenticated user, not just members.
+  // Private and session channels require membership.
+  #requireReadAccess(channelId, userId) {
+    if (this.channelService.isMember(channelId, userId)) return
+    const channel = this.channelService.getChannel(channelId)
+    if (channel?.visibility === 'public') return
+    throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+  }
+
   sendMessage({ channelId, userId, text, clientMsgId = null, priority = 'normal', attachments = [], parentMsgId = null }) {
     if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
     if (!text?.trim() && attachments.length === 0) throw new ServiceError('BAD_REQUEST', 'Message text or attachment required')
@@ -103,7 +112,7 @@ export class MessageService {
   }
 
   listLatestMessages({ channelId, userId, limit = 50 }) {
-    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    this.#requireReadAccess(channelId, userId)
     const rows = this.messageRepo.listLatestMessages({ channelId, limit })
     const messages = this.reactionService
       ? this.reactionService.enrichWithReactions({ messages: rows, requestingUserId: userId })
@@ -112,7 +121,7 @@ export class MessageService {
   }
 
   listMessagesBefore({ channelId, userId, beforeSeq, limit = 50 }) {
-    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    this.#requireReadAccess(channelId, userId)
     const rows = this.messageRepo.listMessagesBefore({ channelId, beforeSeq, limit })
     const hasMore = rows.length === limit
     const messages = this.reactionService
@@ -134,5 +143,10 @@ export class MessageService {
 
   getReplyCountsForMessages({ msgIds }) {
     return this.messageRepo.getReplyCountsForMessages({ msgIds })
+  }
+
+  listChannelThreads({ channelId, userId, limit = 20 }) {
+    if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
+    return this.messageRepo.listThreads({ channelId, limit })
   }
 }

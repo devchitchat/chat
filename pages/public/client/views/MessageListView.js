@@ -45,6 +45,7 @@ export class MessageListView {
     this.#channelId  = model.currentChannelId
 
     this.#bindModelEvents()
+    this.#bindDocumentEvents()
     this.#setupPagination()
     attachMessageInteractions(messagesEl, { model })
     this.#hydrateExisting()
@@ -65,6 +66,24 @@ export class MessageListView {
     m.addEventListener(Ev.MESSAGES_PREPENDED,  e => this.#onMessagesPrepended(e.detail))
     m.addEventListener(Ev.LOADING_MORE_CHANGED, e => this.#onLoadingMoreChanged(e.detail))
     m.addEventListener(Ev.MEMBERS_UPDATED,     () => this.#reapplyMentions())
+    m.addEventListener(Ev.THREAD_REPLY_ADDED,  e => this.#onThreadReplyAdded(e.detail))
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Document event bindings
+  // ─────────────────────────────────────────────────────────────────────────
+
+  #bindDocumentEvents() {
+    // Scroll to and highlight the parent message when a thread is opened
+    document.addEventListener('open-thread', e => {
+      const { msgId } = e.detail
+      const el = this.#el?.querySelector(`[data-msg-id="${msgId}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('msg-highlight')
+        setTimeout(() => el.classList.remove('msg-highlight'), 1500)
+      }
+    })
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -79,6 +98,17 @@ export class MessageListView {
     for (const article of this.#el.querySelectorAll('article.message')) {
       if (article.dataset.hydrated) continue
       article.dataset.hydrated = '1'
+
+      // Inject avatar if not already there
+      if (!article.querySelector('.msg-avatar')) {
+        const displayName = article.querySelector('.message-handle')?.textContent?.trim() ?? '?'
+        const initials = displayName.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+        const avatar = document.createElement('div')
+        avatar.className = 'msg-avatar'
+        avatar.setAttribute('aria-hidden', 'true')
+        avatar.textContent = initials
+        article.prepend(avatar)
+      }
 
       // DM trigger on non-self handles
       const handle = article.querySelector('.message-handle[data-user-id]')
@@ -250,6 +280,14 @@ export class MessageListView {
     this.#el.querySelector(`[data-msg-id="${msgId}"]`)?.remove()
   }
 
+  #onThreadReplyAdded({ parentMsgId }) {
+    const article = this.#el.querySelector(`[data-msg-id="${parentMsgId}"]`)
+    if (!article) return
+    const count = parseInt(article.dataset.replyCount ?? '0', 10) + 1
+    article.dataset.replyCount = String(count)
+    _updateReplyCountLink(article, count)
+  }
+
   #onReactionsUpdated({ msgId, channelId, reactions }) {
     if (channelId !== this.#channelId) return
     const article = this.#el.querySelector(`[data-msg-id="${msgId}"]`)
@@ -350,6 +388,23 @@ function _addHoverToolbar(article, userId) {
   const quickPicks = document.createElement('span')
   quickPicks.className = 'quick-picks'
   toolbar.appendChild(quickPicks)
+
+  // Reply inline button
+  const replyInlineBtn = document.createElement('button')
+  replyInlineBtn.className = 'btn-reply-inline btn-icon'
+  replyInlineBtn.type = 'button'
+  replyInlineBtn.title = 'Reply inline'
+  replyInlineBtn.setAttribute('aria-label', 'Reply inline')
+  replyInlineBtn.innerHTML = '&#x21B3;'
+  replyInlineBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    const handle = article.querySelector('.message-handle')?.textContent?.trim() ?? ''
+    const text   = article.querySelector('.message-text')?.textContent?.trim() ?? ''
+    const msgId  = article.dataset.msgId
+    document.dispatchEvent(new CustomEvent('set-reply', { detail: { msgId, handle, text } }))
+    document.getElementById('message-input')?.focus()
+  })
+  toolbar.appendChild(replyInlineBtn)
 
   const replyBtn = document.createElement('button')
   replyBtn.className = 'btn-reply btn-icon'

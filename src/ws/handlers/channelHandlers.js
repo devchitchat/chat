@@ -5,27 +5,95 @@
 export function handleChannelList(ws, msg, ctx) {
   const { auth, channelService, sendWs } = ctx
   const user = auth.getUser(ws.data.userId)
-  const channels = channelService.listChannels(ws.data.userId, user?.roles || [], msg.body?.hub_id)
-  sendWs(ws, { t: 'channel.list_result', reply_to: msg.id, ok: true, body: { channels, hub_id: msg.body?.hub_id } })
+  const channels = channelService.listChannels(ws.data.userId, user?.roles || [])
+  sendWs(ws, { t: 'channel.list_result', reply_to: msg.id, ok: true, body: { channels } })
 }
 
 export function handleChannelCreate(ws, msg, ctx) {
-  const { auth, hubService, channelService, sendWs, broadcastToChannelAudience } = ctx
-  const user = auth.getUser(ws.data.userId)
-  let { hub_id, kind, name, topic, visibility } = msg.body || {}
-  if (!hub_id || hub_id === 'default') {
-    hub_id = hubService.ensureDefaultHub(ws.data.userId).hub_id
+  const { auth, channelService, botService, sendWs, broadcastToChannelAudience, subscribeUserToChannel } = ctx
+  const { kind, name, topic, visibility, session_ends_at, member_ids } = msg.body || {}
+
+  // Compute session_ends_at from auto_end_days if provided
+  const autoEndDays = msg.body?.auto_end_days
+  let sessionEndsAt = session_ends_at ?? null
+  if (kind === 'session' && autoEndDays != null && autoEndDays > 0) {
+    sessionEndsAt = Date.now() + autoEndDays * 24 * 60 * 60 * 1000
   }
-  const channel = channelService.createChannel({ hubId: hub_id, kind, name, topic, visibility, createdByUserId: ws.data.userId, userRoles: user?.roles || [] })
+
+  const channel = channelService.createChannel({
+    kind, name, topic, visibility,
+    sessionEndsAt,
+    createdByUserId: ws.data.userId,
+  })
+
+  // For session channels: add requested members
+  if (kind === 'session' && Array.isArray(member_ids)) {
+    const user = auth.getUser(ws.data.userId)
+    for (const userId of member_ids) {
+      if (userId === ws.data.userId) continue
+      try {
+        channelService.addMember({
+          channelId: channel.channel_id,
+          requestingUserId: ws.data.userId,
+          requestingRoles: user?.roles || [],
+          targetUserId: userId,
+        })
+        subscribeUserToChannel(userId, channel.channel_id)
+      } catch { /* skip if user not found or already member */ }
+    }
+  }
+
+  // Auto-add all bots to new public channels
+  if (channel.visibility === 'public') {
+    const botIds = botService.addBotsToPublicChannel({ channelId: channel.channel_id })
+    for (const botUserId of botIds) subscribeUserToChannel(botUserId, channel.channel_id)
+  }
+
   sendWs(ws, { t: 'channel.created', reply_to: msg.id, ok: true, body: { channel } })
   broadcastToChannelAudience(channel.channel_id, { t: 'channel.created', ok: true, body: { channel } }, ws)
 }
 
-export function handleChannelUpdate(ws, msg, ctx) {
+export function handleSessionEnd(ws, msg, ctx) {
   const { auth, channelService, sendWs, publishChannel } = ctx
+  const { channel_id } = msg.body || {}
+  const user = auth.getUser(ws.data.userId)
+  const channel = channelService.getChannel(channel_id)
+  if (!channel || channel.kind !== 'session') {
+    return sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'NOT_FOUND', message: 'Session not found' } })
+  }
+  const membership = channelService.getMembership(channel_id, ws.data.userId)
+  const isOwner = membership?.role === 'owner'
+  const isAdmin = user?.roles?.includes('admin')
+  if (!isOwner && !isAdmin) {
+    return sendWs(ws, { t: 'error', reply_to: msg.id, ok: false, body: { code: 'FORBIDDEN', message: 'Only owner or admin can end a session' } })
+  }
+  const updated = channelService.updateChannel({
+    channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [],
+    sessionEndsAt: Date.now(),
+  })
+  const result = { channel_id, session_ends_at: updated.session_ends_at }
+  sendWs(ws, { t: 'session.ended', reply_to: msg.id, ok: true, body: result })
+  publishChannel(channel_id, { t: 'session.ended', ok: true, body: result })
+}
+
+export function handleChannelUpdate(ws, msg, ctx) {
+  const { auth, channelService, botService, sendWs, publishChannel, subscribeUserToChannel } = ctx
   const user = auth.getUser(ws.data.userId)
   const { channel_id, name, topic, visibility } = msg.body || {}
+
+  const before = channelService.getChannel(channel_id)
   const channel = channelService.updateChannel({ channelId: channel_id, userId: ws.data.userId, roles: user?.roles || [], name, topic, visibility })
+
+  // Sync bot memberships when visibility changes
+  if (visibility !== undefined && before?.visibility !== visibility) {
+    if (visibility === 'public') {
+      const botIds = botService.addBotsToPublicChannel({ channelId: channel_id })
+      for (const botUserId of botIds) subscribeUserToChannel(botUserId, channel_id)
+    } else if (before?.visibility === 'public') {
+      botService.removeBotsFromChannel({ channelId: channel_id })
+    }
+  }
+
   sendWs(ws, { t: 'channel.updated', reply_to: msg.id, ok: true, body: { channel } })
   publishChannel(channel_id, { t: 'channel.updated', ok: true, body: { channel } })
 }
@@ -71,11 +139,11 @@ export function handleChannelLeave(ws, msg, ctx) {
 }
 
 export function handleChannelReorder(ws, msg, ctx) {
-  const { auth, channelService, broadcastToHubAudience } = ctx
-  const user = auth.getUser(ws.data.userId)
-  const { hub_id, channel_ids } = msg.body || {}
-  const channels = channelService.reorderChannels({ hubId: hub_id, channelIds: channel_ids, userId: ws.data.userId, userRoles: user?.roles || [] })
-  broadcastToHubAudience(hub_id, { t: 'channel.reordered', ok: true, body: { hub_id, channels } }, null)
+  const { channelService, sendWs } = ctx
+  const { channel_ids, section } = msg.body || {}
+  const channels = channelService.reorderChannels({ channelIds: channel_ids })
+  // Broadcast to the requesting client; other clients will see the order on next channel.list_result
+  sendWs(ws, { t: 'channel.reordered', reply_to: msg.id, ok: true, body: { channels, section } })
 }
 
 export function handleChannelAddMember(ws, msg, ctx) {

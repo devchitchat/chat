@@ -135,19 +135,19 @@ function _build() {
   grid.addEventListener('click', e => {
     const btn = e.target.closest('button[data-emoji]')
     if (!btn) return
-    const emoji = btn.dataset.emoji
+    const emoji  = btn.dataset.emoji
+    const onPick = currentOnPick   // capture before closeEmojiPicker nulls it
     saveRecentEmoji(emoji)
     closeEmojiPicker()
-    currentOnPick?.(emoji)
+    onPick?.(emoji)
   })
 
-  _renderGrid(null)
+  _renderGrid(null, grid)
   return el
 }
 
-function _renderGrid(query) {
-  if (!pickerEl) return
-  const grid = pickerEl.querySelector('.emoji-picker-grid')
+function _renderGrid(query, grid = null) {
+  grid = grid ?? pickerEl?.querySelector('.emoji-picker-grid')
   if (!grid) return
 
   let list
