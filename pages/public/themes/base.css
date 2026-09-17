@@ -2405,12 +2405,15 @@ body:has(.admin-topbar) main {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .admin-page {
+  width: 100%;
   max-width: 900px;
   margin: 0 auto;
   padding: 32px 24px;
+  box-sizing: border-box;
 }
 
 .admin-nav {
@@ -2484,6 +2487,24 @@ body:has(.admin-topbar) main {
   max-width: none;
   margin-bottom: 16px;
 }
+.admin-form--inline input[type="text"],
+.admin-form--inline select {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.admin-form--inline select { cursor: pointer; }
+.admin-form--inline input[type="text"]:focus,
+.admin-form--inline select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
 
 .form-row {
   display: flex;
@@ -2497,18 +2518,22 @@ body:has(.admin-topbar) main {
 }
 .form-row input[type="text"],
 .form-row input[type="password"],
-.form-row input[type="number"] {
+.form-row input[type="number"],
+.form-row select {
   padding: 9px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 15px;
+  font-family: inherit;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
+.form-row select { cursor: pointer; }
 .form-row input[type="text"]:focus,
 .form-row input[type="password"]:focus,
-.form-row input[type="number"]:focus {
+.form-row input[type="number"]:focus,
+.form-row select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
@@ -2640,11 +2665,67 @@ details.hub-group[open] > .hub-group__summary::before {
 .tag--admin { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .tag--bot   { background: color-mix(in srgb, #9b59b6 20%, transparent); color: #9b59b6; }
 .tag--warn  { background: color-mix(in srgb, #f39c12 20%, transparent); color: #f39c12; }
+.tag--muted { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text-muted); }
 
-.btn-danger { color: var(--color-danger, #e74c3c); }
-.btn-danger:hover { background: color-mix(in srgb, var(--color-danger, #e74c3c) 15%, transparent); }
+.admin-channel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-channel-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-topbar-actions select {
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.admin-topbar-actions select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
 
 form.inline { display: inline; }
+
+@media (max-width: 700px) {
+  .admin-topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .admin-topbar-user { display: none; }
+
+  .admin-page {
+    padding: 16px;
+  }
+  .admin-nav {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .admin-form {
+    max-width: none;
+  }
+  /* Stack inline forms (e.g. create token) vertically on mobile */
+  .admin-form--inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  /* Allow wide tables to scroll rather than squish */
+  .admin-section {
+    overflow-x: auto;
+  }
+}
 
 /* ── File uploads ─────────────────────────────────────────────────────────── */
 
