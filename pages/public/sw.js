@@ -14,8 +14,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title ?? 'chat', {
       body:  data.body  ?? '',
-      icon:  './favicon.png',
-      badge: './favicon.png',
+      icon:  './icon-192.png',
+      badge: './badge.png',
       tag:   data.channel_id ?? 'chat', // collapse multiple from the same channel
       data:  { url: data.url ?? defaultUrl },
     })
