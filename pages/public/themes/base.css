@@ -2131,24 +2131,28 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
 .thread-composer {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 13px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 .thread-textarea {
-  width: 100%;
+  flex: 1;
   box-sizing: border-box;
-  padding: 9px 12px;
+  padding: 9px 14px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--text-primary);
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 15px;
+  line-height: 1.5;
+  height: calc(1.5em + 18px);
+  max-height: 160px;
+  overflow-y: auto;
   resize: none;
-  min-height: 38px;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 .thread-textarea:focus {
@@ -2156,7 +2160,6 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
-.thread-send-btn { align-self: flex-end; }
 
 /* "View N replies" link under messages */
 .thread-replies-link {
@@ -2179,33 +2182,18 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   }
   /* Push composer above home indicator (viewport-fit=cover extends under it) */
   .thread-composer {
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
   /* Prevent iOS auto-zoom on focus (triggered when font-size < 16px) */
   .thread-textarea {
     font-size: 16px;
   }
-  .thread-close-mobile { display: inline-flex; }
-
   /* Hide bottom nav while thread is open so it can't overlap the composer */
   body:has(.thread-panel.active.swipe-open) .bottom-nav {
     display: none;
   }
 }
 
-.thread-composer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.thread-close-mobile {
-  display: none; /* desktop: hidden; mobile: shown via media query above */
-  font-size: 13px;
-  opacity: 0.7;
-  margin-right: auto; /* push Reply button to the right */
-}
 
 /* ── Call: status row (shown when a call is active, user hasn't joined) ──── */
 .call-status {
@@ -2988,7 +2976,7 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px 8px;
+  padding: 18px 14px 14px;
   border-bottom: 1px solid var(--border);
 }
 .sidebar-team-badge {

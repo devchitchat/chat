@@ -269,7 +269,9 @@
       rows="1"{{#if isSessionEnded}} disabled{{/if}}></textarea>
     <button class="btn-compose-expand btn-icon" type="button"
       title="Compose mode (Ctrl+E)" aria-label="Open compose mode"{{#if isSessionEnded}} disabled{{/if}}>&#x26F6;</button>
-    <button class="btn-send" aria-label="Send message" type="button"{{#if isSessionEnded}} disabled{{/if}}>Send</button>
+    <button class="btn-send" aria-label="Send message" title="Send" type="button"{{#if isSessionEnded}} disabled{{/if}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    </button>
   </footer>
 
   <!-- Compose overlay — full-panel editor with Write / Preview tabs -->
@@ -291,7 +293,10 @@
     <footer class="compose-overlay-footer">
       <button class="btn-attach btn-icon" id="compose-attach" type="button"
         title="Attach file" aria-label="Attach file">&#x1F4CE;</button>
-      <button class="btn-send" id="compose-send" type="button">Send</button>
+      <button class="btn-send" id="compose-send" type="button" title="Send">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+
     </footer>
   </div>
 
@@ -321,11 +326,7 @@
     <div class="thread-replies" id="thread-replies" role="log" aria-label="Thread replies"></div>
   </div>
   <footer class="thread-composer">
-    <textarea class="thread-textarea" id="thread-input" placeholder="Reply in thread…" rows="2" aria-label="Reply in thread"></textarea>
-    <div class="thread-composer-actions">
-      <button class="btn-icon thread-panel-close thread-close-mobile" aria-label="Close thread" type="button">Close thread</button>
-      <button class="btn-send thread-send-btn" id="thread-send" type="button">Reply</button>
-    </div>
+    <textarea class="thread-textarea" id="thread-input" placeholder="Hit Enter to Reply in thread." rows="1" aria-label="Reply in thread"></textarea>
   </footer>
 </div>
 

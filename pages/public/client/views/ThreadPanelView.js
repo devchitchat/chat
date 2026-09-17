@@ -9,7 +9,6 @@
  *   #thread-anchor     — parent message clone
  *   #thread-replies    — reply list
  *   #thread-input      — reply textarea
- *   #thread-send       — send button
  *
  * Model events handled:
  *   thread-opened       → show panel, clone parent, clear replies
@@ -37,7 +36,6 @@ export class ThreadPanelView {
   #repliesEl
   #bodyEl
   #inputEl
-  #sendBtn
   #mentionPicker
 
   /**
@@ -52,7 +50,6 @@ export class ThreadPanelView {
     this.#repliesEl = panelEl.querySelector('#thread-replies') ?? panelEl.querySelector('.thread-replies')
     this.#bodyEl    = panelEl.querySelector('.thread-body')
     this.#inputEl   = panelEl.querySelector('#thread-input')
-    this.#sendBtn   = panelEl.querySelector('#thread-send')
 
     this.#bindModelEvents()
     this.#bindPanelEvents()
@@ -99,8 +96,6 @@ export class ThreadPanelView {
     this.#panelEl.addEventListener('click', e => {
       if (e.target.closest('.thread-panel-close')) dispatch('close-thread')
     })
-
-    this.#sendBtn?.addEventListener('click', () => this.#sendReply())
 
     this.#inputEl?.addEventListener('keydown', e => {
       if (this.#mentionPicker?.isOpen) return
