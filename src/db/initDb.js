@@ -154,6 +154,10 @@ export const createSchema = (db) => {
   try { db.exec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN edited_at INTEGER`) } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE messages ADD COLUMN parent_msg_id TEXT REFERENCES messages(msg_id)`) } catch { /* already exists */ }
+  // Avatar customization
+  try { db.exec(`ALTER TABLE users ADD COLUMN avatar_initials TEXT`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE users ADD COLUMN avatar_color TEXT`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT`) } catch { /* already exists */ }
 
   // Message reactions
   db.exec(`

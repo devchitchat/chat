@@ -270,3 +270,16 @@ export function handleDmList(ws, msg, ctx) {
   })
   sendWs(ws, { t: 'dm.list_result', reply_to: msg.id, ok: true, body: { dms: enriched } })
 }
+
+export function handleUserAvatarSet(ws, msg, ctx) {
+  const { auth, sendWs, broadcastToAll } = ctx
+  if (!ws.data.userId) return
+  const { initials, color } = msg.body || {}
+  auth.updateAvatar(ws.data.userId, { initials, color })
+  const user = auth.getUser(ws.data.userId)
+  sendWs(ws, { t: 'user.avatar.set_ok', reply_to: msg.id, ok: true, body: { user } })
+  broadcastToAll({
+    t: 'user.profile_updated', ok: true,
+    body: { user_id: user.user_id, avatar_initials: user.avatar_initials, avatar_color: user.avatar_color, avatar_url: user.avatar_url, display_name: user.display_name }
+  })
+}

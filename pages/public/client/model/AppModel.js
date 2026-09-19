@@ -59,6 +59,9 @@ export class AppModel extends EventTarget {
   // ── Activity feed ────────────────────────────────────────────────────────────
   #activityItems = []  // [{ type, text, sub, time, unread, initials }]
 
+  // ── Avatars ───────────────────────────────────────────────────────────────────
+  #avatars = new Map()  // userId → { avatar_initials, avatar_color, avatar_url }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Identity
   // ─────────────────────────────────────────────────────────────────────────
@@ -462,6 +465,19 @@ export class AppModel extends EventTarget {
     if (channel.kind === 'session')      return 'sessions'
     if (channel.visibility === 'private') return 'private'
     return 'public'
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Avatars
+  // ─────────────────────────────────────────────────────────────────────────
+
+  getMemberAvatar(userId) {
+    return this.#avatars.get(userId) ?? null
+  }
+
+  updateMemberProfile({ user_id, avatar_initials, avatar_color, avatar_url, display_name }) {
+    this.#avatars.set(user_id, { avatar_initials: avatar_initials ?? null, avatar_color: avatar_color ?? null, avatar_url: avatar_url ?? null })
+    this.#dispatch(Ev.PROFILE_UPDATED, { userId: user_id, avatar_initials, avatar_color, avatar_url, display_name })
   }
 
   #dispatch(name, detail) {

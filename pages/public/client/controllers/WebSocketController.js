@@ -81,14 +81,31 @@ export class WebSocketController {
     // ── Member lists ───────────────────────────────────────────────────────
     ws.on('user.list_result', ({ users }) => {
       model.setMembers((users ?? []).filter(u => u.handle))
+      // Seed avatar map from initial user list
+      for (const u of (users ?? [])) {
+        if (u.avatar_initials || u.avatar_color || u.avatar_url) {
+          model.updateMemberProfile(u)
+        }
+      }
     })
 
     ws.on('bot.list_result', ({ bots }) => {
       model.setBots((bots ?? []).filter(b => b.handle))
+      // Seed avatar map for bots that have custom avatars
+      for (const b of (bots ?? [])) {
+        if (b.avatar_initials || b.avatar_color || b.avatar_url) {
+          model.updateMemberProfile(b)
+        }
+      }
+    })
+
+    // ── Profile updates ────────────────────────────────────────────────────
+    ws.on('user.profile_updated', (body) => {
+      model.updateMemberProfile(body)
     })
 
     // ── Messages ───────────────────────────────────────────────────────────
-    ws.on('msg.list_result', ({ messages, next_after_seq, has_more, direction, channel_id }) => {
+    ws.on('msg.list_result', ({ messages, has_more, direction, channel_id }) => {
       const channelId = channel_id ?? model.currentChannelId
       if (!channelId) return
 

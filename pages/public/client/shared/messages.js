@@ -124,12 +124,32 @@ export function renderAttachment(a) {
 }
 
 /**
+ * Apply avatar data to a .msg-avatar or .you-avatar element.
+ * If the avatar has a url, renders an <img>; otherwise renders initials with optional bg color.
+ * @param {Element} el
+ * @param {{ avatar_initials?: string|null, avatar_color?: string|null, avatar_url?: string|null }|null} avatarData
+ * @param {string} displayName  — fallback for computed initials
+ */
+export function applyAvatarToEl(el, avatarData, displayName) {
+  if (avatarData?.avatar_url) {
+    el.innerHTML = `<img src="${escHtml(avatarData.avatar_url)}" alt="${escHtml(displayName ?? '')}" class="avatar-img">`
+    el.style.background = ''
+  } else {
+    const initials = avatarData?.avatar_initials
+      || (displayName ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+    el.textContent = initials
+    el.style.background = avatarData?.avatar_color || ''
+  }
+}
+
+/**
  * Build a <article class="message"> element.
  * @param {{ msg_id, seq, user_id, user_display_name, ts, text, attachments }} msg
- * @param {{ userId?: string, userHandle?: string, isThreadReply?: boolean }} [ctx]
+ * @param {{ userId?: string, userHandle?: string, isThreadReply?: boolean, getAvatar?: (userId: string) => object|null }} [ctx]
  *   isThreadReply — omits the "Reply in thread" button (threads can't be nested)
+ *   getAvatar     — optional function returning avatar data for a userId
  */
-export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle, knownHandles, isThreadReply = false } = {}) {
+export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, text, rendered_text, edited_at, attachments }, { userId, userHandle, knownHandles, isThreadReply = false, getAvatar } = {}) {
   const article = document.createElement('article')
   article.className = 'message'
   article.dataset.seq = seq
@@ -144,9 +164,8 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
   const replyBtn = isThreadReply ? '' : '<button class="btn-reply btn-icon" type="button" title="Reply in thread" aria-label="Reply in thread">&#x21A9;</button>'
   const actionsHtml = `<div class="message-hover-actions"><span class="quick-picks"></span>${replyBtn}<button class="btn-react btn-icon" type="button" title="Add reaction" aria-label="Add reaction">🙂</button>${isSelf ? '<button class="btn-msg-actions btn-icon" type="button" title="Message actions">…</button>' : ''}</div>`
   const textHtml = rendered_text ?? (text ? renderText(text, { userHandle, knownHandles }) : '')
-  const initials = (user_display_name ?? user_id ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
   article.innerHTML = `
-      <div class="msg-avatar" aria-hidden="true">${escHtml(initials)}</div>
+      <div class="msg-avatar" data-avatar-user="${escHtml(user_id)}" aria-hidden="true"></div>
       <span class="message-handle${isSelf ? '' : ' dm-trigger'}" data-user-id="${escHtml(user_id)}" title="${isSelf ? '' : 'Send a direct message'}">${escHtml(user_display_name ?? user_id)}</span>
       <time class="message-time" datetime="${ts}">${time}${editedHtml}</time>
       ${textHtml ? `<div class="message-text">${textHtml}</div>` : ''}
@@ -154,6 +173,10 @@ export function makeMessageEl({ msg_id, seq, user_id, user_display_name, ts, tex
       <div class="reaction-bar"></div>
       ${actionsHtml}
     `
+  // Apply avatar (custom or default initials)
+  const avatarEl = article.querySelector('.msg-avatar')
+  if (avatarEl) applyAvatarToEl(avatarEl, getAvatar?.(user_id) ?? null, user_display_name ?? user_id)
+
   // When the server provides rendered_text, @mention styling is not included.
   // Apply it now so every code path gets consistent output.
   if (rendered_text) {

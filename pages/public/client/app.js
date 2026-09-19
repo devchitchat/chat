@@ -494,6 +494,146 @@ if (youNotifDisableBtn) {
 // Initialise: check real subscription state then render
 _refreshPushSubscribed().then(_updateNotifUI)
 
+// ── 8c-ii. Avatar editor ──────────────────────────────────────────────────────
+
+{
+  const avatarBtn     = document.getElementById('you-avatar-btn')
+  const initialsInput = document.getElementById('you-avatar-initials')
+  const removeBtn     = document.getElementById('you-avatar-remove')
+  const fileInput     = document.getElementById('you-avatar-file')
+  const colorsEl      = document.getElementById('you-avatar-colors')
+
+  let _avatarColor = ''
+  let _hasPhoto    = false
+
+  // Update the single avatar button + sidebar avatar
+  function _applyAvatar({ url, initials, color } = {}) {
+    const src          = url ?? null
+    const defaultText  = avatarBtn?.dataset.defaultInitials || initialsInput?.value.trim() || '?'
+    const text         = initials || initialsInput?.value.trim() || defaultText
+    const bg           = color || _avatarColor || ''
+
+    for (const el of [avatarBtn, document.getElementById('sidebar-you-avatar')]) {
+      if (!el) continue
+      if (src) {
+        el.innerHTML = `<img src="${src}" alt="" class="avatar-img">`
+        el.style.background = ''
+      } else {
+        el.textContent = text
+        el.style.background = bg
+      }
+    }
+  }
+
+  function _syncRemoveBtn() {
+    if (removeBtn) removeBtn.hidden = !_hasPhoto
+  }
+
+  // Seed state when the you-sheet opens (or on initial profile-updated)
+  function _seedFromModel() {
+    const selfUserId = document.querySelector('.chat-panel')?.dataset.userId ?? null
+    if (!selfUserId) return
+    const av = model.getMemberAvatar(selfUserId)
+    _avatarColor = av?.avatar_color ?? ''
+    _hasPhoto    = !!(av?.avatar_url)
+    if (initialsInput && av?.avatar_initials) initialsInput.value = av.avatar_initials
+    if (colorsEl) {
+      for (const sw of colorsEl.querySelectorAll('.you-avatar-swatch')) {
+        sw.classList.toggle('selected', sw.dataset.color === _avatarColor)
+      }
+    }
+    _syncRemoveBtn()
+    // Apply the persisted avatar visually
+    if (_hasPhoto) {
+      _applyAvatar({ url: av.avatar_url })
+    } else {
+      _applyAvatar()
+    }
+  }
+
+  // Hook into openYouSheet so state is always fresh when the sheet opens
+  const _origOpenYouSheet = openYouSheet  // defined above in this file
+  openYouSheet = function() {
+    _origOpenYouSheet()
+    _seedFromModel()
+  }
+
+  // Clicking the avatar button triggers photo upload
+  if (avatarBtn) {
+    avatarBtn.addEventListener('click', () => fileInput?.click())
+  }
+
+  // Initials input — live update + debounced WS save
+  let _initialsTimer = null
+  if (initialsInput) {
+    initialsInput.addEventListener('input', () => {
+      _applyAvatar()
+      clearTimeout(_initialsTimer)
+      _initialsTimer = setTimeout(() => {
+        ws.send({ t: 'user.avatar.set', body: { initials: initialsInput.value.trim() || null, color: _avatarColor || null } })
+      }, 600)
+    })
+  }
+
+  // Color swatches — selecting a color clears the photo
+  if (colorsEl) {
+    colorsEl.addEventListener('click', e => {
+      const swatch = e.target.closest('.you-avatar-swatch')
+      if (!swatch) return
+      _avatarColor = swatch.dataset.color ?? ''
+      for (const sw of colorsEl.querySelectorAll('.you-avatar-swatch')) {
+        sw.classList.toggle('selected', sw === swatch)
+      }
+      if (_hasPhoto) {
+        _hasPhoto = false
+        _syncRemoveBtn()
+        fetch(`${BASE_PATH}/api/user/avatar`, { method: 'DELETE' }).catch(() => {})
+      }
+      _applyAvatar()
+      ws.send({ t: 'user.avatar.set', body: { initials: initialsInput?.value.trim() || null, color: _avatarColor || null } })
+    })
+  }
+
+  // Photo upload
+  if (fileInput) {
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0]
+      if (!file) return
+      const formData = new FormData()
+      formData.append('file', file)
+      try {
+        const res = await fetch(`${BASE_PATH}/api/user/avatar`, { method: 'POST', body: formData })
+        if (res.ok) {
+          const { avatar_url } = await res.json()
+          _hasPhoto = true
+          _applyAvatar({ url: avatar_url })
+          _syncRemoveBtn()
+        }
+      } catch { /* ignore */ }
+      fileInput.value = ''
+    })
+  }
+
+  // Remove photo button
+  if (removeBtn) {
+    removeBtn.addEventListener('click', async () => {
+      try {
+        await fetch(`${BASE_PATH}/api/user/avatar`, { method: 'DELETE' })
+        _hasPhoto = false
+        _applyAvatar()
+        _syncRemoveBtn()
+      } catch { /* ignore */ }
+    })
+  }
+
+  // Apply avatar whenever the self user's profile arrives/updates (covers page reload)
+  model.addEventListener('profile-updated', e => {
+    const selfUserId = document.querySelector('.chat-panel')?.dataset.userId ?? null
+    if (!selfUserId || e.detail.userId !== selfUserId) return
+    _seedFromModel()
+  })
+}
+
 // ── 8d. Join banner ───────────────────────────────────────────────────────────
 
 const joinBanner    = document.getElementById('join-banner')

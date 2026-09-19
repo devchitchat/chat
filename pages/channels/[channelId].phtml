@@ -109,7 +109,7 @@
     {{#if user}}
     <div class="sidebar-footer-user">
       <button class="sidebar-user-identity" id="sidebar-btn-you" type="button" aria-label="Your profile and settings" title="Profile &amp; settings">
-        <div class="sidebar-user-avatar">{{user_initials}}</div>
+        <div class="sidebar-user-avatar" id="sidebar-you-avatar">{{user_initials}}</div>
         <div class="sidebar-user-info">
           <span class="sidebar-username">{{user.display_name}}</span>
           <span class="sidebar-user-status">Active</span>
@@ -380,11 +380,32 @@
   <div class="you-sheet-body">
     {{#if user}}
     <div class="you-identity">
-      <div class="you-avatar">{{user_initials}}</div>
+      <div class="you-avatar-wrap">
+        <button class="you-avatar" id="you-avatar-btn" type="button" aria-label="Change avatar photo" title="Tap to change photo">{{user_initials}}</button>
+        <input class="you-avatar-file" id="you-avatar-file" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
+      </div>
       <div class="you-identity-text">
         <span class="you-display-name">{{user.display_name}}</span>
         <span class="you-handle">@{{user.handle}}</span>
       </div>
+    </div>
+    <div class="you-avatar-controls">
+      <div class="you-avatar-editor-initials-row">
+        <label class="you-avatar-label" for="you-avatar-initials">Initials</label>
+        <input class="you-avatar-initials" id="you-avatar-initials" type="text" maxlength="3" placeholder="AB" autocomplete="off" value="{{user_initials}}">
+      </div>
+      <div class="you-avatar-colors" id="you-avatar-colors" role="group" aria-label="Background color">
+        <button class="you-avatar-swatch" type="button" data-color="#5865f2" style="background:#5865f2" aria-label="Indigo"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#ed4245" style="background:#ed4245" aria-label="Red"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#57f287" style="background:#57f287" aria-label="Green"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#fee75c" style="background:#fee75c" aria-label="Yellow"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#eb459e" style="background:#eb459e" aria-label="Fuchsia"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#e67e22" style="background:#e67e22" aria-label="Orange"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#1abc9c" style="background:#1abc9c" aria-label="Teal"></button>
+        <button class="you-avatar-swatch" type="button" data-color="#9b59b6" style="background:#9b59b6" aria-label="Purple"></button>
+        <button class="you-avatar-swatch you-avatar-swatch--none" type="button" data-color="" aria-label="Default color" title="Reset to default color">Auto</button>
+      </div>
+      <button class="you-avatar-remove" id="you-avatar-remove" type="button" hidden>Remove photo</button>
     </div>
     {{/if}}
     <div class="you-section">

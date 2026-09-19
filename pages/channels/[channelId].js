@@ -98,8 +98,8 @@ export async function GET(req) {
     user.roles?.includes('admin')
   )
 
-  const user_initials = (user.display_name ?? user.handle ?? '?')
-    .split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+  const user_initials = user.avatar_initials
+    || (user.display_name ?? user.handle ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
 
   return {
     user,

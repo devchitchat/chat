@@ -18,7 +18,7 @@ import { SqliteDeliveryRepository } from '../adapters/SqliteDeliveryRepository.j
 import { SqliteSearchRepository } from '../adapters/SqliteSearchRepository.js'
 import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository.js'
 import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
-import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList, handleSessionEnd } from './handlers/channelHandlers.js'
+import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList, handleSessionEnd, handleUserAvatarSet } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThreadList, handleThreadChannelList, handleSearchQuery, handleSearchGlobal, handlePresenceSubscribe } from './handlers/messageHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcStreamRemoved, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
@@ -95,6 +95,11 @@ export class ChatServer {
       message: (ws, data) => this.#message(ws, data),
       close:   (ws)       => this.#close(ws),
     }
+  }
+
+  /** Public API — send a payload to every authenticated connected client */
+  broadcastToAll(payload) {
+    this.#broadcastToAll(payload)
   }
 
   // ── Bun WebSocket lifecycle ────────────────────────────────────────────────
@@ -204,6 +209,7 @@ export class ChatServer {
       // Users & DMs
       case 'user.list':                  return handleUserList(ws, msg, ctx)
       case 'bot.list':                   return handleBotList(ws, msg, ctx)
+      case 'user.avatar.set':            return handleUserAvatarSet(ws, msg, ctx)
       case 'dm.open':                    return handleDmOpen(ws, msg, ctx)
       case 'dm.list':                    return handleDmList(ws, msg, ctx)
       // Messages
@@ -264,6 +270,7 @@ export class ChatServer {
       publishChannel:            (channelId, p)     => this.#publishChannel(channelId, p),
       publishCall:               (callId, p)        => this.#publishCall(callId, p),
       publishCallState:          (chId, callId, ps) => this.#publishCallState(chId, callId, ps),
+      broadcastToAll:            (p)                 => this.broadcastToAll(p),
       broadcastToChannelAudience:(chId, p, ex)      => this.#broadcastToChannelAudience(chId, p, ex),
       collectChannelAudience:    (chId, ex)         => this.#collectChannelAudience(chId, ex),
       subscribeUserToChannel:    (userId, chId)     => this.#subscribeUserToChannel(userId, chId),
@@ -381,6 +388,12 @@ export class ChatServer {
       }
     }
     return audience
+  }
+
+  #broadcastToAll(payload) {
+    for (const [, ws] of this.connections) {
+      if (ws.data.userId) this.#sendWs(ws, payload)
+    }
   }
 
   #broadcastToChannelAudience(channelId, payload, excludeWs = null) {

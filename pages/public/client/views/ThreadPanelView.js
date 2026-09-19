@@ -22,7 +22,7 @@
  */
 
 import * as Ev from '../model/events.js'
-import { makeMessageEl, escHtml, utcDateKey, makeDateSeparator } from '../shared/messages.js'
+import { makeMessageEl, escHtml, utcDateKey, makeDateSeparator, applyAvatarToEl } from '../shared/messages.js'
 import { attachMessageInteractions } from './shared/MessageInteractions.js'
 import { renderReactionBar } from './MessageListView.js'
 import { renderQuickPicksSlot } from './shared/EmojiPickerSingleton.js'
@@ -85,6 +85,7 @@ export class ThreadPanelView {
     m.addEventListener(Ev.REACTIONS_UPDATED,    e => this.#onReactionsUpdated(e.detail))
     m.addEventListener(Ev.MESSAGE_UPDATED,      e => this.#onParentUpdated(e.detail))
     m.addEventListener(Ev.CHANNEL_SELECTED,     () => this.#onThreadClosed())
+    m.addEventListener(Ev.PROFILE_UPDATED,      e => this.#onProfileUpdated(e.detail))
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export class ThreadPanelView {
           userId:       this.#model.userId,
           userHandle:   this.#model.userHandle,
           knownHandles: this.#model.knownHandles,
+          getAvatar:    uid => this.#model.getMemberAvatar(uid),
         })
         // Strip interactive elements from the clone
         clone.querySelector('.message-hover-actions')?.remove()
@@ -238,12 +240,23 @@ export class ThreadPanelView {
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
 
+  #onProfileUpdated({ userId, avatar_initials, avatar_color, avatar_url, display_name }) {
+    const avatarData = { avatar_initials: avatar_initials ?? null, avatar_color: avatar_color ?? null, avatar_url: avatar_url ?? null }
+    for (const container of [this.#anchorEl, this.#repliesEl]) {
+      if (!container) continue
+      for (const el of container.querySelectorAll(`[data-avatar-user="${CSS.escape(userId)}"]`)) {
+        applyAvatarToEl(el, avatarData, display_name ?? '')
+      }
+    }
+  }
+
   #makeReplyEl(reply) {
     const article = makeMessageEl(reply, {
       userId:        this.#model.userId,
       userHandle:    this.#model.userHandle,
       knownHandles:  this.#model.knownHandles,
       isThreadReply: true,
+      getAvatar:     uid => this.#model.getMemberAvatar(uid),
     })
     renderQuickPicksSlot(article.querySelector('.quick-picks'))
     if (reply.reactions?.length) {

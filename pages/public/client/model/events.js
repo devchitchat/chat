@@ -46,3 +46,6 @@ export const DMS_UPDATED           = 'dms-updated'            // { dmUnread }
 
 // ── Call ──────────────────────────────────────────────────────────────────────
 export const CALL_CHANGED          = 'call-changed'           // { call }
+
+// ── User profile ──────────────────────────────────────────────────────────────
+export const PROFILE_UPDATED       = 'profile-updated'        // { userId, avatar_initials, avatar_color, avatar_url, display_name }

@@ -123,7 +123,7 @@ export class AuthService {
     return {
       session_id: row.session_id,
       last_seen_at: lastSeenAt,
-      user: { user_id: row.user_id, handle: row.handle, display_name: row.display_name, roles: JSON.parse(row.roles_json) }
+      user: { user_id: row.user_id, handle: row.handle, display_name: row.display_name, roles: JSON.parse(row.roles_json), avatar_initials: row.avatar_initials ?? null, avatar_color: row.avatar_color ?? null, avatar_url: row.avatar_url ?? null }
     }
   }
 
@@ -173,7 +173,7 @@ export class AuthService {
   getUser(userId) {
     const row = this.authRepo.findUserById({ userId })
     if (!row) return null
-    return { user_id: row.user_id, handle: row.handle, display_name: row.display_name, roles: JSON.parse(row.roles_json) }
+    return { user_id: row.user_id, handle: row.handle, display_name: row.display_name, roles: JSON.parse(row.roles_json), avatar_initials: row.avatar_initials ?? null, avatar_color: row.avatar_color ?? null, avatar_url: row.avatar_url ?? null }
   }
 
   findInvite(inviteToken) {
@@ -182,11 +182,23 @@ export class AuthService {
 
   listUsersBasic() {
     return this.authRepo.listUsers().map(row => ({
-      user_id:      row.user_id,
-      handle:       row.handle,
-      display_name: row.display_name,
-      roles:        JSON.parse(row.roles_json),
+      user_id:         row.user_id,
+      handle:          row.handle,
+      display_name:    row.display_name,
+      roles:           JSON.parse(row.roles_json),
+      avatar_initials: row.avatar_initials ?? null,
+      avatar_color:    row.avatar_color    ?? null,
+      avatar_url:      row.avatar_url      ?? null,
     }))
+  }
+
+  updateAvatar(userId, { initials, color }) {
+    const trimmed = initials?.trim().slice(0, 3) || null
+    this.authRepo.updateUserAvatar({ userId, initials: trimmed, color: color ?? null })
+  }
+
+  updateAvatarUrl(userId, avatarUrl) {
+    this.authRepo.updateUserAvatarUrl({ userId, avatarUrl: avatarUrl ?? null })
   }
 
   getDefaultRoles() { return ['user'] }

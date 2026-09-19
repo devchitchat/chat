@@ -72,13 +72,13 @@ export class SqliteAuthRepository {
 
   findUserById({ userId }) {
     return this.db.prepare(
-      'SELECT user_id, handle, display_name, roles_json FROM users WHERE user_id = ?'
+      'SELECT user_id, handle, display_name, roles_json, avatar_initials, avatar_color, avatar_url FROM users WHERE user_id = ?'
     ).get(userId) ?? null
   }
 
   listUsers() {
     return this.db.prepare(
-      `SELECT user_id, handle, display_name, roles_json, created_at FROM users ORDER BY created_at ASC`
+      `SELECT user_id, handle, display_name, roles_json, created_at, avatar_initials, avatar_color, avatar_url FROM users ORDER BY created_at ASC`
     ).all()
   }
 
@@ -100,6 +100,14 @@ export class SqliteAuthRepository {
     this.db.prepare('UPDATE users SET display_name = ? WHERE user_id = ?').run(displayName, userId)
   }
 
+  updateUserAvatar({ userId, initials, color }) {
+    this.db.prepare('UPDATE users SET avatar_initials = ?, avatar_color = ? WHERE user_id = ?').run(initials ?? null, color ?? null, userId)
+  }
+
+  updateUserAvatarUrl({ userId, avatarUrl }) {
+    this.db.prepare('UPDATE users SET avatar_url = ? WHERE user_id = ?').run(avatarUrl ?? null, userId)
+  }
+
   getUserCount() {
     return this.db.prepare('SELECT COUNT(*) AS count FROM users').get()?.count ?? 0
   }
@@ -119,7 +127,8 @@ export class SqliteAuthRepository {
 
   findSessionWithUser({ tokenHash }) {
     return this.db.prepare(
-      `SELECT s.session_id, s.user_id, s.expires_at, s.revoked_at, u.handle, u.display_name, u.roles_json
+      `SELECT s.session_id, s.user_id, s.expires_at, s.revoked_at, s.last_seen_at,
+              u.handle, u.display_name, u.roles_json, u.avatar_initials, u.avatar_color, u.avatar_url
        FROM sessions s JOIN users u ON u.user_id = s.user_id
        WHERE s.token_hash = ?`
     ).get(tokenHash) ?? null

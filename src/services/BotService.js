@@ -64,12 +64,15 @@ export class BotService {
     const roles = JSON.parse(row.roles_json)
     if (!roles.includes('bot')) throw new ServiceError('NOT_FOUND', 'Bot not found')
     return {
-      user_id:      row.user_id,
-      handle:       row.handle,
-      display_name: row.display_name,
+      user_id:         row.user_id,
+      handle:          row.handle,
+      display_name:    row.display_name,
       roles,
-      tokens:       this.authRepo.listBotTokens({ userId }),
-      channels:     this._getBotChannels(userId),
+      avatar_initials: row.avatar_initials ?? null,
+      avatar_color:    row.avatar_color    ?? null,
+      avatar_url:      row.avatar_url      ?? null,
+      tokens:          this.authRepo.listBotTokens({ userId }),
+      channels:        this._getBotChannels(userId),
     }
   }
 

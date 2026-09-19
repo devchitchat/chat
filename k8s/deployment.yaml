@@ -34,7 +34,7 @@ spec:
       serviceAccountName: chat-web
       containers:
       - name: chat-web
-        image: local/chat-web:629f3b9-1789658406713
+        image: local/chat-web:6286111-1789838226653
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
@@ -93,7 +93,7 @@ spec:
         spec:
           containers:
           - name: backup
-            image: local/chat-web:629f3b9-1789658406713
+            image: local/chat-web:6286111-1789838226653
             workingDir: /app
             command:
             - sh

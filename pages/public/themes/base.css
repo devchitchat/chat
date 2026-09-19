@@ -735,6 +735,7 @@ details summary {
   flex-shrink: 0;
   user-select: none;
   margin-top: 2px;
+  overflow: hidden;
 }
 .message-handle {
   font-size: 14px;
@@ -2667,6 +2668,78 @@ details.hub-group[open] > .hub-group__summary::before {
 .tag--warn  { background: color-mix(in srgb, #f39c12 20%, transparent); color: #f39c12; }
 .tag--muted { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text-muted); }
 
+/* ── Admin: bot avatar ────────────────────────────────────────────────────── */
+.admin-avatar-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+/* Click-to-upload wrapper — same pattern as .you-avatar-wrap */
+.admin-avatar-clickwrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.admin-avatar-clickwrap::after {
+  content: 'Edit';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  background: transparent;
+  color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-avatar-clickwrap:hover::after {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+@media (hover: none) {
+  .admin-avatar-clickwrap::after {
+    background: rgba(0, 0, 0, 0.32);
+    color: #fff;
+  }
+}
+.admin-avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.admin-avatar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-avatar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.admin-avatar-colors {
+  flex-wrap: wrap;
+}
+
 .admin-channel-group {
   display: flex;
   flex-direction: column;
@@ -3600,7 +3673,12 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  cursor: pointer;
 }
+.you-avatar:hover { opacity: 0.85; }
 .you-identity {
   display: flex;
   align-items: center;
@@ -3609,6 +3687,121 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   border-bottom: 1px solid var(--border);
 }
 .you-identity-text { display: flex; flex-direction: column; gap: 2px; }
+
+/* ── Avatar image (shared by .msg-avatar, .you-avatar, etc.) ─────────────────── */
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* ── You sheet: avatar wrap (click-to-upload with Edit hint) ─────────────────── */
+.you-avatar-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+/* "Edit" hint — pseudo overlay on the avatar circle */
+.you-avatar-wrap::after {
+  content: 'Edit';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: transparent;
+  background: transparent;
+  pointer-events: none;
+  transition: background 0.15s, color 0.15s;
+}
+.you-avatar-wrap:hover::after {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+/* Always visible on touch screens */
+@media (hover: none) {
+  .you-avatar-wrap::after {
+    background: rgba(0, 0, 0, 0.32);
+    color: #fff;
+  }
+}
+
+/* ── You sheet: avatar controls (initials + colors) ──────────────────────────── */
+.you-avatar-controls {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.you-avatar-editor-initials-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.you-avatar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.you-avatar-initials {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.you-avatar-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.you-avatar-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.you-avatar-swatch:hover { transform: scale(1.15); }
+.you-avatar-swatch.selected { border-color: var(--text-primary); }
+.you-avatar-swatch--none {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  line-height: 1;
+}
+.you-avatar-file { display: none; }
+.you-avatar-remove {
+  background: none;
+  border: none;
+  color: var(--text-danger, #ed4245);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+  width: fit-content;
+}
+.you-avatar-remove:hover { text-decoration: underline; }
 
 /* ── Mobile: bottom nav shows; sidebar footer controls hide ─────────────────── */
 @media (max-width: 767px) {
@@ -3740,6 +3933,7 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   justify-content: center;
   flex-shrink: 0;
   user-select: none;
+  overflow: hidden;
 }
 
 .sidebar-user-info {

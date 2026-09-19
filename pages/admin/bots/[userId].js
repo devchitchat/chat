@@ -4,6 +4,8 @@ import { randomToken } from '../../../src/util/crypto.js'
 import { p } from '../../../src/config.js'
 import { storeTokenFlash, consumeTokenFlash } from '../../../src/util/tokenFlash.js'
 
+const SWATCH_COLORS = ['#5865f2', '#ed4245', '#57f287', '#fee75c', '#eb459e', '#e67e22', '#1abc9c', '#9b59b6']
+
 function getBotUserId(req) {
   return new URL(req.url).pathname.split('/').pop()
 }
@@ -36,10 +38,15 @@ export function GET(req) {
     sessions: allChannels.filter(c => c.kind === 'session').map(_entry),
   }
 
+  const botInitials = bot.avatar_initials
+    || (bot.display_name ?? bot.handle ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+
   return {
     user: session.user,
     pageTitle: `Admin — Bot: ${bot.handle}`,
     bot,
+    botInitials,
+    swatches: SWATCH_COLORS.map(c => ({ color: c, selected: c === (bot.avatar_color ?? '') })),
     createdToken,
     flash,
     tokens: bot.tokens.map(t => ({

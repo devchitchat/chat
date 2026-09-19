@@ -12,6 +12,36 @@
   <div class="admin-notice admin-notice--success">Saved.</div>
   {{/if}}
 
+  <section class="admin-section">
+    <h2>Avatar</h2>
+    <div class="admin-avatar-wrap">
+      <div class="admin-avatar-clickwrap" id="bot-avatar-clickwrap" title="Tap to change photo" aria-label="Change avatar photo" role="button" tabindex="0">
+        <div class="admin-avatar-preview" id="bot-avatar-preview" style="background:{{bot.avatar_color}}">
+          {{#if bot.avatar_url}}
+          <img src="{{bot.avatar_url}}" alt="" class="avatar-img">
+          {{else}}
+          {{botInitials}}
+          {{/if}}
+        </div>
+        <input type="file" id="bot-avatar-file" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+      </div>
+
+      <div class="admin-avatar-controls">
+        <div class="admin-avatar-row">
+          <label class="admin-avatar-label" for="bot-avatar-initials">Initials</label>
+          <input class="you-avatar-initials" id="bot-avatar-initials" type="text" maxlength="3" placeholder="AB" value="{{bot.avatar_initials}}" data-default-initials="{{botInitials}}" data-color="{{bot.avatar_color}}">
+        </div>
+        <div class="you-avatar-colors admin-avatar-colors" id="bot-avatar-colors" role="group" aria-label="Background color">
+          {{#each swatches}}
+          <button type="button" class="you-avatar-swatch {{#if selected}}selected{{/if}}" data-color="{{color}}" style="background:{{color}}" aria-label="{{color}}"></button>
+          {{/each}}
+          <button type="button" class="you-avatar-swatch you-avatar-swatch--none {{#unless bot.avatar_color}}selected{{/unless}}" data-color="" aria-label="Default color" title="Reset to default color">Auto</button>
+        </div>
+        <button class="btn-ghost btn-danger you-avatar-remove" id="bot-avatar-remove" {{#unless bot.avatar_url}}hidden{{/unless}}>Remove photo</button>
+      </div>
+    </div>
+  </section>
+
   {{#if createdToken}}
   <div class="admin-notice admin-notice--success">
     <strong>Token created.</strong> Copy it now — it will not be shown again:<br>
@@ -121,3 +151,110 @@
     </form>
   </section>
 </div>
+
+<script>
+{
+  const BASE      = window.__BASE_PATH__ ?? ''
+  const BOT_ID    = '{{bot.user_id}}'
+  const API       = `${BASE}/api/admin/bot-avatar/${encodeURIComponent(BOT_ID)}`
+
+  const clickwrap  = document.getElementById('bot-avatar-clickwrap')
+  const preview    = document.getElementById('bot-avatar-preview')
+  const initialsEl = document.getElementById('bot-avatar-initials')
+  const colorsEl   = document.getElementById('bot-avatar-colors')
+  const fileInput  = document.getElementById('bot-avatar-file')
+  const removeBtn  = document.getElementById('bot-avatar-remove')
+
+  // Clicking the avatar triggers the file picker
+  if (clickwrap) {
+    clickwrap.addEventListener('click', () => fileInput?.click())
+    clickwrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click() } })
+  }
+
+  let _color    = initialsEl?.dataset.color ?? ''
+  let _hasPhoto = !!(preview?.querySelector('img'))
+
+  function _applyPreview({ url, initials, color } = {}) {
+    if (!preview) return
+    const src  = url ?? null
+    const text = initials || initialsEl?.value.trim() || initialsEl?.dataset.defaultInitials || '?'
+    const bg   = color !== undefined ? color : _color
+    if (src) {
+      preview.innerHTML = `<img src="${src}" alt="" class="avatar-img">`
+      preview.style.background = ''
+    } else {
+      preview.textContent = text
+      preview.style.background = bg
+    }
+  }
+
+  function _syncRemoveBtn() {
+    if (removeBtn) removeBtn.hidden = !_hasPhoto
+  }
+
+  // Initials input — live preview + debounced save
+  let _initialsTimer = null
+  if (initialsEl) {
+    initialsEl.addEventListener('input', () => {
+      _applyPreview()
+      clearTimeout(_initialsTimer)
+      _initialsTimer = setTimeout(() => {
+        fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initials: initialsEl.value.trim() || null, color: _color || null }) }).catch(() => {})
+      }, 600)
+    })
+  }
+
+  // Color swatches — immediate preview + save, clears photo
+  if (colorsEl) {
+    colorsEl.addEventListener('click', e => {
+      const swatch = e.target.closest('.you-avatar-swatch')
+      if (!swatch) return
+      _color = swatch.dataset.color ?? ''
+      for (const sw of colorsEl.querySelectorAll('.you-avatar-swatch')) {
+        sw.classList.toggle('selected', sw === swatch)
+      }
+      if (_hasPhoto) {
+        _hasPhoto = false
+        _syncRemoveBtn()
+        fetch(API, { method: 'DELETE' }).catch(() => {})
+      }
+      _applyPreview()
+      fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initials: initialsEl?.value.trim() || null, color: _color || null }) }).catch(() => {})
+    })
+  }
+
+  // Photo upload
+  if (fileInput) {
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0]
+      if (!file) return
+      const formData = new FormData()
+      formData.append('file', file)
+      try {
+        const res = await fetch(API, { method: 'POST', body: formData })
+        if (res.ok) {
+          const { avatar_url } = await res.json()
+          _hasPhoto = true
+          _applyPreview({ url: avatar_url })
+          _syncRemoveBtn()
+        }
+      } catch { /* ignore */ }
+      fileInput.value = ''
+    })
+  }
+
+  // Remove photo
+  if (removeBtn) {
+    removeBtn.addEventListener('click', async () => {
+      try {
+        await fetch(API, { method: 'DELETE' })
+        _hasPhoto = false
+        _applyPreview()
+        _syncRemoveBtn()
+      } catch { /* ignore */ }
+    })
+  }
+}
+</script>

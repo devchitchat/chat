@@ -40,6 +40,11 @@ async function _setupServices(config = {}) {
   })
   chat.messageService.setUploadService(uploadService)
 
+  // Ensure avatar storage directory exists
+  await Bun.file('./data/avatars/.keep').exists().then(exists => {
+    if (!exists) return Bun.write('./data/avatars/.keep', '')
+  }).catch(() => {})
+
   initContext({
     auth: chat.auth,
     hubService: chat.hubService,
@@ -53,6 +58,7 @@ async function _setupServices(config = {}) {
     userSettingsService,
     uploadService,
     reactionService: chat.reactionService,
+    chatServer: chat,
     logger,
   })
 

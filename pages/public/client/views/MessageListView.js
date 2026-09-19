@@ -20,7 +20,7 @@
 import * as Ev from '../model/events.js'
 import {
   makeMessageEl, renderAttachment, escHtml,
-  utcDateKey, makeDateSeparator, applyInlineRenderingToTextNodes,
+  utcDateKey, makeDateSeparator, applyInlineRenderingToTextNodes, applyAvatarToEl,
 } from '../shared/messages.js'
 import { attachMessageInteractions, cancelActiveEdit } from './shared/MessageInteractions.js'
 import { renderQuickPicksSlot } from './shared/EmojiPickerSingleton.js'
@@ -67,6 +67,7 @@ export class MessageListView {
     m.addEventListener(Ev.LOADING_MORE_CHANGED, e => this.#onLoadingMoreChanged(e.detail))
     m.addEventListener(Ev.MEMBERS_UPDATED,     () => this.#reapplyMentions())
     m.addEventListener(Ev.THREAD_REPLY_ADDED,  e => this.#onThreadReplyAdded(e.detail))
+    m.addEventListener(Ev.PROFILE_UPDATED,     e => this.#onProfileUpdated(e.detail))
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -101,13 +102,21 @@ export class MessageListView {
 
       // Inject avatar if not already there
       if (!article.querySelector('.msg-avatar')) {
+        const msgUserId   = article.dataset.userId ?? ''
         const displayName = article.querySelector('.message-handle')?.textContent?.trim() ?? '?'
-        const initials = displayName.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
         const avatar = document.createElement('div')
         avatar.className = 'msg-avatar'
         avatar.setAttribute('aria-hidden', 'true')
-        avatar.textContent = initials
+        avatar.dataset.avatarUser = msgUserId
+        const avatarData = this.#model.getMemberAvatar(msgUserId)
+        applyAvatarToEl(avatar, avatarData, displayName)
         article.prepend(avatar)
+      } else {
+        // Backfill data-avatar-user attribute on SSR-rendered avatars
+        const avatarEl = article.querySelector('.msg-avatar')
+        if (avatarEl && !avatarEl.dataset.avatarUser && article.dataset.userId) {
+          avatarEl.dataset.avatarUser = article.dataset.userId
+        }
       }
 
       // DM trigger on non-self handles
@@ -262,6 +271,7 @@ export class MessageListView {
       userId:       this.#model.userId,
       userHandle:   this.#model.userHandle,
       knownHandles: this.#model.knownHandles,
+      getAvatar:    uid => this.#model.getMemberAvatar(uid),
     })
     _postProcess(article, message.reactions ?? [], message.msg_id)
     this.#el.appendChild(article)
@@ -278,6 +288,13 @@ export class MessageListView {
   #onMessageDeleted({ channelId, msgId }) {
     if (channelId !== this.#channelId) return
     this.#el.querySelector(`[data-msg-id="${msgId}"]`)?.remove()
+  }
+
+  #onProfileUpdated({ userId, avatar_initials, avatar_color, avatar_url, display_name }) {
+    const avatarData = { avatar_initials: avatar_initials ?? null, avatar_color: avatar_color ?? null, avatar_url: avatar_url ?? null }
+    for (const el of this.#el.querySelectorAll(`[data-avatar-user="${CSS.escape(userId)}"]`)) {
+      applyAvatarToEl(el, avatarData, display_name ?? '')
+    }
   }
 
   #onThreadReplyAdded({ parentMsgId }) {
@@ -352,6 +369,7 @@ function _buildMessageFragment(msgs, model) {
       userId:       model.userId,
       userHandle:   model.userHandle,
       knownHandles: model.knownHandles,
+      getAvatar:    uid => model.getMemberAvatar(uid),
     })
     _postProcess(article, msg.reactions ?? [], msg.msg_id)
     fragment.appendChild(article)
