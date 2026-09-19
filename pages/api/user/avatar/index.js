@@ -37,6 +37,26 @@ export async function POST(req) {
   const userId = await _resolveUserId(req)
   if (!userId) return new Response('Unauthorized', { status: 401 })
 
+  const ct = req.headers.get('content-type') ?? ''
+
+  // JSON: set initials and/or color (merged — omitted fields keep their current value).
+  if (ct.includes('application/json')) {
+    let body
+    try { body = await req.json() } catch {
+      return new Response('Bad Request', { status: 400 })
+    }
+    const current  = auth.getUser(userId)
+    const initials = 'initials' in body ? (body.initials?.trim().slice(0, 3) || null) : (current?.avatar_initials ?? null)
+    const color    = 'color'    in body ? (body.color?.trim() || null)                : (current?.avatar_color    ?? null)
+    auth.updateAvatar(userId, { initials, color })
+    const updated = auth.getUser(userId)
+    chatServer?.broadcastToAll?.({
+      t: 'user.profile_updated', ok: true,
+      body: { user_id: userId, avatar_initials: updated?.avatar_initials ?? null, avatar_color: updated?.avatar_color ?? null, avatar_url: updated?.avatar_url ?? null, display_name: updated?.display_name ?? null }
+    })
+    return Response.json({ ok: true }, { status: 200 })
+  }
+
   let formData
   try {
     formData = await req.formData()
