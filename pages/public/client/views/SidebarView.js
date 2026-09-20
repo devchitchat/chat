@@ -361,7 +361,7 @@ export class SidebarView {
       } else if (section === 'sessions') {
         isTouch()
           ? document.dispatchEvent(new CustomEvent('open-session-create'))
-          : _openCreateSessionModal(ws)
+          : _openCreateSessionModal(ws, model)
       } else if (section === 'dms') {
         _openNewDmSheet(ws, model)
       }
@@ -377,7 +377,7 @@ export class SidebarView {
         if (!channelId) return
         const ch = _findChannel(model.channels, channelId)
         _showSidebarPopover(e, [
-          { label: 'Edit channel', action: () => _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws) },
+          { label: 'Edit channel', action: () => _openChannelModal(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ch?.kind ?? 'text', ws, model) },
           { label: 'Delete channel', danger: true, action: () => ws.send({ t: 'channel.delete', body: { channel_id: channelId } }) },
         ])
       })
@@ -392,7 +392,7 @@ export class SidebarView {
         const channelId = link.dataset.channelId
         if (!channelId) return
         const ch = _findChannel(model.channels, channelId)
-        _openChannelSheet(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ws)
+        _openChannelSheet(channelId, ch?.name ?? '', ch?.topic ?? null, ch?.visibility ?? 'public', ch?.kind ?? 'text', ws, model)
       })
     }
   }
@@ -632,7 +632,7 @@ function _findChannel(channels, channelId) {
 // Member management (shared by channel forms)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _loadMembers(membersEl, { channelId, ws }) {
+function _loadMembers(membersEl, { channelId, ws, model }) {
   membersEl.innerHTML = `
     <div class="member-list-wrap"></div>
     <div class="member-add-row">
@@ -645,6 +645,7 @@ function _loadMembers(membersEl, { channelId, ws }) {
   const searchInput = addRow.querySelector('.member-add-search')
 
   let allUsers = null
+  const allBots = model?.bots ?? []
   let members  = null
   let filtered       = []
   let selectedUserId = null
@@ -701,7 +702,7 @@ function _loadMembers(membersEl, { channelId, ws }) {
     }
     if (!selectedUserId) return
     ws.send({ t: 'channel.add_member', body: { channel_id: channelId, user_id: selectedUserId } })
-    const user = allUsers.find(u => u.user_id === selectedUserId)
+    const user = [...allUsers, ...allBots].find(u => u.user_id === selectedUserId)
     if (user) members = [...members, { user_id: selectedUserId, display_name: user.display_name, handle: user.handle }]
     selectedUserId = null
     searchInput.value = ''
@@ -712,16 +713,16 @@ function _loadMembers(membersEl, { channelId, ws }) {
 
   function render() {
     if (!allUsers || !members) return
-    const humanIds  = new Set(allUsers.map(u => u.user_id))
-    const humans    = members.filter(m => humanIds.has(m.user_id))
-    const memberIds = new Set(humans.map(m => m.user_id))
-    available = allUsers.filter(u => !memberIds.has(u.user_id))
+    const everyone  = [...allUsers, ...allBots]
+    const memberIds = new Set(members.map(m => m.user_id))
+    available = everyone.filter(u => !memberIds.has(u.user_id))
 
-    listWrap.innerHTML = humans.length
-      ? `<ul class="member-list">${humans.map(m => `
+    const myId = model?.userId
+    listWrap.innerHTML = members.length
+      ? `<ul class="member-list">${members.map(m => `
           <li class="member-item">
             <span class="member-name">${escHtml(m.display_name ?? m.handle ?? m.user_id)}</span>
-            <button class="btn-ghost btn-sm" type="button" data-remove-user="${escHtml(m.user_id)}">Remove</button>
+            ${m.user_id !== myId ? `<button class="btn-ghost btn-sm" type="button" data-remove-user="${escHtml(m.user_id)}">Remove</button>` : '<span style="font-size:12px;color:var(--text-muted)">(you)</span>'}
           </li>`).join('')}</ul>`
       : `<p style="font-size:13px;color:var(--text-muted);margin:0 0 8px">No members yet.</p>`
 
@@ -756,25 +757,30 @@ function _loadMembers(membersEl, { channelId, ws }) {
 // Admin form builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _buildChannelForm(container, { channelId, channelName, channelTopic, channelVisibility, ws, dismiss }) {
+function _buildChannelForm(container, { channelId, channelName, channelTopic, channelVisibility, channelKind, ws, model, dismiss }) {
   const currentVisibility = channelVisibility ?? 'public'
+  const isSession = channelKind === 'session'
+  // Sessions always show the members section; regular channels show it only for private
+  const showMembersInitially = isSession || currentVisibility === 'private'
+
   container.innerHTML = `
     <div class="field">
-      <label for="ch-name-input">Channel name</label>
+      <label for="ch-name-input">${isSession ? 'Session name' : 'Channel name'}</label>
       <input id="ch-name-input" type="text" value="${escHtml(channelName)}" maxlength="80" autocomplete="off">
     </div>
     <div class="field">
       <label for="ch-topic-input">Topic <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
       <input id="ch-topic-input" type="text" value="${escHtml(channelTopic ?? '')}" maxlength="240" autocomplete="off">
     </div>
+    ${isSession ? '' : `
     <div class="field">
       <label for="ch-visibility-input">Visibility</label>
       <select id="ch-visibility-input">
         <option value="public"  ${currentVisibility === 'public'  ? 'selected' : ''}>Public</option>
         <option value="private" ${currentVisibility === 'private' ? 'selected' : ''}>Private</option>
       </select>
-    </div>
-    <div class="field" id="ch-members-field" style="${currentVisibility === 'public' ? 'display:none' : ''}">
+    </div>`}
+    <div class="field" id="ch-members-field"${showMembersInitially ? '' : ' style="display:none"'}>
       <label>Members</label>
       <div id="ch-members-container" style="min-height:32px;font-size:13px;color:var(--text-muted)">Loading…</div>
     </div>
@@ -783,22 +789,24 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
       <button class="btn-primary" id="ch-save-btn" type="button">Save</button>
     </div>
     <div class="modal-danger-zone">
-      <p>Deleting this channel removes all its messages permanently.</p>
-      <button class="btn-danger" id="ch-delete-btn" type="button">Delete channel</button>
+      <p>Deleting this ${isSession ? 'session' : 'channel'} removes all its messages permanently.</p>
+      <button class="btn-danger" id="ch-delete-btn" type="button">Delete ${isSession ? 'session' : 'channel'}</button>
     </div>`
 
   const chVisibilitySelect = container.querySelector('#ch-visibility-input')
   const chMembersField     = container.querySelector('#ch-members-field')
-  let chMembersLoaded      = currentVisibility === 'private'
+  let chMembersLoaded      = showMembersInitially
 
-  chVisibilitySelect.addEventListener('change', () => {
-    const isPrivate = chVisibilitySelect.value === 'private'
-    chMembersField.style.display = isPrivate ? '' : 'none'
-    if (isPrivate && !chMembersLoaded) {
-      chMembersLoaded = true
-      _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws })
-    }
-  })
+  if (chVisibilitySelect) {
+    chVisibilitySelect.addEventListener('change', () => {
+      const isPrivate = chVisibilitySelect.value === 'private'
+      chMembersField.style.display = isPrivate ? '' : 'none'
+      if (isPrivate && !chMembersLoaded) {
+        chMembersLoaded = true
+        _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws, model })
+      }
+    })
+  }
 
   container.querySelector('#ch-cancel-btn').addEventListener('click', dismiss)
   container.querySelector('#ch-save-btn').addEventListener('click', () => {
@@ -807,7 +815,7 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     ws.send({ t: 'channel.update', body: {
       channel_id: channelId, name,
       topic:      container.querySelector('#ch-topic-input').value.trim() || null,
-      visibility: chVisibilitySelect.value,
+      visibility: chVisibilitySelect?.value ?? currentVisibility,
     } })
     dismiss()
   })
@@ -815,8 +823,8 @@ function _buildChannelForm(container, { channelId, channelName, channelTopic, ch
     ws.send({ t: 'channel.delete', body: { channel_id: channelId } })
     dismiss()
   })
-  if (currentVisibility === 'private') {
-    _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws })
+  if (showMembersInitially) {
+    _loadMembers(container.querySelector('#ch-members-container'), { channelId, ws, model })
   }
   requestAnimationFrame(() => container.querySelector('#ch-name-input')?.focus())
 }
@@ -858,7 +866,9 @@ function _buildCreateChannelForm(container, { visibility, ws, dismiss }) {
   requestAnimationFrame(() => container.querySelector('#new-ch-name')?.focus())
 }
 
-function _buildCreateSessionForm(container, { ws, dismiss }) {
+function _buildCreateSessionForm(container, { ws, model, dismiss }) {
+  let selectedIds = []
+
   container.innerHTML = `
     <div class="field">
       <label for="new-ses-name">Session name</label>
@@ -868,23 +878,88 @@ function _buildCreateSessionForm(container, { ws, dismiss }) {
       <label for="new-ses-topic">Purpose <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
       <input id="new-ses-topic" type="text" maxlength="240" autocomplete="off">
     </div>
+    <div class="field">
+      <label for="new-ses-members">Members <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <div class="session-members-picker">
+        <input id="new-ses-members" class="session-create-input" type="text" placeholder="Search people and bots…" autocomplete="off">
+        <ul class="session-members-list" id="new-ses-members-list"></ul>
+        <ul class="session-selected-members" id="new-ses-selected"></ul>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="new-ses-cancel" type="button">Cancel</button>
       <button class="btn-primary" id="new-ses-save" type="button">Start session</button>
     </div>`
+
+  const membersInput = container.querySelector('#new-ses-members')
+  const membersList  = container.querySelector('#new-ses-members-list')
+  const selectedList = container.querySelector('#new-ses-selected')
+
+  function renderCandidates() {
+    const q        = membersInput.value.toLowerCase().trim()
+    const myId     = model?.userId
+    const everyone = [...(model?.members ?? []), ...(model?.bots ?? [])].filter(m => m.user_id !== myId)
+    const candidates = q
+      ? everyone.filter(m =>
+          !selectedIds.includes(m.user_id) &&
+          (m.display_name?.toLowerCase().includes(q) || m.handle?.toLowerCase().includes(q))
+        ).slice(0, 8)
+      : everyone.filter(m => !selectedIds.includes(m.user_id)).slice(0, 20)
+    membersList.innerHTML = candidates.map(m => {
+      const initials = (m.display_name ?? m.handle ?? '?').split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+      return `<li class="session-member-option" data-user-id="${escHtml(m.user_id)}" data-name="${escHtml(m.display_name ?? m.handle ?? '')}">
+        <div class="session-member-avatar">${escHtml(initials)}</div>
+        <span>${escHtml(m.display_name ?? m.handle ?? '')}</span>
+      </li>`
+    }).join('')
+  }
+
+  function renderSelected() {
+    const everyone = [...(model?.members ?? []), ...(model?.bots ?? [])]
+    selectedList.innerHTML = selectedIds.map(uid => {
+      const m    = everyone.find(x => x.user_id === uid)
+      const name = m?.display_name ?? m?.handle ?? uid
+      return `<li class="session-selected-chip" data-user-id="${escHtml(uid)}">
+        ${escHtml(name)}
+        <button class="session-chip-remove" type="button" data-user-id="${escHtml(uid)}" aria-label="Remove">✕</button>
+      </li>`
+    }).join('')
+    selectedList.querySelectorAll('.session-chip-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedIds = selectedIds.filter(id => id !== btn.dataset.userId)
+        renderSelected()
+        renderCandidates()
+      })
+    })
+  }
+
+  membersInput.addEventListener('focus', renderCandidates)
+  membersInput.addEventListener('input', renderCandidates)
+  membersList.addEventListener('click', e => {
+    const li = e.target.closest('.session-member-option')
+    if (!li) return
+    const userId = li.dataset.userId
+    if (!userId || selectedIds.includes(userId)) return
+    selectedIds.push(userId)
+    membersInput.value = ''
+    membersList.innerHTML = ''
+    renderSelected()
+  })
+
   container.querySelector('#new-ses-cancel').addEventListener('click', dismiss)
   container.querySelector('#new-ses-save').addEventListener('click', () => {
     const name = container.querySelector('#new-ses-name').value.trim()
     if (!name) return
     ws.send({ t: 'channel.create', body: {
-      kind:  'session',
+      kind:       'session',
       name,
-      topic: container.querySelector('#new-ses-topic').value.trim() || null,
+      topic:      container.querySelector('#new-ses-topic').value.trim() || null,
       visibility: 'public',
+      member_ids: selectedIds,
     } })
     dismiss()
   })
-  requestAnimationFrame(() => container.querySelector('#new-ses-name')?.focus())
+  requestAnimationFrame(() => { container.querySelector('#new-ses-name')?.focus(); renderCandidates() })
 }
 
 function _openNewDmSheet(ws, model) {
@@ -900,7 +975,7 @@ function _openNewDmSheet(ws, model) {
 
 function _buildDmPicker(container, { ws, model, dismiss }) {
   const myId   = model.userId
-  const members = (model.members ?? []).filter(m => m.user_id !== myId)
+  const members = [...(model.members ?? []), ...(model.bots ?? [])].filter(m => m.user_id !== myId)
 
   container.innerHTML = `
     <div class="dm-picker-search-row">
@@ -1001,17 +1076,18 @@ function _showSidebarPopover(mouseEvent, items) {
 function _openCreateChannelModal(visibility, ws) {
   showModal({ title: 'New channel', build: body => _buildCreateChannelForm(body, { visibility, ws, dismiss: dismissModal }) })
 }
-function _openCreateSessionModal(ws) {
-  showModal({ title: 'New session', build: body => _buildCreateSessionForm(body, { ws, dismiss: dismissModal }) })
+function _openCreateSessionModal(ws, model) {
+  showModal({ title: 'New session', build: body => _buildCreateSessionForm(body, { ws, model, dismiss: dismissModal }) })
 }
-function _openChannelModal(channelId, channelName, channelTopic, channelVisibility, ws) {
-  showModal({ title: 'Channel settings', build: body => _buildChannelForm(body, { channelId, channelName, channelTopic, channelVisibility, ws, dismiss: dismissModal }) })
+function _openChannelModal(channelId, channelName, channelTopic, channelVisibility, channelKind, ws, model) {
+  const title = channelKind === 'session' ? 'Session settings' : 'Channel settings'
+  showModal({ title, build: body => _buildChannelForm(body, { channelId, channelName, channelTopic, channelVisibility, channelKind, ws, model, dismiss: dismissModal }) })
 }
-function _openChannelSheet(channelId, channelName, channelTopic, channelVisibility, ws) {
+function _openChannelSheet(channelId, channelName, channelTopic, channelVisibility, channelKind, ws, model) {
   showActionSheet({ label: channelName, items: [
     { label: 'Edit channel', action: () => {
       showActionSheet({ label: 'Edit channel', items: [] })
-      _buildChannelForm(getItemsContainer(), { channelId, channelName, channelTopic, channelVisibility, ws, dismiss: dismissSheet })
+      _buildChannelForm(getItemsContainer(), { channelId, channelName, channelTopic, channelVisibility, channelKind, ws, model, dismiss: dismissSheet })
     }},
     { label: 'Delete channel', danger: true, action: () => {
       showActionSheet({ label: `Delete "#${channelName}"?`, items: [

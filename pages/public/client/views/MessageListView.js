@@ -282,7 +282,7 @@ export class MessageListView {
     if (channelId !== this.#channelId) return
     const article = this.#el.querySelector(`[data-msg-id="${message.msg_id}"]`)
     if (!article) return
-    _applyMessageUpdate(article, message)
+    _applyMessageUpdate(article, message, { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles })
   }
 
   #onMessageDeleted({ channelId, msgId }) {
@@ -470,7 +470,7 @@ function _addThreadRepliesLink(article) {
 /**
  * Apply a message update (edit) to an article element.
  */
-function _applyMessageUpdate(article, message) {
+function _applyMessageUpdate(article, message, { userHandle, knownHandles } = {}) {
   if (message.text !== undefined) {
     article.dataset.rawText = message.text
   }
@@ -479,6 +479,7 @@ function _applyMessageUpdate(article, message) {
     if (textEl) {
       const html = message.rendered_text ?? escHtml(message.text ?? '')
       textEl.innerHTML = _sanitize(html)
+      applyInlineRenderingToTextNodes(textEl, { userHandle, knownHandles })
       _enableTaskCheckboxes(article)
     }
   }

@@ -9,7 +9,7 @@ import { unlinkSync } from 'node:fs'
 import { requireAdminSession } from '../../../../src/adminAuth.js'
 import { auth, chatServer } from '../../../../src/context.js'
 
-const AVATARS_DIR = './data/avatars'
+const AVATARS_DIR = process.env.AVATARS_DIR ?? './data/avatars'
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
 const MAX_BYTES = 5 * 1024 * 1024
 

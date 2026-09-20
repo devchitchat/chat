@@ -2,7 +2,7 @@
  * GET /api/user/avatar/:userId — serve the user's profile photo
  */
 
-const AVATARS_DIR = './data/avatars'
+const AVATARS_DIR = process.env.AVATARS_DIR ?? './data/avatars'
 
 export async function GET(req) {
   const parts = new URL(req.url).pathname.split('/')

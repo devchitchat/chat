@@ -8,7 +8,7 @@
 import { unlinkSync } from 'node:fs'
 import { sessionFromRequest, botUserFromRequest, auth, chatServer } from '../../../../src/context.js'
 
-const AVATARS_DIR = './data/avatars'
+const AVATARS_DIR = process.env.AVATARS_DIR ?? './data/avatars'
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
 const MAX_BYTES = 5 * 1024 * 1024  // 5 MB
 

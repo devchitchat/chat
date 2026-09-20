@@ -214,7 +214,11 @@
   <div class="session-banner{{#if isSessionEnded}} session-banner--ended{{/if}}" id="session-banner">
     <div class="session-banner-members" id="session-banner-members">
       {{#each sessionMembers}}
-      <div class="session-avatar" title="{{display_name}}" style="background: var(--accent)">{{initials}}</div>
+      {{#if avatar_url}}
+      <div class="session-avatar" data-user-id="{{user_id}}" title="{{display_name}}"><img src="{{avatar_url}}" class="avatar-img" alt="{{display_name}}"></div>
+      {{else}}
+      <div class="session-avatar" data-user-id="{{user_id}}" title="{{display_name}}" style="background:{{#if avatar_color}}{{avatar_color}}{{else}}var(--accent){{/if}}">{{initials}}</div>
+      {{/if}}
       {{/each}}
     </div>
     <div class="session-banner-info">

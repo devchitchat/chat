@@ -48,6 +48,10 @@ export class WebSocketController {
       if (channelId) ws.send({ t: 'channel.join', body: { channel_id: channelId } })
     })
 
+    ws.on('error', ({ code, message }) => {
+      console.warn('[ws error]', code, message)
+    })
+
     ws.on('channel.joined', ({ channel_id }) => {
       // Request users/bots for mention picker if not yet loaded
       if (model.members.length === 0) {
@@ -232,6 +236,15 @@ export class WebSocketController {
     // ── Search ─────────────────────────────────────────────────────────────
     ws.on('search.global_result', ({ q, hits }) => {
       document.dispatchEvent(new CustomEvent('search:global_result', { detail: { q, hits: hits ?? [] } }))
+    })
+
+    // ── Channel membership ─────────────────────────────────────────────────
+    ws.on('channel.member_added', (body) => {
+      document.dispatchEvent(new CustomEvent('channel:member_added', { detail: body }))
+    })
+
+    ws.on('channel.member_removed', ({ channel_id, user_id }) => {
+      document.dispatchEvent(new CustomEvent('channel:member_removed', { detail: { channelId: channel_id, userId: user_id } }))
     })
 
     // ── Session ────────────────────────────────────────────────────────────

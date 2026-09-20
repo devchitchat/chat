@@ -61,6 +61,20 @@ export async function navigateTo(url, scroll) {
       currMessages.innerHTML = nextMessages.innerHTML
     }
 
+    // 2b. Replace session banner (only present for session channels)
+    const currBanner = currPanel.querySelector('#session-banner')
+    const nextBanner = nextPanel.querySelector('#session-banner')
+    if (nextBanner) {
+      const clone = nextBanner.cloneNode(true)
+      if (currBanner) {
+        currBanner.replaceWith(clone)
+      } else {
+        currMessages?.before(clone)
+      }
+    } else if (currBanner) {
+      currBanner.remove()
+    }
+
     // 3. Notify the existing island — it will leave the old channel and join the new one
     const d = currPanel.dataset
     document.dispatchEvent(new CustomEvent('chatpanel:navigated', {

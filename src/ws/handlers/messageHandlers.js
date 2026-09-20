@@ -1,7 +1,7 @@
 /**
  * Message, search, and presence WS handlers.
  */
-import { renderMarkdown } from '@devchitchat/index97/markdown'
+import { renderMarkdown } from '../../markdown.js'
 
 /**
  * Auto-join a public channel on first message send if the user is not yet a member.

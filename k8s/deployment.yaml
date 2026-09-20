@@ -34,7 +34,7 @@ spec:
       serviceAccountName: chat-web
       containers:
       - name: chat-web
-        image: local/chat-web:6286111-1789838226653
+        image: local/chat-web:8f27bf6-1789942749820
         imagePullPolicy: IfNotPresent
         env:
         - name: PORT
@@ -45,6 +45,8 @@ spec:
           value: "/var/lib/chat/chat.db"
         - name: UPLOAD_DIR
           value: "/var/lib/chat/uploads"
+        - name: AVATARS_DIR
+          value: "/var/lib/chat/avatars"
         - name: VAPID_PUBLIC_KEY
           valueFrom:
             secretKeyRef:
@@ -93,7 +95,7 @@ spec:
         spec:
           containers:
           - name: backup
-            image: local/chat-web:6286111-1789838226653
+            image: local/chat-web:8f27bf6-1789942749820
             workingDir: /app
             command:
             - sh

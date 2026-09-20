@@ -155,11 +155,15 @@ export function handleChannelReorder(ws, msg, ctx) {
 }
 
 export function handleChannelAddMember(ws, msg, ctx) {
-  const { auth, channelService, sendWs, subscribeUserToChannel } = ctx
+  const { auth, channelService, sendWs, publishChannel, subscribeUserToChannel } = ctx
   const { channel_id, user_id } = msg.body || {}
   const user = auth.getUser(ws.data.userId)
   const result = channelService.addMember({ channelId: channel_id, requestingUserId: ws.data.userId, requestingRoles: user?.roles || [], targetUserId: user_id })
-  sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body: result })
+  // Include the added user's profile so clients can render their avatar without a round-trip
+  const addedUser = auth.getUser(user_id)
+  const body = { ...result, display_name: addedUser?.display_name ?? null, handle: addedUser?.handle ?? null, avatar_initials: addedUser?.avatar_initials ?? null, avatar_color: addedUser?.avatar_color ?? null, avatar_url: addedUser?.avatar_url ?? null }
+  sendWs(ws, { t: 'channel.member_added', reply_to: msg.id, ok: true, body })
+  publishChannel(channel_id, { t: 'channel.member_added', ok: true, body })
 
   // Subscribe the target user's active connections to the channel topic immediately.
   // For bots this is the only way they learn about the new channel at runtime;

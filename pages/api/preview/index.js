@@ -8,7 +8,7 @@
  * Returns: { html: string }
  */
 import { sessionFromRequest } from '../../../src/context.js'
-import { renderMarkdown } from '@devchitchat/index97/markdown'
+import { renderMarkdown } from '../../../src/markdown.js'
 
 export async function POST(req) {
   const session = sessionFromRequest(req)

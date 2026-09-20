@@ -1,5 +1,5 @@
 import { sessionFromRequest, channelService, messageService, reactionService, auth, logger } from '../../src/context.js'
-import { renderMarkdown } from '@devchitchat/index97/markdown'
+import { renderMarkdown } from '../../src/markdown.js'
 import { p, BASE_PATH } from '../../src/config.js'
 
 function sanitizeForFrontEnd(html) {
@@ -80,12 +80,15 @@ export async function GET(req) {
     const rawMembers = channelService.listChannelMembers(channelId)
     sessionMembers = rawMembers.map(m => {
       const u = auth.getUser(m.user_id)
+      const computedInitials = (u?.display_name ?? m.user_id).split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
       return {
-        user_id: m.user_id,
+        user_id:      m.user_id,
         display_name: u?.display_name ?? m.user_id,
-        handle: u?.handle ?? '',
-        role: m.role,
-        initials: (u?.display_name ?? m.user_id).split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+        handle:       u?.handle ?? '',
+        role:         m.role,
+        initials:     u?.avatar_initials || computedInitials,
+        avatar_color: u?.avatar_color || '',
+        avatar_url:   u?.avatar_url || null,
       }
     })
     const ownerMember = rawMembers.find(m => m.role === 'owner')

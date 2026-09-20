@@ -663,15 +663,6 @@ document.addEventListener('join-channel', () => {
 // ── 8e. Session End button ────────────────────────────────────────────────────
 // (Session banner ended state is now managed by SessionBannerView — see section 7c)
 
-const btnEndSession = document.getElementById('btn-end-session')
-if (btnEndSession) {
-  btnEndSession.addEventListener('click', () => {
-    const channelId = btnEndSession.dataset.channelId ?? model.currentChannelId
-    if (!channelId) return
-    if (!confirm('End this session? Members will no longer be able to send messages.')) return
-    document.dispatchEvent(new CustomEvent('session-end', { detail: { channelId } }))
-  })
-}
 
 // ── 8f. Call toast (incoming call notification) ───────────────────────────────
 
@@ -737,7 +728,6 @@ function openSessionCreateSheet() {
   _sessionSelectedIds = []
   if (sessionNameInput) sessionNameInput.value = ''
   if (sessionMembersInput) sessionMembersInput.value = ''
-  if (sessionMembersList) sessionMembersList.innerHTML = ''
   if (sessionSelectedList) sessionSelectedList.innerHTML = ''
   sessionCreateBackdrop.hidden = false
   sessionCreateSheet.hidden    = false
@@ -745,7 +735,7 @@ function openSessionCreateSheet() {
     sessionCreateBackdrop.classList.add('visible')
     sessionCreateSheet.classList.add('visible')
   })
-  setTimeout(() => sessionNameInput?.focus(), 320)
+  setTimeout(() => { sessionNameInput?.focus(); _renderSessionCandidates() }, 320)
 }
 
 function closeSessionCreateSheet() {
@@ -762,23 +752,28 @@ if (sessionCreateCancel) sessionCreateCancel.addEventListener('click', closeSess
 if (sessionCreateBackdrop) sessionCreateBackdrop.addEventListener('click', closeSessionCreateSheet)
 
 // Member search in session create sheet
+function _renderSessionCandidates() {
+  if (!sessionMembersList) return
+  const q = sessionMembersInput?.value.toLowerCase().trim() ?? ''
+  const everyone = [...model.members, ...model.bots]
+  const candidates = q
+    ? everyone.filter(m =>
+        !_sessionSelectedIds.includes(m.user_id) &&
+        (m.display_name?.toLowerCase().includes(q) || m.handle?.toLowerCase().includes(q))
+      ).slice(0, 8)
+    : everyone.filter(m => !_sessionSelectedIds.includes(m.user_id)).slice(0, 20)
+  sessionMembersList.innerHTML = candidates.map(m => {
+    const initials = (m.display_name ?? m.handle).split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+    return `<li class="session-member-option" data-user-id="${_escHtml(m.user_id)}" data-name="${_escHtml(m.display_name ?? m.handle)}">
+      <div class="session-member-avatar">${_escHtml(initials)}</div>
+      <span>${_escHtml(m.display_name ?? m.handle)}</span>
+    </li>`
+  }).join('')
+}
+
 if (sessionMembersInput) {
-  sessionMembersInput.addEventListener('input', () => {
-    const q = sessionMembersInput.value.toLowerCase().trim()
-    if (!sessionMembersList) return
-    if (!q) { sessionMembersList.innerHTML = ''; return }
-    const candidates = model.members.filter(m =>
-      !_sessionSelectedIds.includes(m.user_id) &&
-      (m.display_name?.toLowerCase().includes(q) || m.handle?.toLowerCase().includes(q))
-    ).slice(0, 8)
-    sessionMembersList.innerHTML = candidates.map(m => {
-      const initials = (m.display_name ?? m.handle).split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase()
-      return `<li class="session-member-option" data-user-id="${_escHtml(m.user_id)}" data-name="${_escHtml(m.display_name ?? m.handle)}">
-        <div class="session-member-avatar">${_escHtml(initials)}</div>
-        <span>${_escHtml(m.display_name ?? m.handle)}</span>
-      </li>`
-    }).join('')
-  })
+  sessionMembersInput.addEventListener('focus', _renderSessionCandidates)
+  sessionMembersInput.addEventListener('input', _renderSessionCandidates)
   sessionMembersList?.addEventListener('click', e => {
     const li = e.target.closest('.session-member-option')
     if (!li) return
@@ -794,7 +789,7 @@ if (sessionMembersInput) {
 function _renderSelectedMembers() {
   if (!sessionSelectedList) return
   sessionSelectedList.innerHTML = _sessionSelectedIds.map(uid => {
-    const m = model.members.find(x => x.user_id === uid)
+    const m = model.members.find(x => x.user_id === uid) ?? model.bots.find(x => x.user_id === uid)
     const name = m?.display_name ?? m?.handle ?? uid
     return `<li class="session-selected-chip" data-user-id="${_escHtml(uid)}">
       ${_escHtml(name)}

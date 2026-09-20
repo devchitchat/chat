@@ -22,7 +22,7 @@
  */
 
 import * as Ev from '../model/events.js'
-import { makeMessageEl, escHtml, utcDateKey, makeDateSeparator, applyAvatarToEl } from '../shared/messages.js'
+import { makeMessageEl, escHtml, utcDateKey, makeDateSeparator, applyAvatarToEl, applyInlineRenderingToTextNodes } from '../shared/messages.js'
 import { attachMessageInteractions } from './shared/MessageInteractions.js'
 import { renderReactionBar } from './MessageListView.js'
 import { renderQuickPicksSlot } from './shared/EmojiPickerSingleton.js'
@@ -189,7 +189,10 @@ export class ThreadPanelView {
     if (reply.text !== undefined) article.dataset.rawText = reply.text
     if (reply.rendered_text !== undefined || reply.text !== undefined) {
       const textEl = article.querySelector('.message-text')
-      if (textEl) textEl.innerHTML = _sanitize(reply.rendered_text ?? escHtml(reply.text ?? ''))
+      if (textEl) {
+        textEl.innerHTML = _sanitize(reply.rendered_text ?? escHtml(reply.text ?? ''))
+        applyInlineRenderingToTextNodes(textEl, { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles })
+      }
     }
     if (reply.edited_at) {
       article.dataset.editedAt = reply.edited_at
@@ -220,6 +223,7 @@ export class ThreadPanelView {
     const textEl = this.#anchorEl.querySelector('.message-text')
     if (textEl && (message.rendered_text !== undefined || message.text !== undefined)) {
       textEl.innerHTML = _sanitize(message.rendered_text ?? escHtml(message.text ?? ''))
+      applyInlineRenderingToTextNodes(textEl, { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles })
     }
   }
 
