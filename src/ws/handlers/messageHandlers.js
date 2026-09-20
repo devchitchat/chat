@@ -43,7 +43,7 @@ export function handleMsgSend(ws, msg, ctx) {
   sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id, priority: result.priority } })
 
   const eventBody = {
-    msg_id: result.msg_id, channel_id, seq: result.seq,
+    msg_id: result.msg_id, channel_id, channel_kind: channel?.kind ?? null, seq: result.seq,
     user_id: ws.data.userId, user_display_name: ws.data.displayName,
     ts: result.ts, text, rendered_text: renderMarkdown(text).html,
     priority: result.priority, attachments: result.attachments ?? [],

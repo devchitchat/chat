@@ -58,6 +58,7 @@ async function _setupServices(config = {}) {
     userSettingsService,
     uploadService,
     reactionService: chat.reactionService,
+    tokenUsageService: chat.tokenUsageService,
     chatServer: chat,
     logger,
   })

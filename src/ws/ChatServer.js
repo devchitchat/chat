@@ -23,10 +23,13 @@ import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThr
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcStreamRemoved, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
 import { handleReactionAdd, handleReactionRemove } from './handlers/reactionHandlers.js'
+import { handleUsageReport } from './handlers/usageHandlers.js'
 import { WebPushService } from '../services/WebPushService.js'
 import { SqlitePushRepository } from '../adapters/SqlitePushRepository.js'
 import { SqliteReactionRepository } from '../adapters/SqliteReactionRepository.js'
 import { ReactionService } from '../services/ReactionService.js'
+import { SqliteTokenUsageRepository } from '../adapters/SqliteTokenUsageRepository.js'
+import { TokenUsageService } from '../services/TokenUsageService.js'
 
 /**
  * ChatServer — Bun native WebSocket implementation.
@@ -73,6 +76,7 @@ export class ChatServer {
     this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
     this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
+    this.tokenUsageService = new TokenUsageService({ tokenUsageRepo: new SqliteTokenUsageRepository({ db }) })
     this.pushService      = new WebPushService({
       vapidPublicKey:  process.env.VAPID_PUBLIC_KEY  ?? null,
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
@@ -238,6 +242,8 @@ export class ChatServer {
       // Reactions
       case 'reaction.add':               return handleReactionAdd(ws, msg, ctx)
       case 'reaction.remove':            return handleReactionRemove(ws, msg, ctx)
+      // Usage reporting
+      case 'usage.report':               return handleUsageReport(ws, msg, ctx)
       default:
         this.#sendWs(ws, { t: 'error', ok: false, reply_to: msg.id, body: { code: 'BAD_REQUEST', message: 'Unknown message type' } })
     }
@@ -261,6 +267,7 @@ export class ChatServer {
       pushService:         this.pushService,
       pushRepo:            this.pushRepo,
       reactionService:     this.reactionService,
+      tokenUsageService:   this.tokenUsageService,
       // Connection state (mutable references)
       connections:         this.connections,
       peerConnections:     this.peerConnections,

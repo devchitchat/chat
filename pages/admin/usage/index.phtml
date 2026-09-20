@@ -1,0 +1,206 @@
+<div class="admin-page">
+  <nav class="admin-nav">
+    <a href="{{base}}/admin/invites" class="admin-nav-link">Invites</a>
+    <a href="{{base}}/admin/users" class="admin-nav-link">Users</a>
+    <a href="{{base}}/admin/bots" class="admin-nav-link">Bots</a>
+    <a href="{{base}}/admin/usage" class="admin-nav-link active">Usage</a>
+  </nav>
+
+  <h1>Token Usage</h1>
+
+  <section class="admin-section">
+    <div class="admin-toolbar">
+      <form method="GET" action="{{base}}/admin/usage" class="admin-form-inline">
+        <label for="period">Period</label>
+        <select id="period" name="period" onchange="this.form.submit()">
+          <option value="7d"  {{#if (eq period "7d")}}selected{{/if}}>Last 7 days</option>
+          <option value="30d" {{#if (eq period "30d")}}selected{{/if}}>Last 30 days</option>
+          <option value="all" {{#if (eq period "all")}}selected{{/if}}>All time</option>
+        </select>
+      </form>
+    </div>
+
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-card-label">Turns</div>
+        <div class="stat-card-value">{{summary.turns}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Input tokens</div>
+        <div class="stat-card-value">{{summary.inputTokens}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Output tokens</div>
+        <div class="stat-card-value">{{summary.outputTokens}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Cache tokens</div>
+        <div class="stat-card-value">{{summary.cacheTokens}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Total tokens</div>
+        <div class="stat-card-value">{{summary.totalTokens}}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Est. cost</div>
+        <div class="stat-card-value">{{summary.costUsd}}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-section">
+    <h2>By member</h2>
+    {{#if byActor}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Turns</th>
+          <th>Input</th>
+          <th>Output</th>
+          <th>Total</th>
+          <th>Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each byActor}}
+        <tr>
+          <td>{{name}}</td>
+          <td>{{turns}}</td>
+          <td>{{inputTokens}}</td>
+          <td>{{outputTokens}}</td>
+          <td>{{totalTokens}}</td>
+          <td>{{costUsd}}</td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No data yet.</p>
+    {{/if}}
+  </section>
+
+  <section class="admin-section">
+    <h2>By channel / session</h2>
+    {{#if byChannel}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Kind</th>
+          <th>Turns</th>
+          <th>Total tokens</th>
+          <th>Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each byChannel}}
+        <tr>
+          <td>{{name}}</td>
+          <td><span class="tag">{{kind}}</span></td>
+          <td>{{turns}}</td>
+          <td>{{totalTokens}}</td>
+          <td>{{costUsd}}</td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No data yet.</p>
+    {{/if}}
+  </section>
+
+  <section class="admin-section">
+    <h2>By repo</h2>
+    {{#if byRepo}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Repo</th>
+          <th>Turns</th>
+          <th>Total tokens</th>
+          <th>Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each byRepo}}
+        <tr>
+          <td><code>{{repo}}</code></td>
+          <td>{{turns}}</td>
+          <td>{{totalTokens}}</td>
+          <td>{{costUsd}}</td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No data yet.</p>
+    {{/if}}
+  </section>
+
+  <section class="admin-section">
+    <h2>Recent activity</h2>
+    {{#if recent}}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Member</th>
+          <th>Channel</th>
+          <th>Repo</th>
+          <th>Tokens</th>
+          <th>Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{#each recent}}
+        <tr>
+          <td>{{ts}}</td>
+          <td>{{actor}}</td>
+          <td>{{channel}} {{#if kind}}<span class="tag">{{kind}}</span>{{/if}}</td>
+          <td><code>{{repo}}</code></td>
+          <td>{{totalTokens}}</td>
+          <td>{{costUsd}}</td>
+        </tr>
+      {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="admin-empty">No activity yet.</p>
+    {{/if}}
+  </section>
+</div>
+
+<style>
+.stat-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.stat-card {
+  background: var(--surface-2, #2a2b2e);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  min-width: 130px;
+}
+.stat-card-label {
+  font-size: 0.75rem;
+  color: var(--text-2, #909296);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+.stat-card-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+.admin-toolbar {
+  margin-bottom: 1rem;
+}
+.admin-form-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+</style>
