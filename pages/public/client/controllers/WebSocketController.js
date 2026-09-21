@@ -10,7 +10,8 @@
  *   - Filters messages by channelId when the event is channel-scoped.
  */
 
-import { WsClient } from '../ws.js'
+import { WsClient }    from '../ws.js'
+import { navigateTo } from '../router.js'
 
 export class WebSocketController {
   #ws
@@ -190,7 +191,13 @@ export class WebSocketController {
     })
 
     ws.on('channel.deleted', ({ channel_id }) => {
+      const isActive = channel_id === model.currentChannelId
+      const fallback = isActive ? model.fallbackForDeleted(channel_id) : null
       model.removeChannel(channel_id)
+      if (isActive && fallback) {
+        const base = window.__BASE_PATH__ ?? ''
+        navigateTo(`${base}/channels/${fallback}`, false)
+      }
     })
 
     // ── Thread ─────────────────────────────────────────────────────────────

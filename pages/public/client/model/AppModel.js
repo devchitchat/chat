@@ -33,6 +33,7 @@ export class AppModel extends EventTarget {
   // ── Navigation ─────────────────────────────────────────────────────────────
   #currentChannelId   = null
   #currentChannelMeta = {}  // { name, topic, kind, visibility }
+  #channelHistory     = []  // recently visited channel ids, newest first (max 5)
 
   // ── Messages (cached per channel) ──────────────────────────────────────────
   //   channelId → Message[]  (chronological, oldest first)
@@ -199,7 +200,23 @@ export class AppModel extends EventTarget {
     const prev = this.#currentChannelId
     this.#currentChannelId   = channelId
     this.#currentChannelMeta = meta
+    this.#channelHistory = [channelId, ...this.#channelHistory.filter(id => id !== channelId)].slice(0, 5)
     this.#dispatch(Ev.CHANNEL_SELECTED, { channelId, prev, meta })
+  }
+
+  /**
+   * Returns the best channel id to navigate to after `channelId` is removed.
+   * Checks history first (excluding the removed channel), then falls back to
+   * the first available channel across all sections.
+   */
+  fallbackForDeleted(channelId) {
+    const fromHistory = this.#channelHistory.find(id => id !== channelId)
+    if (fromHistory) return fromHistory
+    for (const list of Object.values(this.#channels)) {
+      const ch = list.find(c => c.channel_id !== channelId)
+      if (ch) return ch.channel_id
+    }
+    return null
   }
 
   updateChannelMeta(channelId, patch) {
