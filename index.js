@@ -154,12 +154,13 @@ export async function setup(config = {}) {
  * Start the devchitchat server as a standalone process.
  *
  * @param {object} config
- * @param {number}  [config.port]       - Port to listen on. Default: process.env.PORT ?? 3000
- * @param {string}  [config.dbPath]     - Path to the SQLite database file. Default: process.env.DB_PATH ?? './data/chat.db'
- * @param {string}  [config.basePath]   - URL subpath to mount the app at, e.g. '/chat'. Default: process.env.BASE_PATH ?? ''
- * @param {boolean} [config.dev]        - Enable dev mode. Default: process.env.NODE_ENV !== 'production'
- * @param {string}  [config.tlsCert]    - Path to TLS certificate. Default: process.env.TLS_CERT ?? './certs/dev-cert.pem'
- * @param {string}  [config.tlsKey]     - Path to TLS private key. Default: process.env.TLS_KEY ?? './certs/dev-key.pem'
+ * @param {number}  [config.port]            - Port to listen on. Default: process.env.PORT ?? 3000
+ * @param {string}  [config.dbPath]         - Path to the SQLite database file. Default: process.env.DB_PATH ?? './data/chat.db'
+ * @param {string}  [config.basePath]       - URL subpath to mount the app at, e.g. '/chat'. Default: process.env.BASE_PATH ?? ''
+ * @param {boolean} [config.dev]            - Enable dev mode. Default: process.env.NODE_ENV !== 'production'
+ * @param {string}  [config.tlsCert]        - Path to TLS certificate. Default: process.env.TLS_CERT ?? './certs/dev-cert.pem'
+ * @param {string}  [config.tlsKey]         - Path to TLS private key. Default: process.env.TLS_KEY ?? './certs/dev-key.pem'
+ * @param {number}  [config.wsIdleTimeout]  - WebSocket idle timeout in seconds. 0 = never. Default: process.env.WS_IDLE_TIMEOUT ?? 30
  * @returns {Promise<import('bun').Server>}
  */
 export async function start(config = {}) {
@@ -167,6 +168,7 @@ export async function start(config = {}) {
     port = Number(process.env.PORT ?? 3000),
     tlsCert = process.env.TLS_CERT ?? './certs/dev-cert.pem',
     tlsKey = process.env.TLS_KEY ?? './certs/dev-key.pem',
+    wsIdleTimeout = Number(process.env.WS_IDLE_TIMEOUT ?? 30),
   } = config
 
   const { chat, db, logger, p, basePath, dev } = await _setupServices(config)
@@ -184,7 +186,7 @@ export async function start(config = {}) {
     basePath,
     permissionsPolicy: CHAT_PERMISSIONS_POLICY,
     csp: CHAT_CSP,
-    idleTimeout: 0,
+    idleTimeout: wsIdleTimeout,
     routes: {
       [p('/ws')]: (req, server) => {
         const session = sessionFromRequest(req)
