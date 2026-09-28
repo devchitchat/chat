@@ -220,6 +220,11 @@ export class MessageListView {
   // ─────────────────────────────────────────────────────────────────────────
 
   #onChannelSelected({ channelId }) {
+    // router.js replaces #messages.innerHTML on each navigation, which detaches the
+    // old #load-more-sentinel. Re-look it up so we never insert into a detached node.
+    this.#sentinelEl = this.#el?.querySelector('#load-more-sentinel')
+    this.#observer?.disconnect()
+
     this.#channelId = channelId
     cancelActiveEdit()
 
