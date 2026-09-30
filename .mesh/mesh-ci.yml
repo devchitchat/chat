@@ -28,12 +28,14 @@ jobs:
         branches: [main]
     commands:
       - |
+        set -e
         SHA=$(git rev-parse --short HEAD)
+        rm -rf /tmp/mesh-gitops
         git -c http.sslVerify=false clone ${GITOPS_REPO_URL} /tmp/mesh-gitops
-        cd /tmp/mesh-gitops
-        sed -i "s|registry.local:5000/chat-web:.*|registry.local:5000/chat-web:${SHA}|g" apps/chat/deployment.yaml
-        git config user.email "ci@mesh"
-        git config user.name "mesh-ci"
-        git add apps/chat/deployment.yaml
-        git diff --cached --quiet || git commit -m "ci: update chat-web to ${SHA}"
-        git -c http.sslVerify=false push origin main
+        sed -i "s|registry.local:5000/chat-web:.*|registry.local:5000/chat-web:${SHA}|g" /tmp/mesh-gitops/apps/chat/deployment.yaml
+        git -C /tmp/mesh-gitops config user.email "ci@mesh"
+        git -C /tmp/mesh-gitops config user.name "mesh-ci"
+        git -C /tmp/mesh-gitops add apps/chat/deployment.yaml
+        git -C /tmp/mesh-gitops diff --cached --quiet || git -C /tmp/mesh-gitops commit -m "ci: update chat-web to ${SHA}"
+        git -C /tmp/mesh-gitops -c http.sslVerify=false pull --rebase origin main
+        git -C /tmp/mesh-gitops -c http.sslVerify=false push origin main
