@@ -1,0 +1,39 @@
+pipeline:
+  name: chat
+
+on:
+  push:
+    branches: [main]
+  manual: true
+
+runner:
+  labels: []
+  fallback: any
+
+jobs:
+  build:
+    mode: shell
+    commands:
+      - |
+        SHA=$(git rev-parse --short HEAD)
+        docker build -t ${REGISTRY_HOST}/chat-web:${SHA} -t ${REGISTRY_HOST}/chat-web:latest .
+        docker push ${REGISTRY_HOST}/chat-web:${SHA}
+        docker push ${REGISTRY_HOST}/chat-web:latest
+
+  update-gitops:
+    mode: shell
+    depends_on: [build]
+    on:
+      push:
+        branches: [main]
+    commands:
+      - |
+        SHA=$(git rev-parse --short HEAD)
+        git -c http.sslVerify=false clone ${GITOPS_REPO_URL} /tmp/mesh-gitops
+        cd /tmp/mesh-gitops
+        sed -i "s|registry.local:5000/chat-web:.*|registry.local:5000/chat-web:${SHA}|g" apps/chat/deployment.yaml
+        git config user.email "ci@mesh"
+        git config user.name "mesh-ci"
+        git add apps/chat/deployment.yaml
+        git diff --cached --quiet || git commit -m "ci: update chat-web to ${SHA}"
+        git -c http.sslVerify=false push origin main

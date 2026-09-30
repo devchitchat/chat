@@ -1,6 +1,0 @@
-context: k3s-local
-namespace: default
-lima: k3s
-vars:
-  dbBackupNodePath: ""
-  uploadsBackupNodePath: ""

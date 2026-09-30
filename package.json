@@ -14,7 +14,8 @@
     "backup-now": "kubectl --context=k3s-local create job --from=cronjob/chat-backup chat-backup-$(date +%s) -n default",
     "restore": "bun scripts/restore.js",
     "restore-uploads": "bun scripts/restore-uploads.js",
-    "push": "infra push",
+    "logs": "kubectl logs -f deployment/chat-web -n default",
+    "status": "kubectl get deployment/chat-web -n default",
     "purge-cf-cache": "bun scripts/purge-cf-cache.js"
   },
   "type": "module",
