@@ -16,9 +16,10 @@ jobs:
     commands:
       - |
         SHA=$(git rev-parse --short HEAD)
-        docker build -t ${REGISTRY_HOST}/chat-web:${SHA} -t ${REGISTRY_HOST}/chat-web:latest .
+        docker build -t ${REGISTRY_HOST}/chat-web:${SHA} .
         docker push ${REGISTRY_HOST}/chat-web:${SHA}
-        docker push ${REGISTRY_HOST}/chat-web:latest
+        DIGEST=$(docker image inspect --format '{{index .RepoDigests 0}}' "${REGISTRY_HOST}/chat-web:${SHA}" | sed 's/.*@//')
+        echo "${DIGEST}" > /tmp/digest-chat-web
 
   update-gitops:
     mode: shell
@@ -29,13 +30,13 @@ jobs:
     commands:
       - |
         set -e
-        SHA=$(git rev-parse --short HEAD)
+        DIGEST=$(cat /tmp/digest-chat-web)
         rm -rf /tmp/mesh-gitops
         git -c http.sslVerify=false clone ${GITOPS_REPO_URL} /tmp/mesh-gitops
-        sed -i "s|registry.local:5000/chat-web:.*|registry.local:5000/chat-web:${SHA}|g" /tmp/mesh-gitops/apps/chat/deployment.yaml
+        sed -i "s|registry.local:5000/chat-web[@:].*|registry.local:5000/chat-web@${DIGEST}|g" /tmp/mesh-gitops/apps/chat/deployment.yaml
         git -C /tmp/mesh-gitops config user.email "ci@mesh"
         git -C /tmp/mesh-gitops config user.name "mesh-ci"
         git -C /tmp/mesh-gitops add apps/chat/deployment.yaml
-        git -C /tmp/mesh-gitops diff --cached --quiet || git -C /tmp/mesh-gitops commit -m "ci: update chat-web to ${SHA}"
+        git -C /tmp/mesh-gitops diff --cached --quiet || git -C /tmp/mesh-gitops commit -m "ci: update chat-web to $(printf '%.12s' "${DIGEST}")"
         git -C /tmp/mesh-gitops -c http.sslVerify=false pull --rebase origin main
         git -C /tmp/mesh-gitops -c http.sslVerify=false push origin main
