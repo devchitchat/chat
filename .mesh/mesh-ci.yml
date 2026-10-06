@@ -19,7 +19,10 @@ jobs:
         export BUILDX_BUILDER=ci-builder
         SHA=$(git rev-parse --short HEAD)
         docker buildx build --push -t ${REGISTRY_HOST}/chat-web:${SHA} .
-        DIGEST=$(docker buildx imagetools inspect ${REGISTRY_HOST}/chat-web:${SHA} | grep -o 'sha256:[a-f0-9]\{64\}' | head -1)
+        DIGEST=$(curl -sf -I \
+          -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
+          "http://${REGISTRY_HOST}/v2/chat-web/manifests/${SHA}" \
+          | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')
         case "$DIGEST" in sha256:*) ;; *) echo "no digest for chat-web:${SHA}"; exit 1;; esac
         echo "${DIGEST}" > /tmp/digest-chat-web
 
