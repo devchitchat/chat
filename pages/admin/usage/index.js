@@ -56,6 +56,7 @@ export function GET(req) {
     })),
     byChannel: data.byChannel.map(r => ({
       name:        r.channel_name ?? r.channel_id,
+      channelId:   r.channel_name ? r.channel_id : null,
       kind:        r.channel_kind ?? '',
       turns:       r.turns,
       totalTokens: fmtTokens(r.total_tokens),

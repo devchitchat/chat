@@ -96,7 +96,7 @@
       <tbody>
       {{#each byChannel}}
         <tr>
-          <td>{{name}}</td>
+          <td>{{#if channelId}}<span title="{{channelId}}">{{name}}</span>{{else}}{{name}}{{/if}}</td>
           <td><span class="tag">{{kind}}</span></td>
           <td>{{turns}}</td>
           <td>{{totalTokens}}</td>
