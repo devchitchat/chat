@@ -1,6 +1,6 @@
 import { runTransaction } from '../db/transaction.js'
 
-const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json, m.parent_msg_id`
+const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json, m.parent_msg_id, m.card_json`
 
 export class SqliteMessageRepository {
   constructor({ db }) {
@@ -11,14 +11,14 @@ export class SqliteMessageRepository {
    * Atomically allocates the next seq, inserts the message and an audit event.
    * Returns { seq }.
    */
-  insertMessage({ msgId, channelId, userId, now, text, clientMsgId, priority = 'normal', attachmentsJson = null, parentMsgId = null }) {
+  insertMessage({ msgId, channelId, userId, now, text, clientMsgId, priority = 'normal', attachmentsJson = null, parentMsgId = null, cardJson = null }) {
     return runTransaction(this.db, () => {
       const row = this.db.prepare('SELECT MAX(seq) AS max_seq FROM messages WHERE channel_id = ?').get(channelId)
       const seq = (row?.max_seq || 0) + 1
 
       this.db.prepare(
-        `INSERT INTO messages (msg_id, channel_id, seq, user_id, ts, text, client_msg_id, priority, attachments_json, parent_msg_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(msgId, channelId, seq, userId, now, text, clientMsgId, priority, attachmentsJson, parentMsgId ?? null)
+        `INSERT INTO messages (msg_id, channel_id, seq, user_id, ts, text, client_msg_id, priority, attachments_json, parent_msg_id, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(msgId, channelId, seq, userId, now, text, clientMsgId, priority, attachmentsJson, parentMsgId ?? null, cardJson)
 
       this.db.prepare(
         `INSERT INTO events (ts, actor_user_id, scope_kind, scope_id, type, body_json)
@@ -39,6 +39,8 @@ export class SqliteMessageRepository {
       ...r,
       attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
       attachments_json: undefined,
+      card: r.card_json ? JSON.parse(r.card_json) : null,
+      card_json: undefined,
     }))
   }
 
@@ -53,6 +55,8 @@ export class SqliteMessageRepository {
       ...r,
       attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
       attachments_json: undefined,
+      card: r.card_json ? JSON.parse(r.card_json) : null,
+      card_json: undefined,
     }))
   }
 
@@ -62,10 +66,16 @@ export class SqliteMessageRepository {
     ).get(msgId) ?? null
   }
 
-  updateMessage({ msgId, text, editedAt }) {
-    this.db.prepare(
-      `UPDATE messages SET text = ?, edited_at = ? WHERE msg_id = ?`
-    ).run(text, editedAt, msgId)
+  updateMessage({ msgId, text, editedAt, cardJson = undefined }) {
+    if (cardJson !== undefined) {
+      this.db.prepare(
+        `UPDATE messages SET text = ?, edited_at = ?, card_json = ? WHERE msg_id = ?`
+      ).run(text, editedAt, cardJson, msgId)
+    } else {
+      this.db.prepare(
+        `UPDATE messages SET text = ?, edited_at = ? WHERE msg_id = ?`
+      ).run(text, editedAt, msgId)
+    }
   }
 
   deleteMessage({ msgId, deletedAt }) {
@@ -85,6 +95,8 @@ export class SqliteMessageRepository {
       ...r,
       attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
       attachments_json: undefined,
+      card: r.card_json ? JSON.parse(r.card_json) : null,
+      card_json: undefined,
     }))
   }
 
@@ -98,6 +110,8 @@ export class SqliteMessageRepository {
       ...r,
       attachments: r.attachments_json ? JSON.parse(r.attachments_json) : [],
       attachments_json: undefined,
+      card: r.card_json ? JSON.parse(r.card_json) : null,
+      card_json: undefined,
     }))
   }
 

@@ -22,6 +22,7 @@ import {
   makeMessageEl, renderAttachment, escHtml,
   utcDateKey, makeDateSeparator, applyInlineRenderingToTextNodes, applyAvatarToEl,
 } from '../shared/messages.js'
+import { makeAgentCardEl, updateAgentCard } from './AgentCardView.js'
 import { attachMessageInteractions, cancelActiveEdit } from './shared/MessageInteractions.js'
 import { renderQuickPicksSlot } from './shared/EmojiPickerSingleton.js'
 import { dispatch } from '../controllers/ChatController.js'
@@ -272,12 +273,13 @@ export class MessageListView {
       }
     }
 
-    const article = makeMessageEl(message, {
+    const ctx = {
       userId:       this.#model.userId,
       userHandle:   this.#model.userHandle,
       knownHandles: this.#model.knownHandles,
       getAvatar:    uid => this.#model.getMemberAvatar(uid),
-    })
+    }
+    const article = message.card ? makeAgentCardEl(message, ctx) : makeMessageEl(message, ctx)
     _postProcess(article, message.reactions ?? [], message.msg_id)
     this.#el.appendChild(article)
     this.#el.scrollTop = this.#el.scrollHeight
@@ -287,7 +289,12 @@ export class MessageListView {
     if (channelId !== this.#channelId) return
     const article = this.#el.querySelector(`[data-msg-id="${message.msg_id}"]`)
     if (!article) return
-    _applyMessageUpdate(article, message, { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles })
+    const ctx = { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles }
+    if (message.card ?? article.dataset.cardStatus) {
+      updateAgentCard(article, message, ctx)
+    } else {
+      _applyMessageUpdate(article, message, ctx)
+    }
   }
 
   #onMessageDeleted({ channelId, msgId }) {
@@ -370,12 +377,13 @@ function _buildMessageFragment(msgs, model) {
     if (prevDate && dateKey !== prevDate) {
       fragment.appendChild(makeDateSeparator(dateKey))
     }
-    const article = makeMessageEl(msg, {
+    const ctx = {
       userId:       model.userId,
       userHandle:   model.userHandle,
       knownHandles: model.knownHandles,
       getAvatar:    uid => model.getMemberAvatar(uid),
-    })
+    }
+    const article = msg.card ? makeAgentCardEl(msg, ctx) : makeMessageEl(msg, ctx)
     _postProcess(article, msg.reactions ?? [], msg.msg_id)
     fragment.appendChild(article)
     prevDate = dateKey

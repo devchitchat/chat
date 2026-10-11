@@ -25,20 +25,21 @@ export class MessageService {
     throw new ServiceError('FORBIDDEN', 'Not a member of channel')
   }
 
-  sendMessage({ channelId, userId, text, clientMsgId = null, priority = 'normal', attachments = [], parentMsgId = null }) {
+  sendMessage({ channelId, userId, text, clientMsgId = null, priority = 'normal', attachments = [], parentMsgId = null, card = null }) {
     if (!this.channelService.isMember(channelId, userId)) throw new ServiceError('FORBIDDEN', 'Not a member of channel')
-    if (!text?.trim() && attachments.length === 0) throw new ServiceError('BAD_REQUEST', 'Message text or attachment required')
+    if (!text?.trim() && attachments.length === 0 && !card) throw new ServiceError('BAD_REQUEST', 'Message text or attachment required')
     if (!['normal', 'async', 'now'].includes(priority)) throw new ServiceError('BAD_REQUEST', 'Invalid priority')
 
     const msgId = newId('m')
     const now = this.nowFn()
     const trimmed = text?.trim() ?? ''
+    const cardJson = card ? JSON.stringify(card) : null
 
     const attachmentsJson = attachments.length > 0 ? JSON.stringify(attachments) : null
 
     const { seq } = this.messageRepo.insertMessage({
       msgId, channelId, userId, now, text: trimmed, clientMsgId, priority, attachmentsJson,
-      parentMsgId: parentMsgId ?? null
+      parentMsgId: parentMsgId ?? null, cardJson
     })
 
     if (trimmed) {
@@ -66,24 +67,29 @@ export class MessageService {
       }
     }
 
-    return { msg_id: msgId, seq, ts: now, priority, attachments: enrichedAttachments, parent_msg_id: parentMsgId ?? null }
+    return { msg_id: msgId, seq, ts: now, priority, attachments: enrichedAttachments, parent_msg_id: parentMsgId ?? null, card }
   }
 
-  editMessage({ msgId, channelId, userId, newText }) {
+  editMessage({ msgId, channelId, userId, newText, card = null }) {
     const msg = this.messageRepo.getById(msgId)
     if (!msg) throw new ServiceError('NOT_FOUND', 'Message not found')
     if (msg.channel_id !== channelId) throw new ServiceError('BAD_REQUEST', 'Message does not belong to this channel')
 
     assertMessageEditable(msg.deleted_at)
     validateEditPermission(userId, msg.user_id)
-    const trimmed = validateEditText(newText)
+
+    // Card edits may have empty text (the card is the content); skip text validation for them.
+    const trimmed = card ? (newText?.trim() ?? '') : validateEditText(newText)
+    const cardJson = card ? JSON.stringify(card) : undefined
 
     const editedAt = this.nowFn()
-    this.messageRepo.updateMessage({ msgId, text: trimmed, editedAt })
+    this.messageRepo.updateMessage({ msgId, text: trimmed, editedAt, cardJson })
 
-    this.searchService.indexMessage({ msg_id: msgId, channel_id: channelId, seq: msg.seq, user_id: msg.user_id, ts: msg.ts, text: trimmed })
+    if (trimmed) {
+      this.searchService.indexMessage({ msg_id: msgId, channel_id: channelId, seq: msg.seq, user_id: msg.user_id, ts: msg.ts, text: trimmed })
+    }
 
-    return { msgId, channelId, text: trimmed, editedAt }
+    return { msgId, channelId, text: trimmed, editedAt, card }
   }
 
   deleteMessage({ msgId, channelId, userId }) {

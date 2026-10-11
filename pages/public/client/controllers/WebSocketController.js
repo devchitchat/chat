@@ -150,14 +150,14 @@ export class WebSocketController {
       }
     })
 
-    ws.on('msg.edited', ({ msg_id, channel_id, text, edited_at, rendered_text }) => {
+    ws.on('msg.edited', ({ msg_id, channel_id, text, edited_at, rendered_text, card }) => {
       const channelId = channel_id ?? model.currentChannelId
       if (!channelId) return
-      model.updateMessage(channelId, { msg_id, text, edited_at, rendered_text })
+      model.updateMessage(channelId, { msg_id, text, edited_at, rendered_text, card: card ?? null })
 
       // If this msg is a thread reply that's currently open
       if (model.threadParentId) {
-        model.updateThreadReply(model.threadParentId, { msg_id, text, edited_at, rendered_text })
+        model.updateThreadReply(model.threadParentId, { msg_id, text, edited_at, rendered_text, card: card ?? null })
       }
     })
 

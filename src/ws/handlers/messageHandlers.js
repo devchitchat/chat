@@ -22,7 +22,7 @@ function _autoJoinIfPublic(ws, channelId, ctx) {
 
 export function handleMsgSend(ws, msg, ctx) {
   const { channelService, messageService, deliveryService, sendWs, publishChannel, dispatchMentions } = ctx
-  const { channel_id, text, client_msg_id, priority, attachments, parent_msg_id } = msg.body || {}
+  const { channel_id, text, client_msg_id, priority, attachments, parent_msg_id, card } = msg.body || {}
 
   const channel = channelService?.getChannel(channel_id)
 
@@ -37,17 +37,20 @@ export function handleMsgSend(ws, msg, ctx) {
   const result = messageService.sendMessage({
     channelId: channel_id, userId: ws.data.userId, text, clientMsgId: client_msg_id, priority,
     attachments: Array.isArray(attachments) ? attachments : [],
-    parentMsgId: parent_msg_id ?? null
+    parentMsgId: parent_msg_id ?? null,
+    card: card ?? null,
   })
 
   sendWs(ws, { t: 'msg.ack', reply_to: msg.id, ok: true, body: { msg_id: result.msg_id, seq: result.seq, client_msg_id, priority: result.priority } })
 
+  const renderedText = text?.trim() ? renderMarkdown(text).html : ''
   const eventBody = {
     msg_id: result.msg_id, channel_id, channel_kind: channel?.kind ?? null, seq: result.seq,
     user_id: ws.data.userId, user_display_name: ws.data.displayName,
-    ts: result.ts, text, rendered_text: renderMarkdown(text).html,
+    ts: result.ts, text, rendered_text: renderedText,
     priority: result.priority, attachments: result.attachments ?? [],
-    parent_msg_id: result.parent_msg_id ?? null
+    parent_msg_id: result.parent_msg_id ?? null,
+    ...(result.card ? { card: result.card } : {}),
   }
 
   publishChannel(channel_id, { t: 'msg.event', ok: true, body: eventBody })
@@ -66,12 +69,16 @@ export function handleMsgSend(ws, msg, ctx) {
 
 export function handleMsgEdit(ws, msg, ctx) {
   const { messageService, publishChannel } = ctx
-  const { msg_id, channel_id, text } = msg.body ?? {}
-  const result = messageService.editMessage({ msgId: msg_id, channelId: channel_id, userId: ws.data.userId, newText: text })
-  const renderedText = renderMarkdown(result.text).html
+  const { msg_id, channel_id, text, card } = msg.body ?? {}
+  const result = messageService.editMessage({ msgId: msg_id, channelId: channel_id, userId: ws.data.userId, newText: text, card: card ?? null })
+  const renderedText = result.text ? renderMarkdown(result.text).html : ''
   publishChannel(channel_id, {
     t: 'msg.edited', ok: true,
-    body: { msg_id: result.msgId, channel_id: result.channelId, text: result.text, edited_at: result.editedAt, rendered_text: renderedText },
+    body: {
+      msg_id: result.msgId, channel_id: result.channelId,
+      text: result.text, edited_at: result.editedAt, rendered_text: renderedText,
+      ...(result.card ? { card: result.card } : {}),
+    },
   })
 }
 
