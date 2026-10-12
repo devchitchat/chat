@@ -132,6 +132,7 @@ export async function GET(req) {
         edited_at: m.edited_at ?? '',
         reply_count: replyCount,
         reply_count_label: replyCount > 0 ? `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : '',
+        card_json: m.card ? JSON.stringify(m.card) : '',
       }
     }),
     seedSeq,

@@ -181,6 +181,38 @@ export class MessageListView {
         }
         prevDateKey = dateKey
       }
+
+      // Card upgrade: SSR renders all messages as plain articles. If this message
+      // has card data, replace it in-place with a proper agent card article so
+      // that refreshed pages show cards the same as live-streamed ones.
+      const cardJson = article.dataset.card
+      if (cardJson) {
+        try {
+          const card = JSON.parse(cardJson)
+          if (card.status) {
+            const msg = {
+              msg_id:            article.dataset.msgId,
+              seq:               parseInt(article.dataset.seq ?? '0', 10),
+              user_id:           article.dataset.userId ?? '',
+              user_display_name: article.querySelector('.message-handle')?.textContent?.trim() ?? '',
+              ts:                parseInt(article.querySelector('time')?.getAttribute('datetime') ?? '0', 10),
+              text:              article.dataset.rawText ?? '',
+              rendered_text:     article.querySelector('.message-text')?.innerHTML ?? '',
+              edited_at:         article.dataset.editedAt || null,
+              card,
+            }
+            const ctx = {
+              userId:       model.userId,
+              userHandle:   model.userHandle,
+              knownHandles: model.knownHandles,
+              getAvatar:    uid => model.getMemberAvatar(uid),
+            }
+            const cardArticle = makeAgentCardEl(msg, ctx)
+            cardArticle.dataset.hydrated = '1'
+            article.replaceWith(cardArticle)
+          }
+        } catch { /* invalid card JSON — leave as plain message */ }
+      }
     }
 
     // Scroll to bottom on initial load.
