@@ -290,11 +290,12 @@ export class MessageListView {
     const article = this.#el.querySelector(`[data-msg-id="${message.msg_id}"]`)
     if (!article) return
     const ctx = { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles }
-    if (message.card ?? article.dataset.cardStatus) {
+    if (message.card) {
       updateAgentCard(article, message, ctx)
-    } else {
+    } else if (!article.dataset.cardStatus) {
       _applyMessageUpdate(article, message, ctx)
     }
+    // else: card article but server sent no card — keep existing card display intact
   }
 
   #onMessageDeleted({ channelId, msgId }) {
