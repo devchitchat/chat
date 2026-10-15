@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { initDb } from '../src/db/initDb.js'
+import { runMigrations } from '../src/db/runMigrations.js'
 import { AuthService } from '../src/services/AuthService.js'
 import { ChannelService } from '../src/services/ChannelService.js'
 import { MessageService } from '../src/services/MessageService.js'
@@ -11,9 +12,10 @@ import { SqliteMessageRepository } from '../src/adapters/SqliteMessageRepository
 import { SqliteDeliveryRepository } from '../src/adapters/SqliteDeliveryRepository.js'
 import { SqliteSearchRepository } from '../src/adapters/SqliteSearchRepository.js'
 
-export function createTestContext() {
+export async function createTestContext() {
   const db = new Database(':memory:')
   initDb(db)
+  await runMigrations(db)
 
   let now = Date.now()
   const nowFn = () => now
