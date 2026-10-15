@@ -71,7 +71,9 @@ export function handleMsgEdit(ws, msg, ctx) {
   const { messageService, publishChannel } = ctx
   const { msg_id, channel_id, text, card } = msg.body ?? {}
   const result = messageService.editMessage({ msgId: msg_id, channelId: channel_id, userId: ws.data.userId, newText: text, card: card ?? null })
-  const renderedText = result.text ? renderMarkdown(result.text).html : ''
+  // For card messages, render the card body as markdown (not the plain fallback text).
+  const markdownSrc = result.card?.body ?? result.text
+  const renderedText = markdownSrc ? renderMarkdown(markdownSrc).html : ''
   publishChannel(channel_id, {
     t: 'msg.edited', ok: true,
     body: {
