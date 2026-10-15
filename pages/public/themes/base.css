@@ -914,7 +914,7 @@ details summary {
   margin-top: auto;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
@@ -1331,7 +1331,13 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
      areas. touch-action: none stops iOS treating these as scroll initiators
      without affecting clicks/taps or the dvh keyboard-resize behaviour. */
   .chat-header { touch-action: none; }
-  .composer { touch-action: pan-y; }
+  .composer {
+    touch-action: pan-y;
+    /* .chat-panel already accounts for safe-area-inset-bottom via its own
+       padding-bottom; don't add it again here or the input floats to the
+       top of the bar. */
+    padding-bottom: 12px;
+  }
 
   /* dvh = dynamic viewport height — shrinks when the keyboard opens,
      so the panels resize and the composer/footer stay above the keyboard. */
@@ -2133,9 +2139,9 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: va
   position: relative;
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  padding: 13px 16px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
