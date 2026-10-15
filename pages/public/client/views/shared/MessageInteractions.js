@@ -21,8 +21,7 @@ import {
   saveRecentEmoji,
 } from './EmojiPickerSingleton.js'
 import { escHtml } from '../../shared/messages.js'
-import { showActionSheet, dismiss as dismissActionSheet, getItemsContainer } from '../../action-sheet.js'
-import { addLongPress } from '../../long-press.js'
+import { showActionSheet } from '../../action-sheet.js'
 import { dispatch } from '../../controllers/ChatController.js'
 
 /**
@@ -141,27 +140,6 @@ export function attachMessageInteractions(containerEl, { model, isThread = false
     e.stopPropagation()
     const article = btn.closest('article.message')
     if (article) _showContextMenu(article, btn, model)
-  })
-
-  // ── Mobile long-press → action sheet ─────────────────────────────────────
-  addLongPress(containerEl, e => {
-    const article   = e.target.closest?.('article.message')
-    const msgId     = article?.dataset.msgId
-    const channelId = _channelId(model)
-    if (!msgId) return
-
-    // Open sheet first (which clears the container), then populate it.
-    showActionSheet({ label: 'React to this message', items: [] })
-
-    const wrapper = document.createElement('div')
-    wrapper.className = 'action-sheet-emoji-picker-wrap'
-    getItemsContainer().appendChild(wrapper)
-
-    openEmojiPicker(wrapper, msgId, emoji => {
-      saveRecentEmoji(emoji)
-      dismissActionSheet()
-      dispatch('react', { msgId, channelId, emoji })
-    })
   })
 }
 
