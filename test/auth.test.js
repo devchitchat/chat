@@ -5,7 +5,7 @@ import { SqliteAuthRepository } from '../src/adapters/SqliteAuthRepository.js'
 describe('AuthService', () => {
   let ctx
 
-  beforeEach(() => { ctx = createTestContext() })
+  beforeEach(async () => { ctx = await createTestContext() })
 
   test('bootstrap token creates an admin user', async () => {
     const result = await ctx.auth.redeemInvite({
