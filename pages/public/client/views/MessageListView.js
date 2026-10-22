@@ -266,6 +266,9 @@ export class MessageListView {
     if (msgs.length > 0) {
       // Model has cached messages (previously visited channel) — re-render from cache
       this.#el.innerHTML = ''
+      // Re-attach sentinel: innerHTML = '' detached it from the DOM, and
+      // sentinel.after() is a no-op on a detached node (messages disappear).
+      if (this.#sentinelEl) this.#el.appendChild(this.#sentinelEl)
       const fragment = _buildMessageFragment(msgs, this.#model)
       if (this.#sentinelEl) {
         this.#sentinelEl.after(fragment)
