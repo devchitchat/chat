@@ -29,4 +29,4 @@ jobs:
       repo: mesh-gitops
       image: build
       manifest: apps/chat/deployment.yaml
-      image_pattern: registry.local:5000/chat-web
+      image_pattern: registry.mesh-system.svc.cluster.local:5000/chat
