@@ -11,37 +11,22 @@ runner:
   fallback: any
 
 jobs:
+  # Built-in: mesh builds the 'test' stage, then the image in buildkitd,
+  # pushes it, and keeps its digest.
   build:
-    mode: shell
-    commands:
-      - |
-        set -e
-        export BUILDX_BUILDER=ci-builder
-        SHA=$(git rev-parse --short HEAD)
-        docker buildx build --push -t ${REGISTRY_HOST}/chat-web:${SHA} .
-        DIGEST=$(curl -sf -I \
-          -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
-          "http://${REGISTRY_HOST}/v2/chat-web/manifests/${SHA}" \
-          | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')
-        case "$DIGEST" in sha256:*) ;; *) echo "no digest for chat-web:${SHA}"; exit 1;; esac
-        echo "${DIGEST}" > /tmp/digest-chat-web
+    uses: image
+    with:
+      test_target: test
 
-  update-gitops:
-    mode: shell
+  # Built-in: mesh pins the digest from 'build' in mesh-gitops. No shell, no token.
+  deploy:
+    uses: gitops
     depends_on: [build]
     on:
       push:
         branches: [main]
-    commands:
-      - |
-        set -e
-        DIGEST=$(cat /tmp/digest-chat-web)
-        rm -rf /tmp/mesh-gitops
-        git -c http.sslVerify=false clone ${GITOPS_REPO_URL} /tmp/mesh-gitops
-        sed -i "s|registry.local:5000/chat-web[@:].*|registry.local:5000/chat-web@${DIGEST}|g" /tmp/mesh-gitops/apps/chat/deployment.yaml
-        git -C /tmp/mesh-gitops config user.email "ci@mesh"
-        git -C /tmp/mesh-gitops config user.name "mesh-ci"
-        git -C /tmp/mesh-gitops add apps/chat/deployment.yaml
-        git -C /tmp/mesh-gitops diff --cached --quiet || git -C /tmp/mesh-gitops commit -m "ci: update chat-web to $(printf '%.12s' "${DIGEST}")"
-        git -C /tmp/mesh-gitops -c http.sslVerify=false pull --rebase origin main
-        git -C /tmp/mesh-gitops -c http.sslVerify=false push origin main
+    with:
+      repo: mesh-gitops
+      image: build
+      manifest: apps/chat/deployment.yaml
+      image_pattern: registry.mesh-system.svc.cluster.local:5000/chat
