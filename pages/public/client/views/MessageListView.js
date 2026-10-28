@@ -261,29 +261,18 @@ export class MessageListView {
     this.#channelId = channelId
     cancelActiveEdit()
 
-    const msgs = this.#model.messagesFor(channelId)
-
-    if (msgs.length > 0) {
-      // Model has cached messages (previously visited channel) — re-render from cache
-      this.#el.innerHTML = ''
-      // Re-attach sentinel: innerHTML = '' detached it from the DOM, and
-      // sentinel.after() is a no-op on a detached node (messages disappear).
-      if (this.#sentinelEl) this.#el.appendChild(this.#sentinelEl)
-      const fragment = _buildMessageFragment(msgs, this.#model)
-      if (this.#sentinelEl) {
-        this.#sentinelEl.after(fragment)
-      } else {
-        this.#el.appendChild(fragment)
-      }
+    // Every channel switch goes through router.js, which has already replaced
+    // #messages with the server's latest page for this channel. Always hydrate
+    // that. Don't re-render from the model cache: it only holds messages that
+    // arrived live (not the SSR history), and clearing #messages to rebuild it
+    // detached the sentinel, so the rebuilt list went nowhere and the channel
+    // showed up empty.
+    this.#hydrateExisting()
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          this.#el.scrollTop = this.#el.scrollHeight
-        })
+        this.#el.scrollTop = this.#el.scrollHeight
       })
-    } else {
-      // No cache — router.js already morphed SSR content into the DOM; hydrate it.
-      this.#hydrateExisting()
-    }
+    })
 
     // Reset pagination sentinel for the new channel
     const hasMore = this.#model.hasMoreFor(channelId)
