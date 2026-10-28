@@ -180,6 +180,11 @@ describe('validateReceipt', () => {
     expect(result.note).toBe('Not tested on device.')
   })
 
+  test('clamps note to 200 characters', () => {
+    const result = validateReceipt({ title: 'T', note: 'N'.repeat(250) })
+    expect(result.note.length).toBe(200)
+  })
+
   test('drops empty note', () => {
     const result = validateReceipt({ title: 'T', note: '   ' })
     expect(result.note).toBeUndefined()
@@ -192,6 +197,30 @@ describe('validateReceipt', () => {
     })
     expect(result.ask.question).toBe('Push?')
     expect(result.ask.actions).toEqual(['Push', 'Not yet'])
+  })
+
+  test('clamps ask.question to 200 characters', () => {
+    const result = validateReceipt({
+      title: 'T',
+      ask: { question: 'Q'.repeat(250), actions: ['Yes'] },
+    })
+    expect(result.ask.question.length).toBe(200)
+  })
+
+  test('limits ask.actions to 4 entries', () => {
+    const result = validateReceipt({
+      title: 'T',
+      ask: { question: 'Q?', actions: ['A', 'B', 'C', 'D', 'E', 'F'] },
+    })
+    expect(result.ask.actions).toHaveLength(4)
+  })
+
+  test('clamps each action label to 32 characters', () => {
+    const result = validateReceipt({
+      title: 'T',
+      ask: { question: 'Q?', actions: ['A'.repeat(50)] },
+    })
+    expect(result.ask.actions[0].length).toBe(32)
   })
 
   test('drops ask when actions array is empty', () => {

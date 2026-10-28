@@ -58,11 +58,11 @@ const VALID_TONES = new Set(['ok', 'warn', 'error', 'neutral'])
  * Returns a sanitized receipt, or null if it is invalid.
  *
  * Schema:
- *   title   string, max 100 chars (required)
- *   tone    'ok' | 'warn' | 'error' | 'neutral'
- *   chips   [{ text: string max 32, tone: string }], max 5 entries
- *   note    string
- *   ask     { question: string, actions: string[], answered?: { action, by, at } }
+ *   title    string, max 100 chars (required)
+ *   tone     'ok' | 'warn' | 'error' | 'neutral'
+ *   chips    [{ text: string max 32, tone: string }], max 5 entries
+ *   note     string, max 200 chars
+ *   ask      { question: string max 200, actions: string[] max 4×32, answered? }
  *
  * @param {unknown} obj
  * @returns {{ title, tone?, chips?, note?, ask? } | null}
@@ -89,7 +89,7 @@ export function validateReceipt(obj) {
   }
 
   if (typeof obj.note === 'string' && obj.note.trim()) {
-    receipt.note = obj.note.trim()
+    receipt.note = obj.note.trim().slice(0, 200)
   }
 
   if (obj.ask && typeof obj.ask === 'object') {
@@ -101,10 +101,11 @@ export function validateReceipt(obj) {
       actions.length > 0
     ) {
       const cleanActions = actions
+        .slice(0, 4)
         .filter(a => typeof a === 'string' && a.trim())
-        .map(a => a.trim())
+        .map(a => a.trim().slice(0, 32))
       if (cleanActions.length > 0) {
-        receipt.ask = { question: question.trim(), actions: cleanActions }
+        receipt.ask = { question: question.trim().slice(0, 200), actions: cleanActions }
 
         if (
           answered &&
