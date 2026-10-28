@@ -202,10 +202,17 @@ export class MessageListView {
               card,
             }
             const ctx = {
-              userId:       model.userId,
-              userHandle:   model.userHandle,
-              knownHandles: model.knownHandles,
-              getAvatar:    uid => model.getMemberAvatar(uid),
+              userId:         model.userId,
+              userHandle:     model.userHandle,
+              knownHandles:   model.knownHandles,
+              getAvatar:      uid => model.getMemberAvatar(uid),
+              channelId:      this.#channelId,
+              getHandle:      uid => model.members.find(m => m.user_id === uid)?.handle
+                                  ?? model.bots.find(b => b.user_id === uid)?.handle
+                                  ?? null,
+              getDisplayName: uid => model.members.find(m => m.user_id === uid)?.display_name
+                                  ?? model.bots.find(b => b.user_id === uid)?.display_name
+                                  ?? uid,
             }
             const cardArticle = makeAgentCardEl(msg, ctx)
             cardArticle.dataset.hydrated = '1'
@@ -298,10 +305,17 @@ export class MessageListView {
     }
 
     const ctx = {
-      userId:       this.#model.userId,
-      userHandle:   this.#model.userHandle,
-      knownHandles: this.#model.knownHandles,
-      getAvatar:    uid => this.#model.getMemberAvatar(uid),
+      userId:         this.#model.userId,
+      userHandle:     this.#model.userHandle,
+      knownHandles:   this.#model.knownHandles,
+      getAvatar:      uid => this.#model.getMemberAvatar(uid),
+      channelId,
+      getHandle:      uid => this.#model.members.find(m => m.user_id === uid)?.handle
+                          ?? this.#model.bots.find(b => b.user_id === uid)?.handle
+                          ?? null,
+      getDisplayName: uid => this.#model.members.find(m => m.user_id === uid)?.display_name
+                          ?? this.#model.bots.find(b => b.user_id === uid)?.display_name
+                          ?? uid,
     }
     const article = message.card ? makeAgentCardEl(message, ctx) : makeMessageEl(message, ctx)
     _postProcess(article, message.reactions ?? [], message.msg_id)
@@ -313,7 +327,17 @@ export class MessageListView {
     if (channelId !== this.#channelId) return
     const article = this.#el.querySelector(`[data-msg-id="${message.msg_id}"]`)
     if (!article) return
-    const ctx = { userHandle: this.#model.userHandle, knownHandles: this.#model.knownHandles }
+    const ctx = {
+      userHandle:     this.#model.userHandle,
+      knownHandles:   this.#model.knownHandles,
+      channelId,
+      getHandle:      uid => this.#model.members.find(m => m.user_id === uid)?.handle
+                          ?? this.#model.bots.find(b => b.user_id === uid)?.handle
+                          ?? null,
+      getDisplayName: uid => this.#model.members.find(m => m.user_id === uid)?.display_name
+                          ?? this.#model.bots.find(b => b.user_id === uid)?.display_name
+                          ?? uid,
+    }
     if (message.card) {
       updateAgentCard(article, message, ctx)
     } else if (!article.dataset.cardStatus) {
@@ -403,10 +427,17 @@ function _buildMessageFragment(msgs, model) {
       fragment.appendChild(makeDateSeparator(dateKey))
     }
     const ctx = {
-      userId:       model.userId,
-      userHandle:   model.userHandle,
-      knownHandles: model.knownHandles,
-      getAvatar:    uid => model.getMemberAvatar(uid),
+      userId:         model.userId,
+      userHandle:     model.userHandle,
+      knownHandles:   model.knownHandles,
+      getAvatar:      uid => model.getMemberAvatar(uid),
+      channelId:      model.currentChannelId,
+      getHandle:      uid => model.members.find(m => m.user_id === uid)?.handle
+                          ?? model.bots.find(b => b.user_id === uid)?.handle
+                          ?? null,
+      getDisplayName: uid => model.members.find(m => m.user_id === uid)?.display_name
+                          ?? model.bots.find(b => b.user_id === uid)?.display_name
+                          ?? uid,
     }
     const article = msg.card ? makeAgentCardEl(msg, ctx) : makeMessageEl(msg, ctx)
     _postProcess(article, msg.reactions ?? [], msg.msg_id)

@@ -3092,7 +3092,10 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   min-height: 32px;
 }
 
-[data-card-status="done"] .agent-card-header { display: none; }
+/* done/error/interrupted states use .agent-card-receipt; the header is not rendered */
+[data-card-status="done"] .agent-card-header,
+[data-card-status="error"] .agent-card-header,
+[data-card-status="interrupted"] .agent-card-header { display: none; }
 
 .agent-card-spinner {
   font-family: var(--font-mono);
@@ -3161,6 +3164,183 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
+}
+
+/* ── Agent card receipt (done state) ──────────────────────────────────────── */
+
+/* Receipt wrapper */
+.agent-card-receipt {
+  padding: 8px 12px 6px;
+}
+
+/* Status dot + title row */
+.agent-card-receipt-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+
+.agent-card-receipt-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.agent-card-receipt-dot--ok      { background: var(--color-success); }
+.agent-card-receipt-dot--warn    { background: var(--color-warning,  #f5a623); }
+.agent-card-receipt-dot--error   { background: var(--color-danger); }
+.agent-card-receipt-dot--neutral { background: var(--text-muted); }
+
+.agent-card-receipt-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* Chips */
+.agent-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.agent-card-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.agent-card-chip--ok      { border-color: var(--color-success); color: var(--color-success); }
+.agent-card-chip--warn    { border-color: var(--color-warning, #f5a623); color: var(--color-warning, #f5a623); }
+.agent-card-chip--error   { border-color: var(--color-danger);  color: var(--color-danger); }
+.agent-card-chip--neutral { }
+
+/* Note */
+.agent-card-note {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--color-warning, #f5a623);
+  font-style: italic;
+}
+
+/* Ask row */
+.agent-card-ask {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.agent-card-ask-question {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.agent-card-ask-answered {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.agent-card-ask-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.agent-card-ask-btn {
+  padding: 3px 10px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border);
+  background: var(--fill-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.agent-card-ask-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.agent-card-ask-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.agent-card-ask-btn--primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.agent-card-ask-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Expand links row */
+.agent-card-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-card-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+.agent-card-link-btn:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+/* Expandable sections */
+.agent-card-report-section {
+  border-top: 1px solid var(--border);
+}
+.agent-card-report-section .agent-card-body {
+  padding: 8px 12px 10px;
+}
+
+.agent-card-activity-section {
+  border-top: 1px solid var(--border);
+}
+
+/* Live activity line (active states) */
+.agent-card-live-activity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.agent-card-live-activity code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Streaming body preview — 3-line clamp with fade-out */
+.agent-card-body--preview {
+  max-height: 4.8em;    /* ~3 lines at 1.6em */
+  overflow: hidden;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
 }
 
 /* Context menu */
