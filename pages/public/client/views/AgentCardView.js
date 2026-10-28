@@ -19,7 +19,11 @@ import { escHtml, applyAvatarToEl, applyInlineRenderingToTextNodes } from '../sh
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const activeSpinners = new WeakMap()  // article → intervalId
+const activeSpinners  = new WeakMap()  // article → intervalId
+const interruptTimers = new WeakMap()  // article → timeoutId
+
+// Cards still in an active state after this long are marked "interrupted".
+const INTERRUPT_AFTER_MS = 5 * 60 * 1000
 
 function startSpinner(article, spinnerEl) {
   if (activeSpinners.has(article)) return
@@ -29,6 +33,15 @@ function startSpinner(article, spinnerEl) {
     frame++
   }, 100)
   activeSpinners.set(article, id)
+
+  const interruptId = setTimeout(() => {
+    if (!isActive(article.dataset.cardStatus)) return
+    stopSpinner(article)
+    article.dataset.cardStatus = 'interrupted'
+    const labelEl = article.querySelector('.agent-card-status-label')
+    if (labelEl) labelEl.textContent = 'interrupted'
+  }, INTERRUPT_AFTER_MS)
+  interruptTimers.set(article, interruptId)
 }
 
 function stopSpinner(article) {
@@ -36,6 +49,11 @@ function stopSpinner(article) {
   if (id != null) {
     clearInterval(id)
     activeSpinners.delete(article)
+  }
+  const interruptId = interruptTimers.get(article)
+  if (interruptId != null) {
+    clearTimeout(interruptId)
+    interruptTimers.delete(article)
   }
 }
 
@@ -82,11 +100,12 @@ function toolInputSummary(name, input) {
 
 function statusLabel(status) {
   switch (status) {
-    case 'thinking':  return 'thinking…'
-    case 'working':   return 'working…'
-    case 'streaming': return 'responding…'
-    case 'error':     return 'error'
-    default:          return ''
+    case 'thinking':    return 'thinking…'
+    case 'working':     return 'working…'
+    case 'streaming':   return 'responding…'
+    case 'error':       return 'error'
+    case 'interrupted': return 'interrupted'
+    default:            return ''
   }
 }
 

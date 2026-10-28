@@ -3104,7 +3104,8 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
 }
 
 [data-card-status="done"] .agent-card-spinner,
-[data-card-status="error"] .agent-card-spinner { display: none; }
+[data-card-status="error"] .agent-card-spinner,
+[data-card-status="interrupted"] .agent-card-spinner { display: none; }
 
 .agent-card-status-label {
   font-size: 12px;
