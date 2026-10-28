@@ -26,7 +26,7 @@
  */
 
 import { escHtml, applyAvatarToEl, applyInlineRenderingToTextNodes } from '../shared/messages.js'
-import { wordCount, deriveTitle } from '../../../../src/core/receipt.js'
+import { wordCount, deriveTitle } from '../shared/receipt.js'
 import { dispatch } from '../controllers/ChatController.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
