@@ -66,6 +66,19 @@ export class SqliteMessageRepository {
     ).get(msgId) ?? null
   }
 
+  /** Like getById but includes card data. Used by the message API endpoint. */
+  getByIdWithCard(msgId) {
+    const r = this.db.prepare(
+      `SELECT msg_id, channel_id, seq, user_id, ts, text, deleted_at, parent_msg_id, card_json FROM messages WHERE msg_id = ?`
+    ).get(msgId)
+    if (!r) return null
+    return {
+      ...r,
+      card: r.card_json ? JSON.parse(r.card_json) : null,
+      card_json: undefined,
+    }
+  }
+
   updateMessage({ msgId, text, editedAt, cardJson = undefined }) {
     if (cardJson !== undefined) {
       this.db.prepare(

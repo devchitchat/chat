@@ -1,6 +1,7 @@
 import { test, expect, describe, afterEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { initDb } from '../src/db/initDb.js'
+import { runMigrations } from '../src/db/runMigrations.js'
 import { createLogger } from '../src/util/logger.js'
 import { ChatServer } from '../src/ws/ChatServer.js'
 import { createServer } from '@devchitchat/index97'
@@ -14,6 +15,7 @@ afterEach(() => { server?.stop() })
 async function startServer() {
   const db = new Database(':memory:')
   initDb(db)
+  await runMigrations(db)
   const logger = createLogger()
   const chat = new ChatServer({ db, logger })
 

@@ -5,7 +5,7 @@ describe('MessageService', () => {
   let ctx, user, channel
 
   beforeEach(async () => {
-    ctx = createTestContext()
+    ctx = await createTestContext()
     user = await ctx.insertUser({ handle: 'alice' })
     channel = ctx.channelService.createChannel({
       kind: 'text', name: 'general',

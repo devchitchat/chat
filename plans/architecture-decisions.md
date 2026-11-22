@@ -287,3 +287,55 @@ Private channels and direct member addition remain fully intact:
 - Less surface area: fewer tokens to manage, fewer expiry edge cases, simpler mental model
 - If a Discord-style shareable join link is ever needed (e.g. for a `family` profile), it can be
   re-introduced as a deliberate feature at that time
+
+---
+
+## ADR-007 — Agent card receipts: compact done-state with expandable sections
+
+**Date:** 2026-10-27
+**Status:** Decided
+
+### Context
+
+Finished agent cards render as walls of text in shared channels, burying human messages and
+making the agent's questions invisible. Active cards show a growing tool-call list that
+scrolls content off screen. We need a compact default view for finished cards and a single
+moving activity line for active cards.
+
+### Options considered
+
+**A. Always-collapsed summary** — finished cards show only a one-line summary. Full detail is
+gone forever unless the user opens the thread.
+
+**B. Receipt + expandable sections** — finished cards default to a compact receipt (title,
+chips, ask, expand links). "Full report" and "Activity" expand independently and persist
+across live edits. Old cards fall back gracefully.
+
+**C. Pagination / "show more" on the body** — truncate the body with a "show more" link.
+Same idea for tool calls.
+
+### Decision
+
+**Option B — receipt + expandable sections.**
+
+A `receipt` object is added as an optional field to `card_json`. It carries a human-readable
+title, status chips, an optional note, and an optional ask with action buttons. The agent
+generates the receipt by producing a `receipt` fenced block at the end of its reply; the
+runtime extracts, validates, and removes it from the body before storing.
+
+The client renders the receipt in the done state. When no receipt is present (old cards or
+generation failure), it derives a title from the first sentence of the body and shows the same
+compact layout without chips or an ask.
+
+Expand/collapse state (`data-open-report`, `data-open-activity`) is stored on the `<article>`
+element and restored after every live edit (every 500 ms while streaming).
+
+### Consequences
+
+- Finished cards take ~4 lines by default: title, chips, ask, expand links.
+- No server or DB migration: `card_json` is opaque JSON; old card shapes still render.
+- `chatopsjs` needs `receipt` pass-through in `createCardResponse` (one-field addition).
+- The agent must not leak the `receipt` block in the streaming preview — stripped during flush.
+- Action buttons use the existing `send-thread-reply` controller dispatch path; no new WS types.
+- Answered-ask state is tracked in agent memory (no new API endpoint needed).
+- The `deriveTitle` fallback must be a pure function in `src/core/` — testable without DOM.

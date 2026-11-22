@@ -147,6 +147,11 @@ export class MessageService {
       : rows
   }
 
+  /** Return a single message with card data, or null if not found. No access check — callers must verify. */
+  getMessageById(msgId) {
+    return this.messageRepo.getByIdWithCard(msgId) ?? null
+  }
+
   getReplyCountsForMessages({ msgIds }) {
     return this.messageRepo.getReplyCountsForMessages({ msgIds })
   }

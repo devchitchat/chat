@@ -33,6 +33,16 @@ const MAGIC = [
   { bytes: [0x1a, 0x45, 0xdf, 0xa3],                         mime: 'video/webm' },
 ]
 
+// Office Open XML extensions — ZIP magic bytes but need a distinct MIME type
+const OFFICE_XML_EXTS = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  key:     'application/x-iwork-keynote-sffkey',
+  numbers: 'application/x-iwork-numbers-sffnumbers',
+  pages:   'application/x-iwork-pages-sffpages',
+}
+
 // Plain-text extensions we serve as text/plain (no magic check needed)
 const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'markdown', 'json', 'csv', 'js', 'ts', 'jsx', 'tsx',
@@ -87,6 +97,9 @@ export function validateMimeType(buf, filename = '') {
       if (!sig.extra.bytes.every((b, i) => extra[i] === b)) continue
     }
 
+    if (sig.mime === 'application/zip' && OFFICE_XML_EXTS[ext]) {
+      return OFFICE_XML_EXTS[ext]
+    }
     return sig.mime
   }
 
