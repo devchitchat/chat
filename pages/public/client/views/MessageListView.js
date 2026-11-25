@@ -331,6 +331,7 @@ export class MessageListView {
       userHandle:     this.#model.userHandle,
       knownHandles:   this.#model.knownHandles,
       channelId,
+      viewerId:       this.#model.userId,
       getHandle:      uid => this.#model.members.find(m => m.user_id === uid)?.handle
                           ?? this.#model.bots.find(b => b.user_id === uid)?.handle
                           ?? null,

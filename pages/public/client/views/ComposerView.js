@@ -80,6 +80,8 @@ export class ComposerView {
     })
 
     this.#model.addEventListener(Ev.CHANNEL_SELECTED, e => {
+      // If the compose overlay is open, close it before switching channels
+      this.#closeOverlay()
       // Clear pending state on navigation
       this.#pendingAttachments = []
       this.#renderChips()

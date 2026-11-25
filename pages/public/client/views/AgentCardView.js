@@ -249,7 +249,7 @@ function renderAsk(ask, { authorId, authorHandle, viewerId, channelId, msgId, ge
     return `<div class="agent-card-ask">${questionHtml}</div>`
   }
 
-  const btns = ask.actions.map((action, i) => {
+  const btns = (ask.actions ?? []).map((action, i) => {
     const primary = i === 0 ? ' agent-card-ask-btn--primary' : ''
     return (
       `<button class="agent-card-ask-btn${primary}" type="button"` +
@@ -568,6 +568,7 @@ export function makeAgentCardEl(message, {
 export function updateAgentCard(article, message, {
   userHandle, knownHandles,
   channelId = '', getHandle = null, getDisplayName = null,
+  viewerId = null,
 } = {}) {
   const card = message.card ?? {}
   const msgId = message.msg_id ?? article.dataset.msgId ?? ''
@@ -587,18 +588,22 @@ export function updateAgentCard(article, message, {
   // Read persisted expand state
   const openReport   = article.dataset.openReport   === '1'
   const openActivity = article.dataset.openActivity === '1'
-  const viewerId     = article.closest('[data-viewer-id]')?.dataset.viewerId ?? null
 
-  cardEl.innerHTML = renderCardContent(card, message.rendered_text, {
-    msgId,
-    openReport,
-    openActivity,
-    viewerId,
-    channelId:     channelId || article.dataset.channelId || '',
-    getHandle,
-    getDisplayName,
-    authorId:      article.dataset.userId ?? '',
-  })
+  try {
+    cardEl.innerHTML = renderCardContent(card, message.rendered_text, {
+      msgId,
+      openReport,
+      openActivity,
+      viewerId,
+      channelId:     channelId || article.dataset.channelId || '',
+      getHandle,
+      getDisplayName,
+      authorId:      article.dataset.userId ?? '',
+    })
+  } catch (err) {
+    console.error('[AgentCardView] updateAgentCard render failed', err)
+    return
+  }
 
   if (scrollable) scrollable.scrollTop = prevScrollTop
 
