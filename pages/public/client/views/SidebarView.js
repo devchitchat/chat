@@ -84,6 +84,7 @@ export class SidebarView {
     m.addEventListener(Ev.THREAD_CLOSED,  () => this.#onThreadClosed())
     m.addEventListener(Ev.MENTIONS_UPDATED, () => this.#updateMentionDots())
     m.addEventListener(Ev.DMS_UPDATED,      () => this.#renderChannels(m.channels))
+    m.addEventListener(Ev.SECRET_MODE_CHANGED, () => this.#renderChannels(m.channels))
   }
 
   #onThreadOpened({ parentMsgId }) {
@@ -138,6 +139,7 @@ export class SidebarView {
       const prefix     = section === 'public'   ? '<span class="ch-prefix">#</span> '
                        : section === 'private'  ? '<span class="ch-prefix ch-prefix--private">🔒</span> '
                        : section === 'sessions' ? '<span class="ch-prefix ch-prefix--session">&#x25C8;</span> '
+                       : (isDM && ch.secret_mode)  ? '<span class="ch-prefix ch-prefix--secret" title="Secret messages on">🔐</span> '
                        : ''
 
       // Session status badge

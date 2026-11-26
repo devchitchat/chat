@@ -93,6 +93,9 @@ export class ComposerView {
       }
       // Enable/disable composer based on session state
       this.#setDisabled(meta.isSessionEnded === true)
+
+      // Apply secret mode visual state (meta.secretMode seeded from SSR data attribute)
+      this.#setSecretMode(meta.kind === 'dm' && !!meta.secretMode)
     })
 
     this.#model.addEventListener('reply-changed', e => {
@@ -104,6 +107,11 @@ export class ComposerView {
       if (e.detail.channelId === this.#model.currentChannelId) {
         this.#setDisabled(true)
       }
+    })
+
+    this.#model.addEventListener(Ev.SECRET_MODE_CHANGED, e => {
+      if (e.detail.channelId !== this.#model.currentChannelId) return
+      this.#setSecretMode(e.detail.secretMode)
     })
   }
 
@@ -129,6 +137,16 @@ export class ComposerView {
     this.#composerEl.querySelector('.btn-send')?.toggleAttribute('disabled', disabled)
     this.#composerEl.querySelector('.btn-compose-expand')?.toggleAttribute('disabled', disabled)
     this.#composerEl.classList.toggle('composer--disabled', disabled)
+  }
+
+  #setSecretMode(isSecret) {
+    this.#composerEl.classList.toggle('composer--secret', isSecret)
+    if (this.#textareaEl && !this.#textareaEl.disabled) {
+      const name = this.#model.currentChannelMeta?.name ?? ''
+      this.#textareaEl.placeholder = isSecret
+        ? `Send a secret message to ${name}`
+        : `Message in ${name}`
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

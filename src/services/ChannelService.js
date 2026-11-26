@@ -119,10 +119,10 @@ export class ChannelService {
     if (userId === targetUserId) throw new ServiceError('BAD_REQUEST', 'Cannot DM yourself')
     const name = buildDmChannelName(userId, targetUserId)
     const existing = this.channelRepo.findDmByName({ name })
-    if (existing) return { channel_id: existing.channel_id, is_new: false }
+    if (existing) return { channel_id: existing.channel_id, is_new: false, secret_mode: !!existing.secret_mode }
     const channelId = newId('c')
     this.channelRepo.insertDmChannel({ channelId, name, userIdA: userId, userIdB: targetUserId, now: this.nowFn() })
-    return { channel_id: channelId, is_new: true }
+    return { channel_id: channelId, is_new: true, secret_mode: false }
   }
 
   listDms({ userId }) {

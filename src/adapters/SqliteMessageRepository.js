@@ -1,10 +1,27 @@
 import { runTransaction } from '../db/transaction.js'
 
-const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json, m.parent_msg_id, m.card_json`
+const MSG_COLS = `m.msg_id, m.seq, m.user_id, u.display_name AS user_display_name, m.ts, m.text, m.edited_at, m.attachments_json, m.parent_msg_id, m.card_json, m.msg_type`
 
 export class SqliteMessageRepository {
   constructor({ db }) {
     this.db = db
+  }
+
+  /**
+   * Insert a system message (mode-change notices, etc.).
+   * System messages have msg_type='system' and no client_msg_id / priority semantics.
+   * Returns { seq }.
+   */
+  insertSystemMessage({ msgId, channelId, userId, now, text }) {
+    return runTransaction(this.db, () => {
+      const row = this.db.prepare('SELECT MAX(seq) AS max_seq FROM messages WHERE channel_id = ?').get(channelId)
+      const seq = (row?.max_seq || 0) + 1
+      this.db.prepare(
+        `INSERT INTO messages (msg_id, channel_id, seq, user_id, ts, text, msg_type, client_msg_id, priority)
+         VALUES (?, ?, ?, ?, ?, ?, 'system', NULL, 'normal')`
+      ).run(msgId, channelId, seq, userId, now, text)
+      return { seq }
+    })
   }
 
   /**

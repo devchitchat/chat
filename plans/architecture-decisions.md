@@ -339,3 +339,60 @@ element and restored after every live edit (every 500 ms while streaming).
 - Action buttons use the existing `send-thread-reply` controller dispatch path; no new WS types.
 - Answered-ask state is tracked in agent memory (no new API endpoint needed).
 - The `deriveTitle` fallback must be a pure function in `src/core/` — testable without DOM.
+
+---
+
+## ADR-008 — Secret messaging: E2E encryption for DMs
+
+**Date:** 2026-11-25
+**Status:** Decided
+
+### Context
+
+Users want to send sensitive messages in DM conversations without the server being able to read
+the content. The app currently stores all messages in plaintext in SQLite.
+
+### Options considered
+
+**A. Server-side encryption at rest** — messages encrypted with a server-held key before writing
+to SQLite. Protects against database theft but not server compromise — the server can still read
+messages in transit.
+
+**B. E2E encryption with ephemeral relay** — messages encrypted client-side, server relays
+ciphertext without storing or reading it. Server cannot read content. Messages are ephemeral
+(lost on page refresh).
+
+**C. E2E encryption with server-stored ciphertext** — ciphertext persisted in SQLite. History
+survives page refresh but requires the client to re-derive the shared key on each load.
+
+### Decision
+
+**Option B — E2E encryption with ephemeral relay.**
+
+Option A provides no meaningful protection against the main threat (server compromise).
+Option C adds complexity (ciphertext storage, schema changes to messages) while reducing the
+privacy guarantee (server can still observe that messages exist and their size).
+
+Option B gives the strongest privacy for the stated threat model: "someone reads the database."
+Ephemerality is intentional — the user clicks "Make secret" to have an off-the-record conversation,
+not to have an archived encrypted conversation.
+
+### Cryptography
+
+- ECDH with P-256 for key exchange; one key pair per device stored in IndexedDB as non-extractable CryptoKey
+- Public keys stored server-side in `user_public_keys` (server sees them, cannot decrypt)
+- AES-GCM 256-bit encryption per message; random 96-bit IV
+- No forward secrecy in v1 (acceptable for the target threat model)
+
+### Secret mode flag
+
+Stored server-side as `channels.secret_mode` (integer). Both parties see the same mode on
+return. Mode changes are recorded as system messages so users who were offline see the change.
+
+### Consequences
+
+- Secret messages not searchable (ciphertext not stored → no FTS)
+- Secret messages not visible to bots or agents in that DM
+- Private key is device-local — cannot read secret messages on a second device
+- Server still sees metadata: who messaged whom, timestamp, ciphertext size
+- Markdown is rendered client-side only for secret messages (server-side renderer cannot decrypt)

@@ -21,6 +21,7 @@ export let botService = null
 export let uploadService = null
 export let reactionService = null
 export let tokenUsageService = null
+export let secretModeService = null
 export let chatServer = null
 export let logger = null
 
@@ -37,6 +38,7 @@ export function init(services) {
   uploadService = services.uploadService
   reactionService = services.reactionService
   tokenUsageService = services.tokenUsageService ?? null
+  secretModeService = services.secretModeService ?? null
   chatServer = services.chatServer ?? null
   logger = services.logger
 }

@@ -15,8 +15,9 @@ import * as Ev from './events.js'
 
 export class AppModel extends EventTarget {
   // ── Identity ────────────────────────────────────────────────────────────────
-  #userId      = null
-  #userHandle  = null
+  #userId          = null
+  #userHandle      = null
+  #userDisplayName = null
 
   // ── Sidebar state ───────────────────────────────────────────────────────────
   //   Flat channel buckets — each entry is a channel object:
@@ -63,16 +64,21 @@ export class AppModel extends EventTarget {
   // ── Avatars ───────────────────────────────────────────────────────────────────
   #avatars = new Map()  // userId → { avatar_initials, avatar_color, avatar_url }
 
+  // ── Crypto ───────────────────────────────────────────────────────────────────
+  cryptoManager = null  // CryptoManager instance, set by app.js after init
+
   // ─────────────────────────────────────────────────────────────────────────
   // Identity
   // ─────────────────────────────────────────────────────────────────────────
 
-  get userId()     { return this.#userId }
-  get userHandle() { return this.#userHandle }
+  get userId()          { return this.#userId }
+  get userHandle()      { return this.#userHandle }
+  get userDisplayName() { return this.#userDisplayName }
 
-  setIdentity({ userId, userHandle }) {
-    this.#userId     = userId
-    this.#userHandle = userHandle
+  setIdentity({ userId, userHandle, userDisplayName = null }) {
+    this.#userId          = userId
+    this.#userHandle      = userHandle
+    this.#userDisplayName = userDisplayName
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -224,6 +230,20 @@ export class AppModel extends EventTarget {
       this.#currentChannelMeta = { ...this.#currentChannelMeta, ...patch }
     }
     this.#dispatch(Ev.CHANNEL_META_UPDATED, { channelId, ...patch })
+  }
+
+  /**
+   * Update secret mode for a DM channel.
+   * Updates the DM list entry and fires SECRET_MODE_CHANGED.
+   */
+  setSecretMode(channelId, secretMode) {
+    // Update in-channel meta if it's the current channel
+    if (channelId === this.#currentChannelId) {
+      this.#currentChannelMeta = { ...this.#currentChannelMeta, secretMode: !!secretMode }
+    }
+    // Update the DM list entry so the sidebar lock icon updates
+    this.upsertChannel({ channel_id: channelId, secret_mode: secretMode ? 1 : 0 })
+    this.#dispatch(Ev.SECRET_MODE_CHANGED, { channelId, secretMode: !!secretMode })
   }
 
   // ─────────────────────────────────────────────────────────────────────────

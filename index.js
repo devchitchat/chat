@@ -59,6 +59,7 @@ async function _setupServices(config = {}) {
     uploadService,
     reactionService: chat.reactionService,
     tokenUsageService: chat.tokenUsageService,
+    secretModeService: chat.secretModeService,
     chatServer: chat,
     logger,
   })

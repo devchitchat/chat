@@ -66,9 +66,10 @@ export async function GET(req) {
   }
 
   // For DM channels, replace the internal name with the other person's display name
+  let dmOtherUserId = null
   if (channel.kind === 'dm') {
-    const otherUserId = channel.name.split(':').slice(1).find(id => id !== user.user_id)
-    const otherUser = otherUserId ? auth.getUser(otherUserId) : null
+    dmOtherUserId = channel.name.split(':').slice(1).find(id => id !== user.user_id) ?? null
+    const otherUser = dmOtherUserId ? auth.getUser(dmOtherUserId) : null
     channel = { ...channel, name: otherUser?.display_name ?? 'Direct Message', topic: null }
   }
 
@@ -113,6 +114,9 @@ export async function GET(req) {
     isSession,
     isSessionEnded,
     isSessionOwner,
+    isDm: channel.kind === 'dm',
+    dmOtherUserId,
+    isSecretMode: !!(channel.secret_mode),
     sessionMembers,
     sessionOwner,
     currentChannelId: channelId,
@@ -133,6 +137,7 @@ export async function GET(req) {
         reply_count: replyCount,
         reply_count_label: replyCount > 0 ? `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : '',
         card_json: m.card ? JSON.stringify(m.card) : '',
+        isSystem: m.msg_type === 'system',
       }
     }),
     seedSeq,

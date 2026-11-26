@@ -4364,3 +4364,77 @@ article.message:hover .message-hover-actions { opacity: 1; pointer-events: auto;
   animation: msg-highlight-pulse 1.5s ease-out forwards;
   border-radius: 6px;
 }
+
+/* ── Secret messaging ────────────────────────────────────────────────────────── */
+
+/* Banner shown at top of chat when DM is in secret mode */
+.secret-mode-banner[hidden] { display: none; }
+.secret-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--accent-subtle, rgba(82,130,255,.1));
+  border-bottom: 1px solid var(--accent, #5282ff);
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Toggle button in header */
+.secret-mode-toggle {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  color: var(--text);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.2));
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.secret-mode-toggle:hover {
+  border-color: var(--accent, #5282ff);
+  color: var(--accent, #5282ff);
+}
+.secret-mode-toggle--active {
+  color: var(--accent, #5282ff);
+  border-color: var(--accent, #5282ff);
+}
+
+/* Composer secret mode accent */
+.composer--secret {
+  border-top: 2px solid var(--accent, #5282ff);
+}
+.composer--secret #message-input {
+  color: var(--accent, #5282ff);
+}
+
+/* Secret message bubble */
+.message--secret {
+  opacity: 0.9;
+}
+.message--secret .message-text::before {
+  content: '🔐 ';
+}
+
+/* System message (centered timeline notice) */
+.system-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 16px;
+  margin: 4px 0;
+}
+.system-message-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-secondary, #2a2a2a);
+  padding: 3px 10px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* Sidebar DM lock icon for secret mode */
+.ch-prefix--secret {
+  font-size: 12px;
+}

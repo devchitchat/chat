@@ -20,6 +20,7 @@ import { SqliteSignalingRepository } from '../adapters/SqliteSignalingRepository
 import { handleHello, handleInviteRedeem, handleSignIn, handleSignOut, handleAdminInviteCreate, handleAdminInviteList, handleAdminInviteRevoke, handleAdminUserList, handleAdminUserSetRoles, handleAdminUserSetPassword, handleAdminUserSetDisplayName, handleAdminBotCreate, handleAdminBotList, handleAdminBotTokenCreate, handleAdminBotTokenRevoke, handleAdminBotSetChannels } from './handlers/authHandlers.js'
 import { handleChannelList, handleChannelCreate, handleChannelUpdate, handleChannelDelete, handleChannelJoin, handleChannelLeave, handleChannelReorder, handleChannelAddMember, handleChannelRemoveMember, handleChannelListMembers, handleUserList, handleBotList, handleDmOpen, handleDmList, handleSessionEnd, handleUserAvatarSet } from './handlers/channelHandlers.js'
 import { handleMsgSend, handleMsgList, handleMsgEdit, handleMsgDelete, handleThreadList, handleThreadChannelList, handleSearchQuery, handleSearchGlobal, handlePresenceSubscribe } from './handlers/messageHandlers.js'
+import { handleDmSetSecretMode, handleDmSecret, handleUserPublicKeySet } from './handlers/secretHandlers.js'
 import { handleRtcCallCreate, handleRtcJoin, handleRtcOffer, handleRtcAnswer, handleRtcIce, handleRtcStreamPublish, handleRtcStreamRemoved, handleRtcLeave, handleRtcEndCall } from './handlers/rtcHandlers.js'
 import { handlePushSubscribe, handlePushUnsubscribe } from './handlers/pushHandlers.js'
 import { handleReactionAdd, handleReactionRemove } from './handlers/reactionHandlers.js'
@@ -30,6 +31,8 @@ import { SqliteReactionRepository } from '../adapters/SqliteReactionRepository.j
 import { ReactionService } from '../services/ReactionService.js'
 import { SqliteTokenUsageRepository } from '../adapters/SqliteTokenUsageRepository.js'
 import { TokenUsageService } from '../services/TokenUsageService.js'
+import { SecretModeService } from '../services/SecretModeService.js'
+import { SqlitePublicKeyRepository } from '../adapters/SqlitePublicKeyRepository.js'
 
 /**
  * ChatServer — Bun native WebSocket implementation.
@@ -75,8 +78,13 @@ export class ChatServer {
     this.notificationService = new NotificationService({ deliveryService: this.deliveryService, authService: this.auth })
     this.presenceService  = new PresenceService()
     this.signalingService = new SignalingService({ signalingRepo: new SqliteSignalingRepository({ db }) })
-    this.botService       = new BotService({ authService: this.auth, authRepo, channelRepo })
-    this.tokenUsageService = new TokenUsageService({ tokenUsageRepo: new SqliteTokenUsageRepository({ db }) })
+    this.botService          = new BotService({ authService: this.auth, authRepo, channelRepo })
+    this.tokenUsageService   = new TokenUsageService({ tokenUsageRepo: new SqliteTokenUsageRepository({ db }) })
+    this.secretModeService   = new SecretModeService({
+      channelRepo,
+      messageRepo,
+      publicKeyRepo: new SqlitePublicKeyRepository({ db }),
+    })
     this.pushService      = new WebPushService({
       vapidPublicKey:  process.env.VAPID_PUBLIC_KEY  ?? null,
       vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
@@ -216,6 +224,9 @@ export class ChatServer {
       case 'user.avatar.set':            return handleUserAvatarSet(ws, msg, ctx)
       case 'dm.open':                    return handleDmOpen(ws, msg, ctx)
       case 'dm.list':                    return handleDmList(ws, msg, ctx)
+      case 'dm.set_secret_mode':         return handleDmSetSecretMode(ws, msg, ctx)
+      case 'dm.secret':                  return handleDmSecret(ws, msg, ctx)
+      case 'user.public_key_set':        return handleUserPublicKeySet(ws, msg, ctx)
       // Messages
       case 'msg.send':                   return handleMsgSend(ws, msg, ctx)
       case 'msg.edit':                   return handleMsgEdit(ws, msg, ctx)
@@ -268,6 +279,7 @@ export class ChatServer {
       pushRepo:            this.pushRepo,
       reactionService:     this.reactionService,
       tokenUsageService:   this.tokenUsageService,
+      secretModeService:   this.secretModeService,
       // Connection state (mutable references)
       connections:         this.connections,
       peerConnections:     this.peerConnections,

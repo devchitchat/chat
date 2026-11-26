@@ -248,7 +248,7 @@ export function handleDmOpen(ws, msg, ctx) {
   // Tell the initiating connection to navigate (no notify_only)
   sendWs(ws, {
     t: 'dm.opened', reply_to: msg.id, ok: true,
-    body: { channel_id: result.channel_id, is_new: result.is_new, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
+    body: { channel_id: result.channel_id, is_new: result.is_new, secret_mode: result.secret_mode ?? false, with_user: { user_id: target_user_id, display_name: targetUser?.display_name ?? null } }
   })
 
   // Notify the initiating user's OTHER connections (sidebar) so the DM appears in the list
@@ -270,7 +270,11 @@ export function handleDmList(ws, msg, ctx) {
   for (const dm of dms) ws.subscribe(`channel:${dm.channel_id}`)
   const enriched = dms.map(dm => {
     const other = auth.getUser(dm.other_user_id)
-    return { channel_id: dm.channel_id, with_user: { user_id: dm.other_user_id, display_name: other?.display_name ?? dm.other_user_id } }
+    return {
+      channel_id:  dm.channel_id,
+      secret_mode: !!dm.secret_mode,
+      with_user:   { user_id: dm.other_user_id, display_name: other?.display_name ?? dm.other_user_id },
+    }
   })
   sendWs(ws, { t: 'dm.list_result', reply_to: msg.id, ok: true, body: { dms: enriched } })
 }

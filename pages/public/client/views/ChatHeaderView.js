@@ -9,6 +9,7 @@
  */
 
 import * as Ev from '../model/events.js'
+import { dispatch } from '../controllers/ChatController.js'
 
 export class ChatHeaderView {
   #model
@@ -16,6 +17,8 @@ export class ChatHeaderView {
   #titleEl
   #topicEl
   #startCallBtn
+  #secretBanner
+  #secretToggleBtn
 
   /**
    * @param {AppModel}    model
@@ -26,7 +29,9 @@ export class ChatHeaderView {
     this.#headerEl    = headerEl
     this.#titleEl     = headerEl.querySelector('.chat-title')
     this.#topicEl     = headerEl.querySelector('.chat-topic')
-    this.#startCallBtn = headerEl.querySelector('#btn-start-call')
+    this.#startCallBtn    = headerEl.querySelector('#btn-start-call')
+    this.#secretBanner    = document.getElementById('secret-mode-banner')
+    this.#secretToggleBtn = headerEl.querySelector('#btn-secret-mode-toggle')
 
     this.#bindModelEvents()
     this.#bindInteractions()
@@ -76,6 +81,21 @@ export class ChatHeaderView {
       if (this.#startCallBtn) {
         this.#startCallBtn.hidden = kind === 'dm'
       }
+
+      // Secret mode banner — only relevant for DMs; read from channel meta (seeded from SSR)
+      if (kind === 'dm') {
+        const { secretMode } = e.detail.meta ?? {}
+        this.#updateSecretBanner(!!secretMode)
+        if (this.#secretToggleBtn) this.#secretToggleBtn.hidden = false
+      } else {
+        if (this.#secretBanner)    this.#secretBanner.hidden    = true
+        if (this.#secretToggleBtn) this.#secretToggleBtn.hidden = true
+      }
+    })
+
+    this.#model.addEventListener(Ev.SECRET_MODE_CHANGED, e => {
+      if (e.detail.channelId !== this.#model.currentChannelId) return
+      this.#updateSecretBanner(e.detail.secretMode)
     })
 
     // Auto-join: hide the join banner when the server confirms membership
@@ -112,6 +132,14 @@ export class ChatHeaderView {
       document.body.classList.add('sidebar-open')
     })
 
+    // Secret mode toggle
+    this.#secretToggleBtn?.addEventListener('click', () => {
+      const channelId = this.#model.currentChannelId
+      if (!channelId) return
+      const dm = this.#model.channels.dms?.find(d => d.channel_id === channelId)
+      dispatch('set-dm-secret-mode', { channelId, enabled: !dm?.secret_mode })
+    })
+
     // Start Call button → let CallView handle the WebRTC side
     this.#startCallBtn?.addEventListener('click', () => {
       document.dispatchEvent(new CustomEvent('call:start-requested'))
@@ -121,5 +149,19 @@ export class ChatHeaderView {
     document.addEventListener('call:state-changed', e => {
       if (this.#startCallBtn) this.#startCallBtn.hidden = e.detail?.inCall ?? false
     })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  #updateSecretBanner(isSecret) {
+    if (this.#secretBanner) {
+      this.#secretBanner.hidden = !isSecret
+    }
+    if (this.#secretToggleBtn) {
+      this.#secretToggleBtn.textContent = isSecret ? 'Turn off secret' : 'Make secret'
+      this.#secretToggleBtn.classList.toggle('secret-mode-toggle--active', isSecret)
+    }
   }
 }

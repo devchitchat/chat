@@ -317,7 +317,15 @@ export class MessageListView {
                           ?? this.#model.bots.find(b => b.user_id === uid)?.display_name
                           ?? uid,
     }
-    const article = message.card ? makeAgentCardEl(message, ctx) : makeMessageEl(message, ctx)
+    let article
+    if (message.msg_type === 'system') {
+      article = makeSystemMsgEl(message)
+    } else if (message.card) {
+      article = makeAgentCardEl(message, ctx)
+    } else {
+      article = makeMessageEl(message, ctx)
+      if (message.is_secret) article.classList.add('message--secret')
+    }
     _postProcess(article, message.reactions ?? [], message.msg_id)
     this.#el.appendChild(article)
     this.#el.scrollTop = this.#el.scrollHeight
@@ -602,4 +610,16 @@ export function renderReactionBar(article, reactions, msgId) {
 
 function _sanitize(html) {
   return String(html ?? '').replaceAll('<script>', '').replaceAll('</script>', '')
+}
+
+/**
+ * Build a system-message element (centered timeline notice, no avatar/actions).
+ * Used for secret mode toggled notices and other system events.
+ */
+function makeSystemMsgEl({ msg_id, text }) {
+  const el = document.createElement('div')
+  el.className = 'system-message'
+  el.dataset.msgId = msg_id ?? ''
+  el.innerHTML = `<span class="system-message-text">${escHtml(text ?? '')}</span>`
+  return el
 }

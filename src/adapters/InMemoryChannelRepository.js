@@ -75,8 +75,8 @@ export class InMemoryChannelRepository {
     return [...this._channels.values()].find(c => c.kind === 'dm' && c.name === name && !c.deleted_at) ?? null
   }
 
-  insertDmChannel({ channelId, name, userIdA, userIdB, now }) {
-    this._channels.set(channelId, { channel_id: channelId, kind: 'dm', name, topic: null, visibility: 'private', sort_order: 0, session_ends_at: null, created_by_user_id: userIdA, created_at: now, deleted_at: null })
+  insertDmChannel({ channelId, name, userIdA, userIdB, now, secretMode = 0 }) {
+    this._channels.set(channelId, { channel_id: channelId, kind: 'dm', name, topic: null, visibility: 'private', sort_order: 0, session_ends_at: null, secret_mode: secretMode, created_by_user_id: userIdA, created_at: now, deleted_at: null })
     this._members.set(`${channelId}:${userIdA}`, { channel_id: channelId, user_id: userIdA, role: 'member', joined_at: now, left_at: null, banned_at: null })
     this._members.set(`${channelId}:${userIdB}`, { channel_id: channelId, user_id: userIdB, role: 'member', joined_at: now, left_at: null, banned_at: null })
   }
@@ -91,8 +91,13 @@ export class InMemoryChannelRepository {
       .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
       .map(c => {
         const otherMember = [...this._members.values()].find(m => m.channel_id === c.channel_id && m.user_id !== userId && !m.left_at)
-        return { channel_id: c.channel_id, name: c.name, kind: c.kind, other_user_id: otherMember?.user_id ?? null }
+        return { channel_id: c.channel_id, name: c.name, kind: c.kind, secret_mode: c.secret_mode ?? 0, other_user_id: otherMember?.user_id ?? null }
       })
+  }
+
+  setDmSecretMode({ channelId, enabled }) {
+    const c = this._channels.get(channelId)
+    if (c && c.kind === 'dm') c.secret_mode = enabled ? 1 : 0
   }
 
   upsertMembership({ channelId, userId, role, now }) {

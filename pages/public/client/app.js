@@ -12,6 +12,7 @@
  */
 
 import { AppModel }              from './model/AppModel.js'
+import { CryptoManager }         from './crypto/CryptoManager.js'
 import { WebSocketController }   from './controllers/WebSocketController.js'
 import { ChatController }        from './controllers/ChatController.js'
 import { MessageListView }       from './views/MessageListView.js'
@@ -53,8 +54,9 @@ const model = new AppModel()
 const chatPanelEl = document.querySelector('.chat-panel')
 if (chatPanelEl) {
   model.setIdentity({
-    userId:     chatPanelEl.dataset.userId ?? null,
-    userHandle: chatPanelEl.dataset.userHandle ?? null,
+    userId:          chatPanelEl.dataset.userId        ?? null,
+    userHandle:      chatPanelEl.dataset.userHandle    ?? null,
+    userDisplayName: chatPanelEl.dataset.userDisplayName ?? null,
   })
   // Seed the current channel
   const channelId    = chatPanelEl.dataset.id ?? null
@@ -70,18 +72,40 @@ if (chatPanelEl) {
       isMember:        chatPanelEl.dataset.isMember !== 'false',
       isSessionEnded:  chatPanelEl.dataset.isSessionEnded === 'true',
       isSessionOwner:  chatPanelEl.dataset.isSessionOwner === 'true',
+      secretMode:      chatPanelEl.dataset.secretMode === 'true',
+      otherUserId:     chatPanelEl.dataset.otherUserId ?? null,
     })
     model.seedMessages(channelId, { oldestSeq: seedFirstSeq, newestSeq: seedSeq, hasMore: seedHasMore })
   }
 }
 
-// ── 3. Controllers ────────────────────────────────────────────────────────────
+// ── 3. CryptoManager ─────────────────────────────────────────────────────────
+
+;(async () => {
+  try {
+    const cm = new CryptoManager()
+    await cm.init()
+    model.cryptoManager = cm
+
+    // Upload public key so DM peers can encrypt messages to us
+    const jwk = await cm.getPublicKeyJwk()
+    await fetch(`${BASE_PATH}/api/users/me/public-key`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ public_key_jwk: jwk }),
+    })
+  } catch (err) {
+    console.warn('[app] CryptoManager init failed — secret messaging disabled', err)
+  }
+})()
+
+// ── 4. Controllers ────────────────────────────────────────────────────────────
 
 const wsController   = new WebSocketController(model, `${BASE_PATH}/ws`)
 const ws             = wsController.ws
 new ChatController(model, ws)
 
-// ── 4. Views ──────────────────────────────────────────────────────────────────
+// ── 5. Views ──────────────────────────────────────────────────────────────────
 
 // Sidebar
 const sidebarEl = document.querySelector('aside[data-sidebar], aside.sidebar, aside')
@@ -147,7 +171,7 @@ if (sidebarEl && window.matchMedia('(min-width: 769px)').matches) {
   })
 }
 
-// ── 5. SPA navigation ─────────────────────────────────────────────────────────
+// ── 6. SPA navigation ─────────────────────────────────────────────────────────
 
 // router.js morphs the DOM and dispatches 'chatpanel:navigated'.
 // We update the model here so views react automatically.
@@ -162,7 +186,11 @@ document.addEventListener('chatpanel:navigated', e => {
   // Update identity if it changed (shouldn't, but guard anyway)
   const panel = document.querySelector('.chat-panel')
   if (panel?.dataset.userId) {
-    model.setIdentity({ userId: panel.dataset.userId, userHandle: panel.dataset.userHandle ?? null })
+    model.setIdentity({
+      userId:          panel.dataset.userId,
+      userHandle:      panel.dataset.userHandle    ?? null,
+      userDisplayName: panel.dataset.userDisplayName ?? null,
+    })
   }
 
   // Seed pagination bookmarks for the new channel (newestSeq drives msg.list catch-up)
@@ -181,6 +209,8 @@ document.addEventListener('chatpanel:navigated', e => {
     isMember:       panel?.dataset.isMember !== 'false',
     isSessionEnded: panel?.dataset.isSessionEnded === 'true',
     isSessionOwner: panel?.dataset.isSessionOwner === 'true',
+    secretMode:     panel?.dataset.secretMode === 'true',
+    otherUserId:    panel?.dataset.otherUserId ?? null,
   })
 
   // Update join banner visibility

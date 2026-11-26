@@ -64,13 +64,14 @@ export class ChatController {
     listen('join-channel',           d => this.#joinChannel(d))
     listen('session-end',            d => this.#sessionEnd(d))
     listen('search:message-selected', d => this.#onSearchMessageSelected(d))
+    listen('set-dm-secret-mode',     d => this.#setDmSecretMode(d))
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
 
-  #sendMessage({ channelId, text, attachments = [], priority = 'normal' }) {
+  async #sendMessage({ channelId, text, attachments = [], priority = 'normal' }) {
     if (!text?.trim() && attachments.length === 0) return
     const replyTo = this.#model.replyTo
     let finalText = text?.trim() ?? ''
@@ -79,6 +80,20 @@ export class ChatController {
       const excerpt = replyTo.text.length > MAX ? replyTo.text.slice(0, MAX) + '…' : replyTo.text
       finalText = `> **${replyTo.handle}**: ${excerpt}\n\n${finalText}`
     }
+
+    // Secret DM: encrypt and relay ephemerally — never stored in DB.
+    // Check currentChannelMeta first (seeded from SSR on page load, updated live),
+    // fall back to the DM list entry (populated after dm.list_result arrives).
+    const isSecretChannel =
+      this.#model.currentChannelId === channelId && this.#model.currentChannelMeta?.secretMode
+      || this.#model.channels.dms?.find(d => d.channel_id === channelId)?.secret_mode
+    const dm = this.#model.channels.dms?.find(d => d.channel_id === channelId)
+    if (isSecretChannel && this.#model.cryptoManager) {
+      await this.#sendSecretMessage({ channelId, text: finalText, dm })
+      if (replyTo) this.#model.clearReply()
+      return
+    }
+
     this.#ws.send({
       t: 'msg.send',
       body: {
@@ -96,6 +111,69 @@ export class ChatController {
       },
     })
     if (replyTo) this.#model.clearReply()
+  }
+
+  async #sendSecretMessage({ channelId, text, dm }) {
+    const cryptoMgr = this.#model.cryptoManager
+    const recipientId = dm?.with_user?.user_id
+      ?? this.#model.currentChannelMeta?.otherUserId
+    if (!recipientId) return
+
+    // Fetch recipient's public key from server
+    let recipientPublicKeyJwk
+    try {
+      const base = window.__BASE_PATH__ ?? ''
+      const res = await fetch(`${base}/api/users/${encodeURIComponent(recipientId)}/public-key`)
+      if (!res.ok) {
+        console.warn('[ChatController] recipient has no public key — cannot send secret message')
+        return
+      }
+      const data = await res.json()
+      recipientPublicKeyJwk = data.public_key_jwk
+    } catch (err) {
+      console.error('[ChatController] failed to fetch recipient public key', err)
+      return
+    }
+
+    let iv, ciphertext
+    try {
+      ;({ iv, ciphertext } = await cryptoMgr.encrypt(text, recipientPublicKeyJwk))
+    } catch (err) {
+      console.error('[ChatController] encryption failed', err)
+      return
+    }
+
+    const senderPublicKeyJwk = await cryptoMgr.getPublicKeyJwk()
+    this.#ws.send({
+      t: 'dm.secret',
+      body: {
+        channel_id:           channelId,
+        iv,
+        ciphertext,
+        sender_public_key_jwk: senderPublicKeyJwk,
+      },
+    })
+
+    // Optimistic local echo for the sender
+    this.#model.addMessage(channelId, {
+      msg_id:            `secret-local-${Date.now()}`,
+      channel_id:        channelId,
+      user_id:           this.#model.userId,
+      user_display_name: this.#model.userDisplayName,
+      text,
+      raw_text:          text,
+      ts:                Date.now(),
+      ts_fmt:            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      is_secret:         true,
+      msg_type:          'message',
+      reactions:         [],
+      attachments:       [],
+      reply_count:       0,
+    })
+  }
+
+  #setDmSecretMode({ channelId, enabled }) {
+    this.#ws.send({ t: 'dm.set_secret_mode', body: { channel_id: channelId, enabled } })
   }
 
   #sendThreadReply({ channelId, parentMsgId, text, attachments = [] }) {

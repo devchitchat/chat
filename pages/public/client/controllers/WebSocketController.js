@@ -341,6 +341,57 @@ export class WebSocketController {
       }
     })
 
+    // ── Secret messaging ───────────────────────────────────────────────────
+    ws.on('dm.secret_mode_changed', ({ channel_id, secret_mode, system_msg } = {}) => {
+      model.setSecretMode(channel_id, secret_mode)
+      if (system_msg) model.addMessage(channel_id, { ...system_msg, user_display_name: null })
+    })
+
+    ws.on('dm.secret', async (body = {}) => {
+      const { channel_id, from_user_id, iv, ciphertext, sender_public_key_jwk } = body
+      const cryptoMgr = model.cryptoManager
+      if (!cryptoMgr) return
+      try {
+        const plaintext = await cryptoMgr.decrypt(iv, ciphertext, sender_public_key_jwk)
+        model.addMessage(channel_id, {
+          msg_id:           body.msg_id ?? `secret-${Date.now()}`,
+          channel_id,
+          user_id:          from_user_id,
+          user_display_name: body.user_display_name ?? null,
+          text:             plaintext,
+          raw_text:         plaintext,
+          ts:               body.ts ?? Date.now(),
+          ts_fmt:           new Date(body.ts ?? Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          is_secret:        true,
+          msg_type:         'message',
+          reactions:        [],
+          attachments:      [],
+          reply_count:      0,
+        })
+      } catch (err) {
+        console.error('[WebSocketController] dm.secret decrypt failed', err)
+      }
+    })
+
+    ws.on('dm.secret_ack', () => { /* no-op — message was delivered */ })
+
+    ws.on('dm.secret_undelivered', ({ channel_id } = {}) => {
+      model.addMessage(channel_id, {
+        msg_id:    `undelivered-${Date.now()}`,
+        channel_id,
+        user_id:   null,
+        text:      'Secret message could not be delivered — recipient is offline.',
+        raw_text:  'Secret message could not be delivered — recipient is offline.',
+        ts:        Date.now(),
+        ts_fmt:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        is_secret: false,
+        msg_type:  'system',
+        reactions: [],
+        attachments: [],
+        reply_count: 0,
+      })
+    })
+
     // ── Call events are forwarded as-is to the current call state object ───
     // CallView registers its own ws.on() handlers; we don't touch call state
     // here to keep call logic isolated in CallView / ChatController.

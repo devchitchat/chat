@@ -98,7 +98,7 @@ export class SqliteChannelRepository {
 
   listDmsByUser({ userId }) {
     return this.db.prepare(
-      `SELECT c.channel_id, c.name, c.kind,
+      `SELECT c.channel_id, c.name, c.kind, c.secret_mode,
               other.user_id AS other_user_id
        FROM channels c
        JOIN channel_members cm  ON cm.channel_id = c.channel_id AND cm.user_id = ? AND cm.left_at IS NULL
@@ -106,6 +106,12 @@ export class SqliteChannelRepository {
        WHERE c.kind = 'dm' AND c.deleted_at IS NULL
        ORDER BY c.created_at DESC`
     ).all(userId, userId)
+  }
+
+  setDmSecretMode({ channelId, enabled }) {
+    this.db.prepare(
+      `UPDATE channels SET secret_mode = ? WHERE channel_id = ? AND kind = 'dm'`
+    ).run(enabled ? 1 : 0, channelId)
   }
 
   upsertMembership({ channelId, userId, role, now }) {
