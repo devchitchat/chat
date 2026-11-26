@@ -783,7 +783,7 @@ details summary {
 }
 .message-text blockquote strong { color: var(--text-primary); }
 .message-text table { border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 0.9em; display: block; overflow-x: auto; }
-.message-text th, .message-text td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; white-space: nowrap; }
+.message-text th, .message-text td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; min-width: 80px; }
 .message-text th { background: var(--bg-input, var(--bg-sidebar)); font-weight: 600; }
 .message-text tr:nth-child(even) { background: color-mix(in srgb, var(--accent) 4%, transparent); }
 
