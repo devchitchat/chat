@@ -7,11 +7,12 @@
  * Returns 404 if the user has not yet registered a public key
  * (they haven't opened the app since the secret-messaging feature shipped).
  */
-import { sessionFromRequest, secretModeService } from '../../../../src/context.js'
+import { sessionFromRequest, botUserFromRequest, secretModeService } from '../../../../src/context.js'
 
-export function GET(req) {
+export async function GET(req) {
   const session = sessionFromRequest(req)
-  if (!session?.user) return new Response('Unauthorized', { status: 401 })
+  const user    = session?.user ?? await botUserFromRequest(req)
+  if (!user) return new Response('Unauthorized', { status: 401 })
 
   const userId = new URL(req.url).pathname.split('/').filter(Boolean).at(-2)
   if (!userId) return new Response('Not Found', { status: 404 })
